@@ -43,6 +43,7 @@ export class HTMLReducer {
         "cookieJar",
         "iframe",
         "nocontent",
+        "noscript",
         "template",
     ];
 
@@ -90,6 +91,12 @@ export class HTMLReducer {
         "foreground",
     ]);
 
+    emptyTagsSelector: string[] = [
+        "span",
+        "div",
+        "p",
+    ];
+
     removeAllClasses: boolean = true;
     removeLinkTags: boolean = true;
     removeMetaTags: boolean = true;
@@ -123,7 +130,8 @@ export class HTMLReducer {
         this.processClassAttributes(doc);
         this.removeMiscAttributes(doc);
         this.replaceLinks(doc);
-        this.removeCommentNodes(doc);
+        // this.removeCommentNodes(doc);
+        this.removeEmptyNodes(doc, this.emptyTagsSelector);
 
         let reduced = doc.documentElement.outerHTML;
         reduced = reduced.replace(/<!DOCTYPE[^>]*>/, "");
@@ -224,6 +232,20 @@ export class HTMLReducer {
                 node.parentNode.removeChild(node);
             }
             node = walker.nextNode();
+        }
+    }
+
+    private removeEmptyNodes(
+        doc: Document,
+        selectors: string[]
+    ): void {
+        for (const selector of selectors) {
+            const nodes = doc.querySelectorAll(selector);
+            nodes.forEach((node) => {
+                if(node.childNodes.length == 0){
+                    node.parentNode?.removeChild(node)
+                }
+                });
         }
     }
 }

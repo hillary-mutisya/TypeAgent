@@ -96,9 +96,11 @@ async function ensureWebsocketConnected() {
                 } else if (data.messageType == "siteTranslatorStatus") {
                     if (data.body.status == "initializing") {
                         showBadgeBusy();
+                        await showSiteTranslatorInitializing();
                         console.log(`Initializing ${data.body.translator}`);
                     } else if (data.body.status == "initialized") {
                         showBadgeHealthy();
+                        await showSiteTranslatorInitialized();
                         console.log(
                             `Finished initializing ${data.body.translator}`,
                         );
@@ -1187,8 +1189,9 @@ async function runBrowserAction(action: any) {
         }
         case "getPageSchema": {
             const targetTab = await getActiveTab();
-            const key = action.parameters.url ?? targetTab.url;
-            const value = await chrome.storage.session.get(["pageSchema"]);
+            // const key = action.parameters.url ?? targetTab.url;
+            // const value = await chrome.storage.session.get(["pageSchema"]);
+            /*
             if (value && Array.isArray(value.pageSchema)) {
                 const targetSchema = value.pageSchema.filter(
                     (c: { url: any }) => c.url === key,
@@ -1200,10 +1203,22 @@ async function runBrowserAction(action: any) {
                     showBadgeHealthy();
                 }
             }
+            */
+
+            const response = await chrome.tabs.sendMessage(targetTab.id!, {
+                type: "get_page_schema",
+                action: action,
+            });
+
+            if (response) {
+                responseObject = response;
+                showBadgeHealthy();
+            }
 
             break;
         }
         case "setPageSchema": {
+            const targetTab = await getActiveTab();
             const key = action.parameters.url;
             let value = await chrome.storage.session.get(["pageSchema"]);
             let updatedSchema = value.pageSchema;
@@ -1220,7 +1235,12 @@ async function runBrowserAction(action: any) {
                 body: action.parameters.schema,
             });
 
-            await chrome.storage.session.set({ pageSchema: updatedSchema });
+            // await chrome.storage.session.set({ pageSchema: updatedSchema });
+
+            const response = await chrome.tabs.sendMessage(targetTab.id!, {
+                type: "set_page_schema",
+                action: action,
+            });
 
             break;
         }
@@ -1307,6 +1327,37 @@ function showBadgeBusy() {
     chrome.action.setBadgeBackgroundColor({ color: "#0000FF" }, () => {
         chrome.action.setBadgeText({ text: "..." });
     });
+}
+
+function dispatchEventOnTab(
+    tabId: number,
+    eventName: string,
+    eventDetail?: string,
+) {
+    const dispatch = (name: string, detail?: string) => {
+        const parsedDetail = detail ? JSON.parse(detail) : null;
+        const event = new CustomEvent(name, { detail: parsedDetail });
+        document.dispatchEvent(event);
+    };
+    chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        func: dispatch,
+        args: [eventName, ""],
+    });
+}
+
+async function showSiteTranslatorInitializing() {
+    const activeTab = await getActiveTab();
+    if (activeTab && activeTab.id) {
+        dispatchEventOnTab(activeTab.id!, "schemaInitializing");
+    }
+}
+
+async function showSiteTranslatorInitialized() {
+    const activeTab = await getActiveTab();
+    if (activeTab && activeTab.id) {
+        dispatchEventOnTab(activeTab.id!, "schemaInitialized");
+    }
 }
 
 chrome.action?.onClicked.addListener(async (tab) => {
@@ -1443,26 +1494,40 @@ chrome.runtime.onMessageExternal.addListener(
 );
 
 chrome.runtime.onMessage.addListener(
-    (message: any, sender: chrome.runtime.MessageSender, sendResponse) => {
-        async () => {
-            switch (message.type) {
-                case "initialize": {
-                    console.log("Browser Agent Service Worker started");
-                    try {
-                        const connected = await ensureWebsocketConnected();
-                        if (!connected) {
-                            reconnectWebSocket();
-                            showBadgeError();
-                        }
-                    } catch {
+    async (
+        message: any,
+        sender: chrome.runtime.MessageSender,
+        sendResponse,
+    ) => {
+        switch (message.type) {
+            case "initialize": {
+                console.log("Browser Agent Service Worker started");
+                try {
+                    const connected = await ensureWebsocketConnected();
+                    if (!connected) {
                         reconnectWebSocket();
+                        showBadgeError();
                     }
-
-                    sendResponse("Service worker initialize called");
-                    break;
+                } catch {
+                    reconnectWebSocket();
                 }
+
+                sendResponse("Service worker initialize called");
+                break;
             }
-        };
+            case "resetPageSchema": {
+                if (
+                    currentSiteTranslator == "browser.crossword" &&
+                    sender.tab
+                ) {
+                    await clearCrosswordCache(sender.tab!);
+                    await reinitCrosswordSchema(sender.tab!);
+                    sendResponse("Re-initialized crossword schema");
+                }
+
+                break;
+            }
+        }
     },
 );
 
@@ -1487,44 +1552,51 @@ chrome.contextMenus?.onClicked.addListener(
         switch (info.menuItemId) {
             case "reInitCrosswordPage": {
                 // insert site-specific script
-                await chrome.tabs.sendMessage(tab.id!, {
-                    type: "setup_UniversalCrossword",
-                });
-
-                // trigger translator
-                if (webSocket && webSocket.readyState === WebSocket.OPEN) {
-                    webSocket.send(
-                        JSON.stringify({
-                            source: "browser",
-                            target: "dispatcher",
-                            messageType: "enableSiteTranslator",
-                            body: "browser.crossword",
-                        }),
-                    );
-                }
+                await reinitCrosswordSchema(tab);
 
                 break;
             }
             case "clearCrosswordPageCache": {
                 // remove cached schema for current tab
-                const key = tab.url;
-                const value = await chrome.storage.session.get(["pageSchema"]);
-                if (value && Array.isArray(value.pageSchema)) {
-                    const updatedSchema = value.pageSchema.filter(
-                        (c: { url: any }) => c.url !== key,
-                    );
-
-                    await chrome.storage.session.set({
-                        pageSchema: updatedSchema,
-                    });
-                } else {
-                    await chrome.storage.session.set({
-                        pageSchema: [],
-                    });
-                }
+                await clearCrosswordCache(tab);
 
                 break;
             }
         }
     },
 );
+async function clearCrosswordCache(tab: chrome.tabs.Tab) {
+    const key = tab.url;
+    const value = await chrome.storage.session.get(["pageSchema"]);
+    if (value && value.pageSchema && Array.isArray(value.pageSchema)) {
+        const updatedSchema = value.pageSchema.filter(
+            (c: { url: any }) => c.url !== key,
+        );
+
+        await chrome.storage.session.set({
+            pageSchema: updatedSchema,
+        });
+    } else {
+        await chrome.storage.session.set({
+            pageSchema: [],
+        });
+    }
+}
+
+async function reinitCrosswordSchema(tab: chrome.tabs.Tab) {
+    await chrome.tabs.sendMessage(tab.id!, {
+        type: "setup_UniversalCrossword",
+    });
+
+    // trigger translator
+    if (webSocket && webSocket.readyState === WebSocket.OPEN) {
+        webSocket.send(
+            JSON.stringify({
+                source: "browser",
+                target: "dispatcher",
+                messageType: "enableSiteTranslator",
+                body: "browser.crossword",
+            }),
+        );
+    }
+}

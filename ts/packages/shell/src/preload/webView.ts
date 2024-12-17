@@ -21,8 +21,14 @@ ipcRenderer.on("received-from-browser-ipc", async (_, data) => {
         } else if (data.messageType == "siteTranslatorStatus") {
             if (data.body.status == "initializing") {
                 console.log(`Initializing ${data.body.translator}`);
+                document.dispatchEvent(
+                    new CustomEvent("schemaInitializing"),
+                );
             } else if (data.body.status == "initialized") {
                 console.log(`Finished initializing ${data.body.translator}`);
+                document.dispatchEvent(
+                    new CustomEvent("schemaInitialized"),
+                );
             }
         } else if (data.messageType.startsWith("browserActionRequest.")) {
             const message = await runSiteAction(data.messageType, data.body);

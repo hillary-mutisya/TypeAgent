@@ -497,6 +497,90 @@ function setIdsOnAllElements(frameId: number) {
     }
 }
 
+// Helper function to create and manage the popup
+function createTranslatorStatusPopup(message: string, duration?: number): void {
+    // Check if a popup already exists
+    let popup = document.getElementById('site-translator-status-popup');
+    if (!popup) {
+        popup = document.createElement('div');
+        popup.id = 'site-translator-status-popup';
+        popup.style.position = 'fixed';
+        popup.style.top = '10px';
+        popup.style.right = '10px';
+        popup.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+        popup.style.color = 'white';
+        popup.style.padding = '10px 20px';
+        popup.style.borderRadius = '5px';
+        popup.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+        popup.style.zIndex = '10000';
+        document.body.appendChild(popup);
+    }
+
+    // Update the popup message
+    popup.textContent = message;
+
+    // Remove the popup after the specified duration
+    if (duration) {
+        setTimeout(() => {
+            if (popup) {
+                popup.remove();
+            }
+        }, duration);
+    }
+}
+
+function observeSchemaElement(element: HTMLElement, onChange: (response?: any) => void): void {
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.type === 'childList' || mutation.type === 'attributes') {
+                console.log('Schema element modified. Re-initializing schema.');
+                
+                observer.disconnect();
+                onChange();
+            }
+        });
+    });
+
+    observer.observe(element, {
+        childList: true,
+        subtree: true,
+        attributes: true
+    });
+
+    // Detect if the element is removed from the DOM
+    const parentObserver = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (Array.from(mutation.removedNodes).includes(element)) {
+                console.log('Schema element removed. Re-initializing schema.');
+                
+                parentObserver.disconnect(); // Stop observing once the element is removed
+                onChange();
+            }
+        });
+    });
+
+    if (element.parentElement) {
+        parentObserver.observe(element.parentElement, { childList: true });
+    }
+}
+
+// Listen for the "schemaInitializing" event
+document.addEventListener('schemaInitializing', () => {
+    createTranslatorStatusPopup('initializing ...');
+});
+
+// Listen for the "schemaInitialized" event
+document.addEventListener('schemaInitialized', (event: Event) => {
+    const customEvent = event as CustomEvent;
+    const success = customEvent.detail?.success !== false; // Check the success property
+
+    if (success) {
+        createTranslatorStatusPopup('initialized', 5000); // Show success message and close after 5 seconds
+    } else {
+        createTranslatorStatusPopup('initialization failed', 15000); // Show failure message and close after 15 seconds
+    }
+});
+
 function sendPaleoDbRequest(data: any) {
     document.dispatchEvent(
         new CustomEvent("toPaleoDbAutomation", { detail: data }),
@@ -522,6 +606,7 @@ document.addEventListener("fromUIEventsDispatcher", async function (e: any) {
 async function handleScriptAction(
     message: any,
     sendResponse: (response?: any) => void,
+    useServiceWorker?: boolean
 ) {
     switch (message.type) {
         case "get_page_links_by_query": {
@@ -641,7 +726,31 @@ async function handleScriptAction(
         case "get_page_schema": {
             const value = localStorage.getItem("pageSchema");
             if (value) {
-                sendResponse(JSON.parse(value));
+                const updatedSchema = JSON.parse(value);
+                sendResponse(updatedSchema);
+                const sentinelSelector = updatedSchema?.across[0]?.cssSelector;
+            if(sentinelSelector){
+                const sentinel = document.querySelector(sentinelSelector) as HTMLElement;
+                if(sentinel && sentinel.parentElement){
+                    observeSchemaElement(sentinel.parentElement, ()=>{
+                        const value = localStorage.getItem("pageSchema");
+                        if (value) {
+                            localStorage.removeItem("pageSchema");
+                        }
+                        if(useServiceWorker){
+                            // Send a message to the service worker
+                            chrome.runtime.sendMessage({ type: 'resetPageSchema' }, (response) => {
+                                console.log('Response from service worker:', response);
+                            });
+                        }else{
+                        window.top?.postMessage("setupSiteAgent","*");
+                        }
+                    })
+                }else{
+                    // page has changed and schema is no longer valid
+                    sendResponse(null);
+                }
+            }
             } else {
                 sendResponse(null);
             }
@@ -650,6 +759,26 @@ async function handleScriptAction(
         case "set_page_schema": {
             let updatedSchema = message.action.parameters.schema;
             localStorage.setItem("pageSchema", JSON.stringify(updatedSchema));
+            const sentinelSelector = updatedSchema?.across[0]?.cssSelector;
+            if(sentinelSelector){
+                const sentinel = document.querySelector(sentinelSelector) as HTMLElement;
+                if(sentinel && sentinel.parentElement){
+                    observeSchemaElement(sentinel.parentElement, ()=>{
+                        const value = localStorage.getItem("pageSchema");
+                        if (value) {
+                            localStorage.removeItem("pageSchema");
+                        }
+                        if(useServiceWorker){
+                            // Send a message to the service worker
+                            chrome.runtime.sendMessage({ type: 'resetPageSchema' }, (response) => {
+                                console.log('Response from service worker:', response);
+                            });
+                        }else{
+                        window.top?.postMessage("setupSiteAgent","*");
+                        }
+                    })
+                }
+            }
             sendResponse({});
             break;
         }
@@ -670,7 +799,7 @@ chrome.runtime?.onMessage.addListener(
         sender: chrome.runtime.MessageSender,
         sendResponse,
     ) => {
-        await handleScriptAction(message, sendResponse);
+        await handleScriptAction(message, sendResponse, true);
     },
 );
 

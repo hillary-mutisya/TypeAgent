@@ -12,6 +12,7 @@ import {
     generateActionSchema,
     parseActionSchemaSource,
     generateSchemaTypeDefinition,
+    toJSONParsedActionSchema,
 } from "action-schema";
 import { ActionSchemaCreator as sc } from "action-schema";
 import path from "path";
@@ -239,6 +240,44 @@ export async function handleSchemaDiscoveryAction(
             { exact: true },
         );
 
+        // add wildcard paramspecs
+        let schemaConfig = {
+            paramSpec: {} as Record<string, any>,
+        };
+
+        const authoredActionOrigJson = new Map(
+            Object.entries(
+                (await browser.getCurrentPageStoredProperty(
+                    url!,
+                    "authoredIntentJson",
+                )) ?? {},
+            ),
+        );
+
+        authoredActionOrigJson.forEach((value, key) => {
+            if (value.parameters !== undefined) {
+                value.parameters.forEach((param: any) => {
+                    if (schemaConfig.paramSpec[key] === undefined) {
+                        schemaConfig.paramSpec[key] = {} as Record<
+                            string,
+                            string
+                        >;
+                    }
+                    schemaConfig.paramSpec[key][param.shortName] = "wildcard";
+                });
+            }
+        });
+
+        //
+        const parsed = parseActionSchemaSource(
+            schema,
+            "dynamicUserActions",
+            "DynamicUserPageActions",
+            "",
+            schemaConfig,
+            false,
+        );
+
         const hostName = new URL(url!).hostname.replace(/\./g, "_");
         const agentName = `temp_${hostName}`;
         const schemaDescription = `A schema that enables interactions with the ${hostName} page`;
@@ -249,7 +288,11 @@ export async function handleSchemaDiscoveryAction(
             schema: {
                 description: schemaDescription,
                 schemaType: "DynamicUserPageActions",
-                schemaFile: { content: schema, format: "ts" },
+                // schemaFile: { content: schema, format: "ts" },
+                schemaFile: {
+                    content: JSON.stringify(toJSONParsedActionSchema(parsed)),
+                    format: "pas",
+                },
             },
         };
 

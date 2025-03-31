@@ -1092,6 +1092,17 @@ async function runBrowserAction(action: any) {
 
             await chrome.storage.session.set({ pageSchema: updatedSchema });
 
+            if (
+                action.parameters.schema.titleCssSelector !== undefined &&
+                action.parameters.schema.titleCssSelector.length > 0
+            ) {
+                const targetTab = await getActiveTab();
+                const response = await chrome.tabs.sendMessage(targetTab?.id!, {
+                    type: "observe_element",
+                    selector: action.parameters.schema.titleCssSelector,
+                });
+            }
+
             break;
         }
         case "getPageStoredProperty": {
@@ -1458,6 +1469,57 @@ chrome.runtime.onMessage.addListener(
                     });
 
                     sendResponse({});
+                    break;
+                }
+                case "element_changed": {
+                    const targetTab = await getActiveTab();
+                    const key = targetTab?.url;
+                    const value = await chrome.storage.session.get([
+                        "pageSchema",
+                    ]);
+                    if (value && Array.isArray(value.pageSchema)) {
+                        const targetSchema = value.pageSchema.filter(
+                            (c: { url: any }) => c.url === key,
+                        );
+
+                        // TODO: Need to invalidate schema cache if html changes
+                        if (targetSchema && targetSchema.length > 0) {
+                            const schema = targetSchema[0].body;
+                            if (
+                                schema.titleCssSelector !== undefined &&
+                                schema.titleCssSelector.length > 0 &&
+                                schema.titleCssSelector === message.selector
+                            ) {
+                                // remove cached schema for current tab
+                                const updatedSchema = value.pageSchema.filter(
+                                    (c: { url: any }) => c.url !== key,
+                                );
+
+                                await chrome.storage.session.set({
+                                    pageSchema: updatedSchema,
+                                });
+
+                                // re-initialize crossword
+                                // trigger translator
+                                if (
+                                    webSocket &&
+                                    webSocket.readyState === WebSocket.OPEN
+                                ) {
+                                    webSocket.send(
+                                        JSON.stringify({
+                                            method: "enableSiteTranslator",
+                                            params: {
+                                                translator: "browser.crossword",
+                                            },
+                                        }),
+                                    );
+                                }
+                            }
+                        }
+                    }
+
+                    sendResponse({});
+
                     break;
                 }
             }

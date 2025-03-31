@@ -845,6 +845,27 @@ function getBoundingBox(element: HTMLElement): DOMRect {
     return element.getBoundingClientRect();
 }
 
+function observeElementChanges(selector: string) {
+    const targetElement = document.querySelector(selector);
+    if (!targetElement) return;
+
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach(() => {
+            chrome.runtime.sendMessage({
+                action: "element_changed",
+                selector,
+                newContent: targetElement.innerHTML,
+            });
+        });
+    });
+
+    observer.observe(targetElement, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+    });
+}
+
 function sendPaleoDbRequest(data: any) {
     document.dispatchEvent(
         new CustomEvent("toPaleoDbAutomation", { detail: data }),
@@ -1051,6 +1072,11 @@ async function handleScriptAction(
             if (value) {
                 localStorage.removeItem("pageSchema");
             }
+            sendResponse({});
+            break;
+        }
+        case "observe_element": {
+            observeElementChanges(message.selector);
             sendResponse({});
             break;
         }

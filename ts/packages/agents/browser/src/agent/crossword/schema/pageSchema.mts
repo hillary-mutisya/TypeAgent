@@ -13,4 +13,7 @@ export type CrosswordClue = {
 export type Crossword = {
     across: CrosswordClue[];
     down: CrosswordClue[];
+
+    // CSS selector for the element that holds the daily crossword's title
+    titleCssSelector: string;
 };

@@ -20,20 +20,6 @@ interface Restaurant {
 }
 
 /**
- * Escapes special characters in URLs
- * @param url The URL to escape
- * @returns The escaped URL
- */
-function escapeUrl(url: string): string {
-    return url
-        .replace(/\{/g, "%7B")
-        .replace(/\}/g, "%7D")
-        .replace(/\s/g, "%20")
-        .replace(/"/g, "%22")
-        .replace(/\\/g, "%5C");
-}
-
-/**
  * Checks if a string is a blank node identifier (handles various formats)
  * @param str The string to check
  * @returns Whether the string is a blank node identifier
@@ -427,167 +413,229 @@ function extractRestaurants(
     entities: { [id: string]: any },
     triples: Triple[],
 ): { [id: string]: Restaurant } {
+    console.time("extractRestaurants");
     const restaurants: { [id: string]: Restaurant } = {};
-    const restaurantByBlankNode: { [blankNodeId: string]: string } = {};
+    const restaurantByBlankNode = new Set<string>();
+    const childRestaurants = new Set<string>();
 
-    // First, identify all blank nodes that are restaurants
+    let totalRestaurantsCount = 0;
+    let lastPrintedCount = 0;
+
+    // Memoize expensive functions
+    const memoizedGetLocalName = memoize(getLocalName);
+    const memoizedUnescapeValue = memoize(unescapeValue);
+    const memoizedNormalizeBlankNodeId = memoize(normalizeBlankNodeId);
+
+    // Function to check and print progress
+    const checkAndPrintProgress = () => {
+        totalRestaurantsCount = Object.keys(restaurants).length;
+        if (totalRestaurantsCount >= lastPrintedCount + 10000) {
+            console.log(
+                `Progress: Found ${totalRestaurantsCount} restaurants so far`,
+            );
+            lastPrintedCount =
+                Math.floor(totalRestaurantsCount / 10000) * 10000;
+        }
+    };
+
+    // Create indexing with Maps for better performance
+    const triplesBySubject = new Map<string, Triple[]>();
+    const triplesByObject = new Map<string, Triple[]>();
+
+    // Optimize predicate checks with regex instead of includes
+    const typeRegex = /type$/;
+    const restaurantRegex = /(Restaurant|FoodEstablishment)$/;
+
+    console.log("Building indexes...");
+    console.time("buildIndexes");
+    // Build indexes once - O(n) operation
+    triples.forEach((triple) => {
+        if (!triple) return;
+
+        // Index by subject
+        if (!triplesBySubject.has(triple.subject)) {
+            triplesBySubject.set(triple.subject, []);
+        }
+        triplesBySubject.get(triple.subject)!.push(triple);
+
+        // Index by object for blank nodes
+        if (triple.isObjectBlankNode) {
+            if (!triplesByObject.has(triple.object)) {
+                triplesByObject.set(triple.object, []);
+            }
+            triplesByObject.get(triple.object)!.push(triple);
+        }
+    });
+    console.timeEnd("buildIndexes");
+    console.log("Indexes built successfully");
+
+    console.log("Identifying restaurant blank nodes...");
+    console.time("identifyBlankNodes");
+    // First, identify all blank nodes that are restaurants - O(n) operation
     triples.forEach((triple) => {
         if (!triple) return;
 
         if (
             isBlankNode(triple.subject) &&
-            triple.predicate.includes("type") &&
-            (triple.object.includes("Restaurant") ||
-                triple.object.includes("FoodEstablishment"))
+            typeRegex.test(triple.predicate) &&
+            restaurantRegex.test(triple.object)
         ) {
             // Track that this blank node is a restaurant
-            restaurantByBlankNode[normalizeBlankNodeId(triple.subject)] =
-                triple.subject;
+            restaurantByBlankNode.add(
+                memoizedNormalizeBlankNodeId(triple.subject),
+            );
         }
     });
+    console.timeEnd("identifyBlankNodes");
+    console.log(`Found ${restaurantByBlankNode.size} restaurant blank nodes`);
 
-    console.log(
-        `Found ${Object.keys(restaurantByBlankNode).length} restaurant blank nodes`,
-    );
-
+    console.log("Processing parent entities of restaurant blank nodes...");
+    console.time("processParentEntities");
     // Find the parent entity of restaurant blank nodes
-    triples.forEach((triple) => {
-        if (!triple) return;
+    for (const blankNodeId of restaurantByBlankNode) {
+        const restaurantBlankNode = blankNodeId;
 
-        if (
-            triple.isObjectBlankNode &&
-            restaurantByBlankNode[normalizeBlankNodeId(triple.object)]
-        ) {
-            // This triple connects a parent entity to a restaurant blank node
+        // Use the index to find parent connections - O(1) lookup instead of O(n) filtering
+        const parentConnections =
+            triplesByObject.get(restaurantBlankNode) || [];
+
+        parentConnections.forEach((triple) => {
             const parentId = triple.subject;
-            const restaurantBlankNode = triple.object;
-            const parentProperty = getLocalName(triple.predicate);
+            const parentProperty = memoizedGetLocalName(triple.predicate);
 
             if (!isBlankNode(parentId)) {
                 // Only process if the parent is not itself a blank node (we want top-level entities)
+                // Track that this restaurant is a child
+                childRestaurants.add(restaurantBlankNode);
+
                 if (!restaurants[parentId]) {
+                    // Initialize the object with all its properties at once
                     restaurants[parentId] = {
                         "@id": parentId,
                         "@type": "Restaurant",
                         "@source": "parent",
                         [parentProperty]: {},
                     };
+
+                    checkAndPrintProgress();
                 }
 
-                // Find all triples related to this restaurant blank node
-                const restaurantTriples = triples.filter(
-                    (t) =>
-                        t.subject === restaurantBlankNode ||
-                        (t.isObjectBlankNode &&
-                            t.object === restaurantBlankNode),
-                );
+                // Find all triples related to this restaurant blank node - O(1) lookup
+                const restaurantTriples =
+                    triplesBySubject.get(restaurantBlankNode) || [];
+                const parentPropertyObj = restaurants[parentId][parentProperty];
 
                 // Add restaurant data to the parent entity
                 restaurantTriples.forEach((rt) => {
-                    if (rt.subject === restaurantBlankNode) {
-                        const propName = getLocalName(rt.predicate);
-                        let value: any;
+                    const propName = memoizedGetLocalName(rt.predicate);
+                    let value: any;
 
-                        if (rt.isObjectBlankNode) {
-                            // Handle nested blank nodes
-                            const nestedTriples = triples.filter(
-                                (nt) => nt.subject === rt.object,
+                    if (rt.isObjectBlankNode) {
+                        // Handle nested blank nodes - O(1) lookup with lazy loading
+                        const nestedTriples =
+                            triplesBySubject.get(rt.object) || [];
+                        value = {};
+
+                        nestedTriples.forEach((nt) => {
+                            const nestedPropName = memoizedGetLocalName(
+                                nt.predicate,
                             );
-                            value = {};
-
-                            nestedTriples.forEach((nt) => {
-                                const nestedPropName = getLocalName(
-                                    nt.predicate,
-                                );
-                                value[nestedPropName] = unescapeValue(
-                                    nt.object,
-                                );
-                            });
-                        } else {
-                            value = unescapeValue(rt.object);
-                        }
-
-                        restaurants[parentId][parentProperty][propName] = value;
+                            value[nestedPropName] = memoizedUnescapeValue(
+                                nt.object,
+                            );
+                        });
+                    } else {
+                        value = memoizedUnescapeValue(rt.object);
                     }
+
+                    parentPropertyObj[propName] = value;
                 });
             }
-        }
-    });
-
-    // Add standalone restaurants (not linked to any parent)
-    for (const blankNodeId in restaurantByBlankNode) {
-        const restaurantId = restaurantByBlankNode[blankNodeId];
-
-        // Check if this restaurant is already included as a child of some parent
-        let isChild = false;
-        for (const parentId in restaurants) {
-            if (restaurants[parentId][restaurantId]) {
-                isChild = true;
-                break;
-            }
-        }
-
-        if (!isChild) {
-            // This is a standalone restaurant, collect all its properties
-            const restaurantTriples = triples.filter(
-                (t) => t.subject === restaurantId,
-            );
-            const restaurantData: Restaurant = {
-                "@id": restaurantId,
-                "@type": "Restaurant",
-                "@source": "standalone",
-            };
-
-            restaurantTriples.forEach((rt) => {
-                const propName = getLocalName(rt.predicate);
-                let value: any;
-
-                if (rt.isObjectBlankNode) {
-                    // Handle nested blank nodes
-                    const nestedTriples = triples.filter(
-                        (nt) => nt.subject === rt.object,
-                    );
-                    value = {};
-
-                    nestedTriples.forEach((nt) => {
-                        const nestedPropName = getLocalName(nt.predicate);
-                        value[nestedPropName] = unescapeValue(nt.object);
-                    });
-                } else {
-                    value = unescapeValue(rt.object);
-                }
-
-                restaurantData[propName] = value;
-            });
-
-            restaurants[restaurantId] = restaurantData;
-        }
+        });
     }
+    console.timeEnd("processParentEntities");
 
+    console.log("Processing standalone restaurants...");
+    console.time("processStandaloneRestaurants");
+    // Add standalone restaurants (not linked to any parent) - O(1) checks with Set
+    for (const blankNodeId of restaurantByBlankNode) {
+        // Skip if this restaurant is already a child - O(1) check with Set
+        if (childRestaurants.has(blankNodeId)) {
+            continue;
+        }
+
+        // This is a standalone restaurant, collect all its properties - O(1) lookup
+        const restaurantTriples = triplesBySubject.get(blankNodeId) || [];
+
+        // Initialize all properties at once
+        const restaurantData: Restaurant = {
+            "@id": blankNodeId,
+            "@type": "Restaurant",
+            "@source": "standalone",
+        };
+
+        // Build a properties object first, then assign all at once
+        const properties: { [key: string]: any } = {};
+        restaurantTriples.forEach((rt) => {
+            const propName = memoizedGetLocalName(rt.predicate);
+
+            if (rt.isObjectBlankNode) {
+                // Handle nested blank nodes - O(1) lookup
+                const nestedTriples = triplesBySubject.get(rt.object) || [];
+                const nestedProps: { [key: string]: any } = {};
+
+                nestedTriples.forEach((nt) => {
+                    const nestedPropName = memoizedGetLocalName(nt.predicate);
+                    nestedProps[nestedPropName] = memoizedUnescapeValue(
+                        nt.object,
+                    );
+                });
+
+                properties[propName] = nestedProps;
+            } else {
+                properties[propName] = memoizedUnescapeValue(rt.object);
+            }
+        });
+
+        // Assign all properties at once
+        Object.assign(restaurantData, properties);
+        restaurants[blankNodeId] = restaurantData;
+        checkAndPrintProgress();
+    }
+    console.timeEnd("processStandaloneRestaurants");
+
+    console.log("Processing restaurants from 'item' properties in entities...");
+    console.time("processItemProperties");
     // Also check for entities that refer to restaurants through 'item' property
     for (const entityId in entities) {
         const entity = entities[entityId];
 
         if (entity.item && typeof entity.item === "object") {
-            // Check if the item is a restaurant
+            // Check if the item is a restaurant - use direct property check instead of includes
             if (
                 entity.item.type === "Restaurant" ||
                 entity.item.type === "FoodEstablishment"
             ) {
-                restaurants[entityId + "#item"] = {
-                    "@id": entityId + "#item",
+                const restaurantId = entityId + "#item";
+                restaurants[restaurantId] = {
+                    "@id": restaurantId,
                     "@type": "Restaurant",
                     "@source": "item",
                     ...entity.item,
                 };
+                checkAndPrintProgress();
             }
         }
     }
+    console.timeEnd("processItemProperties");
 
+    console.log("Processing direct restaurant entities...");
+    console.time("processDirectEntities");
     // Direct search for entities with type restaurant
     for (const entityId in entities) {
         const entity = entities[entityId];
 
+        // Use direct property check instead of includes
         if (
             entity.type === "Restaurant" ||
             entity.type === "FoodEstablishment"
@@ -598,10 +646,29 @@ function extractRestaurants(
                 "@source": "direct",
                 ...entity,
             };
+            checkAndPrintProgress();
         }
     }
+    console.timeEnd("processDirectEntities");
 
+    console.timeEnd("extractRestaurants");
+    console.log(
+        `Finished! Total restaurants found: ${Object.keys(restaurants).length}`,
+    );
     return restaurants;
+}
+
+// Simple memoization function
+function memoize<T, R>(fn: (arg: T) => R): (arg: T) => R {
+    const cache = new Map<T, R>();
+    return (arg: T): R => {
+        if (cache.has(arg)) {
+            return cache.get(arg)!;
+        }
+        const result = fn(arg);
+        cache.set(arg, result);
+        return result;
+    };
 }
 
 /**
@@ -610,7 +677,7 @@ function extractRestaurants(
  * @param outputFilePath Path to save the output JSON file
  * @param debug Whether to enable debug mode
  */
-async function processNQuadFile(
+export async function processNQuadFile(
     inputFilePath: string,
     outputFilePath: string,
     debug: boolean = false,
@@ -695,23 +762,35 @@ async function processNQuadFile(
     }
 }
 
-// Export functions for use as a module
-export { parseNQuadLine, processBlankNodes, processNQuadFile, escapeUrl };
+async function getSubfolders(parentDir: string): Promise<string[]> {
+    const subfolders: string[] = [];
+    const items = await fs.promises.readdir(parentDir, { withFileTypes: true });
+
+    for (const item of items) {
+        if (item.isDirectory()) {
+            subfolders.push(path.join(parentDir, item.name));
+        }
+    }
+
+    return subfolders;
+}
+
 async function main() {
-    const sourceFolder = path.join(
+    const parentFolder = path.join(
         homedir(),
         "Downloads",
         "restaurant common crawl",
-        "part_12",
     );
-    const inputFile = path.join(sourceFolder, "part_12");
-    const outputFile = path.join(
-        sourceFolder,
-        path.basename(inputFile, path.extname(inputFile)) + ".json",
-    );
+    const subfolders = await getSubfolders(parentFolder);
+    for (const folder of subfolders) {
+        const inputFile = path.join(folder, path.basename(folder));
+        const outputFile = path.join(
+            folder,
+            path.basename(inputFile, path.extname(inputFile)) + ".json",
+        );
 
-    // Choose which implementation to use
-    await processNQuadFile(inputFile, outputFile);
+        await processNQuadFile(inputFile, outputFile);
+    }
 
     console.log("Conversion complete!");
 }

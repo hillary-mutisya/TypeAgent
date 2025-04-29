@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Web Agent Plan Visualizer</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="sidepanel2.css">
+</head>
+<body class="bg-gray-100 p-4">
+  <div class="container">
+    <!-- Header Section -->
+    <div class="bg-white p-4 rounded-lg shadow-md mb-4 hidden">
+      <h1 class="text-xl font-bold mb-2">Web Agent Plan Visualizer</h1>
+      <div class="text-sm text-gray-600 mb-2" id="page-info">Loading page info...</div>
+      <div class="flex gap-2 mb-2">
+        <button id="export-plan" class="flex items-center gap-1 bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-down"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/></svg>
+          Export
+        </button>
+        <button id="import-plan" class="flex items-center gap-1 bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-upload"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+          Import
+        </button>
+        <button id="save-plan" class="flex items-center gap-1 bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-save"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          Save
+        </button>
+        <button id="load-plan" class="flex items-center gap-1 bg-purple-600 text-white px-3 py-1 rounded text-sm hover:bg-purple-700">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-folder-open"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
+          Load
+        </button>
+      </div>
+      <select id="saved-plans" class="w-full p-1 text-sm border rounded hidden">
+        <option value="">Select a saved plan...</option>
+      </select>
+    </div>
+
+    <div class="grid grid-cols-1 gap-4 mb-4">
+      <!-- Action Definition Section -->
+      <div class="bg-white p-4 rounded-lg shadow-md">
+        <h2 class="text-lg font-semibold mb-2">Action Definition</h2>
+        
+        <div class="mb-3">
+          <label class="block text-sm font-medium text-gray-700 mb-1">Action Name</label>
+          <input
+            type="text"
+            id="action-name"
+            class="w-full p-2 border rounded-md text-sm"
+          />
+        </div>
+        
+        <h3 class="font-semibold mt-3 mb-2 text-sm">Parameters</h3>
+        <div id="action-parameters" class="max-h-40 overflow-y-auto">
+          <!-- Parameters will be inserted here -->
+        </div>
+        
+        <button 
+          id="add-parameter-btn"
+          class="flex items-center gap-1 text-blue-600 hover:text-blue-800 mt-2 text-sm"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+          Add Parameter
+        </button>
+      </div>
+      
+      <!-- Plan Definition Section -->
+      <div class="bg-white p-4 rounded-lg shadow-md">
+        <h2 class="text-lg font-semibold mb-2">Plan Definition</h2>
+        
+        <div class="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Plan Name</label>
+            <input
+              type="text"
+              id="plan-name"
+              class="w-full p-1 border rounded-md text-sm"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Intent Schema Name</label>
+            <input
+              type="text"
+              id="intent-schema-name"
+              class="w-full p-1 border rounded-md text-sm"
+            />
+          </div>
+        </div>
+        
+        <div class="mb-3">
+          <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+          <input
+            type="text"
+            id="plan-description"
+            class="w-full p-1 border rounded-md text-sm"
+          />
+        </div>
+        
+        <h3 class="font-semibold mt-3 mb-2 text-sm">Steps</h3>
+        <div id="plan-steps" class="max-h-60 overflow-y-auto">
+          <!-- Steps will be inserted here -->
+        </div>
+        
+        <button 
+          id="add-step-btn"
+          class="flex items-center gap-1 text-blue-600 hover:text-blue-800 mt-2 text-sm"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+          Add Step
+        </button>
+      </div>
+    </div>
+    
+    <!-- LLM Integration Section -->
+    <div class="bg-white p-4 rounded-lg shadow-md mb-4 hidden">
+      <h2 class="text-lg font-semibold mb-2 flex items-center gap-1">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-cpu"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg>
+        LLM Integration
+      </h2>
+      
+      <div class="mb-2">
+        <label class="block text-sm font-medium text-gray-700 mb-1">
+          Ask the LLM to modify your plan
+        </label>
+        <textarea
+          id="llm-prompt"
+          placeholder="Try: 'Add a new step to click a button'"
+          class="w-full p-2 border rounded-md h-16 text-sm"
+        ></textarea>
+      </div>
+      
+      <div class="flex justify-between">
+        <button 
+          id="send-to-llm-btn"
+          class="bg-purple-600 text-white px-3 py-1 rounded text-sm hover:bg-purple-700"
+        >
+          Send to LLM
+        </button>
+        
+        <div id="llm-response" class="ml-3 p-2 bg-purple-50 rounded-md border border-purple-200 flex-1 hidden text-sm">
+        </div>
+      </div>
+    </div>
+    
+    <!-- Visualization of Plan Flow -->
+    <div class="bg-white p-4 rounded-lg shadow-md hidden">
+      <h2 class="text-lg font-semibold mb-2">Plan Flow Visualization</h2>
+      
+      <div class="overflow-x-auto">
+        <div id="plan-flow" class="flex items-center gap-3 py-2">
+          <!-- Flow visualization will be inserted here -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="sidepanel2.js"></script>
+</body>
+</html>

@@ -110,6 +110,18 @@ module.exports = {
                     to: "./extension",
                 },
                 {
+                    from: path.join(srcDir, "sidepanel2.html"),
+                    to: "./extension",
+                },
+                {
+                    from: path.join(srcDir, "sidepanel2.js"),
+                    to: "./extension",
+                },
+                {
+                    from: path.join(srcDir, "sidepanel2.css"),
+                    to: "./extension",
+                },
+                {
                     from: path.join(srcDir, "options.html"),
                     to: "./extension",
                 },

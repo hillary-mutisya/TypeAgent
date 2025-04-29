@@ -34,6 +34,12 @@ export function initializeContextMenu(): void {
     });
 
     chrome.contextMenus.create({
+        title: "Discover page Schema 2",
+        id: "discoverPageSchema2",
+        documentUrlPatterns: ["http://*/*", "https://*/*"],
+    });
+
+    chrome.contextMenus.create({
         id: "sidepanel-registerAgent",
         title: "Update Page Agent",
         contexts: ["all"],
@@ -101,6 +107,16 @@ export async function handleContextMenuClick(
             break;
         }
         case "discoverPageSchema": {
+            await chrome.sidePanel.open({ tabId: tab.id! });
+            break;
+        }
+        case "discoverPageSchema2": {
+            await chrome.sidePanel.setOptions({
+                tabId: tab.id!,
+                path: 'sidepanel2.html',
+                enabled: true
+              });
+
             await chrome.sidePanel.open({ tabId: tab.id! });
             break;
         }

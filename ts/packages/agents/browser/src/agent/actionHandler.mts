@@ -9,6 +9,7 @@ import {
     AppAgent,
     AppAgentEvent,
     SessionContext,
+    Storage,
     TypeAgentAction,
 } from "@typeagent/agent-sdk";
 import { createActionResult } from "@typeagent/agent-sdk/helpers/action";
@@ -42,6 +43,7 @@ import { CrosswordActions } from "./crossword/schema/userActions.mjs";
 import { InstacartActions } from "./instacart/schema/userActions.mjs";
 import { ShoppingActions } from "./commerce/schema/userActions.mjs";
 import { SchemaDiscoveryActions } from "./discovery/schema/discoveryActions.mjs";
+import { PageActionIndex, PageActionIndexManager } from "./pageActionIndex.mjs";
 
 export function instantiate(): AppAgent {
     return {
@@ -59,6 +61,7 @@ export type BrowserActionContext = {
     browserConnector: BrowserConnector | undefined;
     browserProcess: ChildProcess | undefined;
     tabTitleIndex: TabTitleIndex | undefined;
+    pageActionIndex: PageActionIndexManager | undefined;
 };
 
 async function initializeBrowserContext(): Promise<BrowserActionContext> {
@@ -69,6 +72,7 @@ async function initializeBrowserContext(): Promise<BrowserActionContext> {
         browserConnector: undefined,
         browserProcess: undefined,
         tabTitleIndex: undefined,
+        pageActionIndex: undefined,
     };
 }
 
@@ -84,6 +88,16 @@ async function updateBrowserContext(
     if (enable) {
         if (!context.agentContext.tabTitleIndex) {
             context.agentContext.tabTitleIndex = createTabTitleIndex();
+        }
+
+        if(!context.agentContext.pageActionIndex){
+            const fileName = "pageActionIndex.json"
+            if (!(await context.sessionStorage?.exists(fileName))) {
+                await context.sessionStorage?.write(fileName, "");
+            }
+            const filePath = await getFullStorageFilePath(fileName, context.sessionStorage!);
+            context.agentContext.pageActionIndex = new PageActionIndexManager(filePath!);
+            await context.agentContext.pageActionIndex.initialize();
         }
 
         if (context.agentContext.webSocket?.readyState === WebSocket.OPEN) {
@@ -379,6 +393,13 @@ async function handleTabIndexActions(
         throw new Error("No websocket connection.");
     }
     return undefined;
+}
+
+async function getFullStorageFilePath(fileName: string, storage: Storage) {
+    const paths = await storage?.list("", { fullPath: true });
+    const candidates = paths?.filter((item) => item.endsWith(fileName!));
+
+    return candidates ? candidates[0] : undefined;
 }
 
 export async function createAutomationBrowser(isVisible?: boolean) {

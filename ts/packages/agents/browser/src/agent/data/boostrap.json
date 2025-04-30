@@ -1,0 +1,394 @@
+{
+    "websites": {
+      "example-shop.com": {
+        "domain": "example-shop.com",
+        "name": "Example Shop",
+        "pageTypes": {
+          "homepage": {
+            "name": "Homepage",
+            "urlPatterns": [
+              "^https?://www\\.example-shop\\.com/?$", 
+              "^https?://example-shop\\.com/?$"
+            ],
+            "actions": {
+              "search": {
+                "type": "dev",
+                "schemaFileName": "search.schema.ts",
+                "actionName": "performSearch"
+              },
+              "navigateToCategory": {
+                "type": "dev",
+                "schemaFileName": "navigation.schema.ts",
+                "actionName": "goToCategory"
+              }
+            }
+          },
+          "productDetailsPage": {
+            "name": "Product Details Page",
+            "urlPatterns": [
+              "^https?://(?:www\\.)?example-shop\\.com/product/[\\w-]+"
+            ],
+            "actions": {
+              "addToCart": {
+                "type": "dev",
+                "schemaFileName": "cart.schema.ts",
+                "actionName": "addItemToCart"
+              },
+              "saveForLater": {
+                "type": "dev",
+                "schemaFileName": "wishlist.schema.ts",
+                "actionName": "saveToWishlist"
+              }
+            }
+          },
+          "shoppingCart": {
+            "name": "Shopping Cart",
+            "urlPatterns": [
+              "^https?://(?:www\\.)?example-shop\\.com/cart"
+            ],
+            "actions": {
+              "checkout": {
+                "type": "dev",
+                "schemaFileName": "checkout.schema.ts",
+                "actionName": "proceedToCheckout"
+              },
+              "updateQuantity": {
+                "type": "dev",
+                "schemaFileName": "cart.schema.ts",
+                "actionName": "updateItemQuantity"
+              }
+            }
+          },
+          "searchResultsPage": {
+            "name": "Search Results Page",
+            "urlPatterns": [
+              "^https?://(?:www\\.)?example-shop\\.com/search"
+            ],
+            "actions": {
+              "filterResults": {
+                "type": "dev",
+                "schemaFileName": "search.schema.ts",
+                "actionName": "filterSearchResults"
+              },
+              "sortResults": {
+                "type": "dev",
+                "schemaFileName": "search.schema.ts",
+                "actionName": "sortSearchResults"
+              },
+              "selectResult": {
+                "type": "dev",
+                "schemaFileName": "search.schema.ts",
+                "actionName": "selectSearchResult"
+              }
+            }
+          }
+        }
+      },
+      "example-news.com": {
+        "domain": "example-news.com",
+        "name": "Example News",
+        "pageTypes": {
+          "homepage": {
+            "name": "Homepage",
+            "urlPatterns": [
+              "^https?://(?:www\\.)?example-news\\.com/?$"
+            ],
+            "actions": {
+              "search": {
+                "type": "dev",
+                "schemaFileName": "search.schema.ts",
+                "actionName": "searchArticles"
+              },
+              "navigateToSection": {
+                "type": "dev",
+                "schemaFileName": "navigation.schema.ts",
+                "actionName": "goToNewsSection"
+              }
+            }
+          },
+          "articlePage": {
+            "name": "Article Page",
+            "urlPatterns": [
+              "^https?://(?:www\\.)?example-news\\.com/article/[\\w-]+"
+            ],
+            "actions": {
+              "saveArticle": {
+                "type": "dev",
+                "schemaFileName": "articles.schema.ts",
+                "actionName": "saveArticleForLater"
+              },
+              "shareArticle": {
+                "type": "dev",
+                "schemaFileName": "sharing.schema.ts",
+                "actionName": "shareArticleToSocial"
+              },
+              "toggleDarkMode": {
+                "type": "dev",
+                "schemaFileName": "display.schema.ts",
+                "actionName": "toggleReadingMode"
+              }
+            }
+          },
+          "sectionPage": {
+            "name": "Section Page",
+            "urlPatterns": [
+              "^https?://(?:www\\.)?example-news\\.com/section/[\\w-]+"
+            ],
+            "actions": {
+              "filterByDate": {
+                "type": "dev",
+                "schemaFileName": "filter.schema.ts",
+                "actionName": "filterByPublishDate"
+              },
+              "sortArticles": {
+                "type": "dev",
+                "schemaFileName": "sort.schema.ts",
+                "actionName": "sortArticlesList"
+              }
+            }
+          }
+        }
+      },
+      "example-mail.com": {
+        "domain": "example-mail.com",
+        "name": "Example Mail",
+        "pageTypes": {
+          "inboxPage": {
+            "name": "Inbox Page",
+            "urlPatterns": [
+              "^https?://(?:www\\.)?example-mail\\.com/inbox"
+            ],
+            "actions": {
+              "composeNewEmail": {
+                "type": "dev",
+                "schemaFileName": "email.schema.ts",
+                "actionName": "composeEmail"
+              },
+              "refreshInbox": {
+                "type": "dev",
+                "schemaFileName": "email.schema.ts",
+                "actionName": "refreshEmailList"
+              },
+              "searchEmails": {
+                "type": "dev",
+                "schemaFileName": "search.schema.ts",
+                "actionName": "searchInbox"
+              },
+              "selectEmail": {
+                "type": "dev",
+                "schemaFileName": "email.schema.ts",
+                "actionName": "selectEmailItem"
+              }
+            }
+          },
+          "emailViewPage": {
+            "name": "Email View Page",
+            "urlPatterns": [
+              "^https?://(?:www\\.)?example-mail\\.com/email/[\\w-]+"
+            ],
+            "actions": {
+              "replyToEmail": {
+                "type": "dev",
+                "schemaFileName": "email.schema.ts",
+                "actionName": "replyToEmail"
+              },
+              "forwardEmail": {
+                "type": "dev",
+                "schemaFileName": "email.schema.ts",
+                "actionName": "forwardEmail"
+              },
+              "deleteEmail": {
+                "type": "dev",
+                "schemaFileName": "email.schema.ts",
+                "actionName": "moveEmailToTrash"
+              },
+              "markAsRead": {
+                "type": "dev",
+                "schemaFileName": "email.schema.ts",
+                "actionName": "markEmailAsRead"
+              }
+            }
+          },
+          "composePage": {
+            "name": "Compose Email Page",
+            "urlPatterns": [
+              "^https?://(?:www\\.)?example-mail\\.com/compose"
+            ],
+            "actions": {
+              "sendEmail": {
+                "type": "dev",
+                "schemaFileName": "email.schema.ts",
+                "actionName": "sendComposedEmail"
+              },
+              "attachFile": {
+                "type": "dev",
+                "schemaFileName": "email.schema.ts",
+                "actionName": "attachFileToEmail"
+              },
+              "saveDraft": {
+                "type": "dev",
+                "schemaFileName": "email.schema.ts",
+                "actionName": "saveEmailDraft"
+              }
+            }
+          }
+        }
+      },
+      "example-game.com": {
+        "domain": "example-game.com",
+        "name": "Example Game",
+        "pageTypes": {
+          "spellingBeePage": {
+            "name": "Spelling Bee Page",
+            "urlPatterns": [
+              "^https?://(?:www\\.)?example-game\\.com/spelling-bee"
+            ],
+            "actions": {
+              "submitWord": {
+                "type": "user",
+                "actionDefinition": {
+                  "actionName": "submitWord",
+                  "parameters": [
+                    {
+                      "name": "Word to submit",
+                      "shortName": "word",
+                      "description": "The word that the user wants to submit in the spelling bee game.",
+                      "type": "string",
+                      "required": true
+                    }
+                  ]
+                },
+                "plan": {
+                  "planName": "SubmitWordPlan",
+                  "intentSchemaName": "submitWord",
+                  "description": "This plan allows the user to submit a word in the spelling bee game.",
+                  "steps": [
+                    {
+                      "actionName": "clickOnElement",
+                      "parameters": {
+                        "elementText": "|"
+                      }
+                    },
+                    {
+                      "actionName": "enterTextAtPageScope",
+                      "parameters": {
+                        "textParameter": "word"
+                      }
+                    },
+                    {
+                      "actionName": "clickOnButton",
+                      "parameters": {
+                        "buttonText": "Enter"
+                      }
+                    }
+                  ]
+                }
+              },
+              "viewHint": {
+                "type": "user",
+                "actionDefinition": {
+                  "actionName": "viewHint",
+                  "parameters": []
+                },
+                "plan": {
+                  "planName": "ViewHintPlan",
+                  "intentSchemaName": "viewHint",
+                  "description": "This plan allows the user to view a hint in the spelling bee game.",
+                  "steps": [
+                    {
+                      "actionName": "clickOnElement",
+                      "parameters": {
+                        "elementText": "Hint"
+                      }
+                    }
+                  ]
+                }
+              },
+              "shuffleLetters": {
+                "type": "user",
+                "actionDefinition": {
+                  "actionName": "shuffleLetters",
+                  "parameters": []
+                },
+                "plan": {
+                  "planName": "ShuffleLettersPlan",
+                  "intentSchemaName": "shuffleLetters",
+                  "description": "This plan allows the user to shuffle the letters in the spelling bee game.",
+                  "steps": [
+                    {
+                      "actionName": "clickOnElement",
+                      "parameters": {
+                        "elementText": "Shuffle"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "crosswordPage": {
+            "name": "Crossword Page",
+            "urlPatterns": [
+              "^https?://(?:www\\.)?example-game\\.com/crossword"
+            ],
+            "actions": {
+              "revealCell": {
+                "type": "user",
+                "actionDefinition": {
+                  "actionName": "revealCell",
+                  "parameters": []
+                },
+                "plan": {
+                  "planName": "RevealCellPlan",
+                  "intentSchemaName": "revealCell",
+                  "description": "This plan allows the user to reveal the current cell in the crossword puzzle.",
+                  "steps": [
+                    {
+                      "actionName": "clickOnElement",
+                      "parameters": {
+                        "elementText": "Reveal"
+                      }
+                    },
+                    {
+                      "actionName": "clickOnElement",
+                      "parameters": {
+                        "elementText": "Cell"
+                      }
+                    }
+                  ]
+                }
+              },
+              "checkPuzzle": {
+                "type": "user",
+                "actionDefinition": {
+                  "actionName": "checkPuzzle",
+                  "parameters": []
+                },
+                "plan": {
+                  "planName": "CheckPuzzlePlan",
+                  "intentSchemaName": "checkPuzzle",
+                  "description": "This plan allows the user to check the puzzle for errors.",
+                  "steps": [
+                    {
+                      "actionName": "clickOnElement",
+                      "parameters": {
+                        "elementText": "Check"
+                      }
+                    },
+                    {
+                      "actionName": "clickOnElement",
+                      "parameters": {
+                        "elementText": "Puzzle"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "version": "1.0.0",
+    "lastUpdated": "2025-04-30T12:00:00.000Z"
+  }

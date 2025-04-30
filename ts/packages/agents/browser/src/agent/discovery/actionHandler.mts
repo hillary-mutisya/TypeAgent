@@ -26,6 +26,7 @@ import {
 } from "./schema/discoveryActions.mjs";
 import { UserIntent } from "./schema/recordedActions.mjs";
 import { createSchemaAuthoringAgent } from "./authoringActionHandler.mjs";
+import { KnownPageTypes } from "./schema/pageTypes.mjs";
 
 export async function handleSchemaDiscoveryAction(
     action: SchemaDiscoveryActions,
@@ -73,6 +74,16 @@ export async function handleSchemaDiscoveryAction(
         const htmlFragments = await browser.getHtmlFragments();
         const screenshot = await browser.getCurrentPageScreenshot();
         let pageSummary = "";
+        let pageType = "";
+
+        const pageTypeResponse = await agent.getPageType(undefined, htmlFragments, [
+            screenshot,
+        ]);
+
+        if (pageTypeResponse.success) {
+            pageType = (pageTypeResponse.data as KnownPageTypes).pageType.name;
+            console.log(`Page Type: ${pageType}`)
+        }
 
         const summaryResponse = await agent.getPageSummary(
             undefined,
@@ -150,6 +161,10 @@ export async function handleSchemaDiscoveryAction(
                     createTempAgentForSchema(browser, agent, context),
                 );
             }, 500);
+        }
+
+        if(context.agentContext.pageActionIndex){
+            // context.agentContext.pageActionIndex.processPage(url, htmlFragments)
         }
 
         return {

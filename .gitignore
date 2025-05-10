@@ -20,6 +20,7 @@ dist-pub/
 *.map
 *.out.txt
 *.tsbuildinfo
+.rollup.cache
 
 # Local development and debugging
 .scratch/

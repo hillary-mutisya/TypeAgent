@@ -391,7 +391,10 @@ async function handleTabIndexActions(
     return undefined;
 }
 
-export async function createAutomationBrowser(isVisible?: boolean) {
+export async function createAutomationBrowser(
+    isVisible?: boolean,
+    useChrome?: boolean,
+) {
     let timeoutHandle: NodeJS.Timeout;
 
     const timeoutPromise = new Promise<undefined>((_resolve, reject) => {
@@ -410,6 +413,7 @@ export async function createAutomationBrowser(isVisible?: boolean) {
 
                 const childProcess = fork(expressService, [
                     isVisible ? "true" : "false",
+                    useChrome ? "true" : "false",
                 ]);
 
                 childProcess.on("message", function (message) {

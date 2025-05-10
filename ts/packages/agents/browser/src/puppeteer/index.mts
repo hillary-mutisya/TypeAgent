@@ -266,7 +266,14 @@ export async function main() {
         new URL(path.join("..", "./extension"), import.meta.url),
     );
 
-    const consoleArgs = process.argv.slice(2);
+    let consoleArgs = process.argv.slice(2);
+    if (!consoleArgs || consoleArgs.length == 0) {
+        consoleArgs = ["true", "false"];
+    }
+
+    if (consoleArgs && consoleArgs.length == 1) {
+        consoleArgs = [consoleArgs[0], "false"];
+    }
 
     const runner = new HeadlessExtensionRunner({
         extensionPath: extensionPath,

@@ -14,6 +14,10 @@ export type CreateOrUpdateWebPlan = {
         // the list of plan steps provided by the user. Each entry is a clear, concise description of an operation
         // that the user would run on a web page.
         webPlanSteps?: string[];
+
+        // unique identifier for the web plan
+        webPlanId?: string;
+        
         // The parameter names for the values that must be provided when users invoke this web plan
         requiredParameterNames?: string[];
     };
@@ -22,6 +26,8 @@ export type CreateOrUpdateWebPlan = {
 export type RunCurrentWebPlan = {
     actionName: "runCurrentWebPlan";
     parameters: {
+        // unique identifier for the web plan
+        webPlanId?: string;
         // the proposed name for the plan
         webPlanName?: string;
         // Set this value baderd on the web plan name, description and steps. The goal defines the

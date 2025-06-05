@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { AppAgent, TypeAgentAction } from "@typeagent/agent-sdk";
+import { ActionContext, AppAgent, TypeAgentAction } from "@typeagent/agent-sdk";
 import { BrowserConnector } from "../browserConnector.mjs";
 import { createActionResultNoDisplay } from "@typeagent/agent-sdk/helpers/action";
 import {
@@ -14,8 +14,10 @@ import { UserIntent } from "./schema/recordedActions.mjs";
 import { SchemaDiscoveryActions } from "./schema/discoveryActions.mjs";
 import { SchemaDiscoveryAgent } from "./translator.mjs";
 import { WebPlanResult, WebPlanSuggestions } from "./schema/evaluatePlan.mjs";
+import { randomUUID } from "crypto";
 
 type WebPlanInfo = {
+    id: string;
     webPlanName?: string | undefined;
     webPlanDescription?: string | undefined;
     webPlanSteps?: string[] | undefined;
@@ -31,20 +33,33 @@ export function createSchemaAuthoringAgent(
     let intentInfo: { intentJson: UserIntent; actions: any } | undefined =
         undefined;
 
-    let webPlanDraft: WebPlanInfo = {};
+    let webPlanDraft: WebPlanInfo = {id: randomUUID()};
 
     return {
         async executeAction(
             action: TypeAgentAction<PlanAuthoringActions>,
-            actionContext: any,
+            actionContext: ActionContext<any>,
         ): Promise<any> {
             console.log(`Executing action: ${action.actionName}`);
+
             switch (action.actionName) {
                 case "createOrUpdateWebPlan":
                     const result = await handleUpdateWebPlan(
                         action,
                         actionContext,
                     );
+
+                    result.activityContext = webPlanDraft !== undefined
+                    ? {
+                          activityName: action.actionName,
+                          description: `Updating webPlan ${webPlanDraft.webPlanName}`,
+                          state: {
+                              title: webPlanDraft.webPlanName,
+                              draft: webPlanDraft
+                          },
+                      }
+                    : null;
+
                     return result;
                     break;
                 case "runCurrentWebPlan":
@@ -79,7 +94,7 @@ export function createSchemaAuthoringAgent(
             result.additionalInstructions = additionalInstructions;
         }
 
-        result.entities;
+        result.entities = [entityFromWebPlan(webPlanDraft)];
         return result;
     }
 
@@ -103,6 +118,7 @@ export function createSchemaAuthoringAgent(
             "Check the output in the browser. Is the task completed?";
 
         webPlanDraft = {
+            id: action.parameters.webPlanId ?? randomUUID(),
             webPlanName: action.parameters.webPlanName,
             webPlanDescription: action.parameters.webPlanDescription,
             webPlanSteps: action.parameters.webPlanSteps,
@@ -173,6 +189,20 @@ export function createSchemaAuthoringAgent(
 
         return { question, additionalInstructions };
     }
+
+function entityFromWebPlan(webPlan: WebPlanInfo) {
+    return {
+        name: webPlan.webPlanName ?? "draftPlan",
+        type: ["Montage", "project"],
+        uniqueId: webPlan.id,
+        facets: [
+            {
+                name: "status",
+                value: "This plan is under development.",
+            },
+        ],
+    };
+}
 
     async function handleRunWebPlan(
         action: RunCurrentWebPlan,

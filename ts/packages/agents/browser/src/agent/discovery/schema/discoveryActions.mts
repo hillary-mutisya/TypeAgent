@@ -32,6 +32,7 @@ export type RegisterPageDynamicAgent = {
     };
 };
 
+// Action for creating or updating web plans
 export type StartAuthoringSession = {
     actionName: "startAuthoringSession";
 };

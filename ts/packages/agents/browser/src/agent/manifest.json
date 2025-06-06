@@ -44,6 +44,15 @@
         "schemaFile": "./discovery/schema/discoveryActions.mts",
         "schemaType": "SchemaDiscoveryActions"
       }
+    },
+    "actionAuthoring": {
+      "defaultEnabled": false,
+      "transient": true,
+      "schema": {
+        "description": "A schema that enables authoring new actions for the web automation plans.",
+        "schemaFile": "./discovery/schema/authoringActions.mts",
+        "schemaType": "PlanAuthoringActions"
+      }
     }
   }
 }

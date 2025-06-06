@@ -17,7 +17,7 @@ export type CreateOrUpdateWebPlan = {
 
         // unique identifier for the web plan
         webPlanId?: string;
-        
+
         // The parameter names for the values that must be provided when users invoke this web plan
         requiredParameterNames?: string[];
     };

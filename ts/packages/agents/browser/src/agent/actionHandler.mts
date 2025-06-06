@@ -46,6 +46,8 @@ import { CrosswordActions } from "./crossword/schema/userActions.mjs";
 import { InstacartActions } from "./instacart/schema/userActions.mjs";
 import { ShoppingActions } from "./commerce/schema/userActions.mjs";
 import { SchemaDiscoveryActions } from "./discovery/schema/discoveryActions.mjs";
+import { PlanAuthoringActions } from "./discovery/schema/authoringActions.mjs";
+import { handlePlanAuthoringAction } from "./discovery/authoringActionHandler.mjs";
 
 export function instantiate(): AppAgent {
     return {
@@ -188,12 +190,17 @@ async function updateBrowserContext(
                                     context,
                                 );
 
-                            webSocket.send(
-                                JSON.stringify({
-                                    id: data.id,
-                                    result: discoveryResult.data,
-                                }),
-                            );
+                            if (
+                                discoveryResult !== undefined &&
+                                "data" in discoveryResult
+                            ) {
+                                webSocket.send(
+                                    JSON.stringify({
+                                        id: data.id,
+                                        result: discoveryResult.data,
+                                    }),
+                                );
+                            }
                         }
                     }
                 }
@@ -221,7 +228,8 @@ async function executeBrowserAction(
         | TypeAgentAction<CrosswordActions, "browser.crossword">
         | TypeAgentAction<ShoppingActions, "browser.commerce">
         | TypeAgentAction<InstacartActions, "browser.instacart">
-        | TypeAgentAction<SchemaDiscoveryActions, "browser.actionDiscovery">,
+        | TypeAgentAction<SchemaDiscoveryActions, "browser.actionDiscovery">
+        | TypeAgentAction<PlanAuthoringActions, "browser.actionAuthoring">,
 
     context: ActionContext<BrowserActionContext>,
 ) {
@@ -266,12 +274,46 @@ async function executeBrowserAction(
 
                 // return createActionResult(instacartResult);
             } else if (action.schemaName === "browser.actionDiscovery") {
+                if (action.actionName == "startAuthoringSession") {
+                    // activate authoring schema
+                    await context.sessionContext.toggleTransientAgent(
+                        "browser.actionAuthoring",
+                        true,
+                    );
+
+                    // trigger default action
+                    return await handlePlanAuthoringAction(
+                        {
+                            actionName: "createOrUpdateWebPlan",
+                            parameters: {
+                                nextPrompt: "",
+                                webPlanName: "",
+                                webPlanDescription: "",
+                            },
+                        },
+                        context,
+                    );
+                }
+
                 const discoveryResult = await handleSchemaDiscoveryAction(
                     action,
                     context.sessionContext,
                 );
 
-                return createActionResult(discoveryResult.displayText);
+                if (discoveryResult !== undefined) {
+                    if ("displayText" in discoveryResult) {
+                        return createActionResult(discoveryResult.displayText);
+                    } else {
+                        return discoveryResult as ActionResult;
+                    }
+                }
+            } else if (action.schemaName === "browser.actionAuthoring") {
+                const authoringResult = await handlePlanAuthoringAction(
+                    action,
+                    context,
+                );
+
+                return authoringResult;
             }
 
             await connector?.sendActionToBrowser(action, schemaName);

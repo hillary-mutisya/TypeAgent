@@ -25,7 +25,6 @@ import {
     SchemaDiscoveryActions,
 } from "./schema/discoveryActions.mjs";
 import { UserIntent } from "./schema/recordedActions.mjs";
-import { createSchemaAuthoringAgent } from "./authoringActionHandler.mjs";
 
 export async function handleSchemaDiscoveryAction(
     action: SchemaDiscoveryActions,
@@ -63,9 +62,6 @@ export async function handleSchemaDiscoveryAction(
             break;
         case "registerPageDynamicAgent":
             actionData = await handleRegisterSiteSchema(action);
-            break;
-        case "startAuthoringSession":
-            actionData = await handleRegisterAuthoringAgent(action);
             break;
     }
 
@@ -156,46 +152,6 @@ export async function handleSchemaDiscoveryAction(
             schema: Array.from(uniqueItems.values()),
             typeDefinitions: typeDefinitions,
         };
-    }
-
-    async function handleRegisterAuthoringAgent(action: any) {
-        const packageRoot = path.join("..", "..", "..");
-        const schemaFilePath = fileURLToPath(
-            new URL(
-                path.join(
-                    packageRoot,
-                    "./src/agent/discovery/schema/authoringActions.mts",
-                ),
-                import.meta.url,
-            ),
-        );
-
-        const agentName = `actionAuthor`;
-        const schemaDescription = `A schema that enables authoring new actions for the web automation plans`;
-
-        const manifest: AppAgentManifest = {
-            emojiChar: "🧑‍🔧",
-            description: schemaDescription,
-            schema: {
-                description: schemaDescription,
-                schemaType: "PlanAuthoringActions",
-                schemaFile: schemaFilePath,
-                cached: false,
-            },
-        };
-
-        // register agent after request is processed to avoid a deadlock
-        setTimeout(async () => {
-            try {
-                await context.removeDynamicAgent(agentName);
-            } catch {}
-
-            await context.addDynamicAgent(
-                agentName,
-                manifest,
-                createSchemaAuthoringAgent(browser, agent, context),
-            );
-        }, 500);
     }
 
     async function handleRegisterSiteSchema(action: any) {

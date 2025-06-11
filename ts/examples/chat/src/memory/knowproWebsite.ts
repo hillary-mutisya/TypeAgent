@@ -354,9 +354,9 @@ export async function createKnowproWebsiteCommands(
         }
         const namedArgs = parseNamedArguments(args, websiteAddHistoryDef());
 
-        // For now, let's hardcode the path since namedArgs.path is a function
-        let historyPath: string | undefined = undefined; // namedArgs.path would be a function call
+        let historyPath= namedArgs.path as unknown as string;       
 
+        if(!historyPath){
         const defaultPaths = getDefaultBrowserPaths();
         if (namedArgs.source === "chrome") {
             historyPath = defaultPaths.chrome.history as string;
@@ -367,6 +367,8 @@ export async function createKnowproWebsiteCommands(
             return;
         }
 
+    }
+    
         try {
             if (!historyPath) {
                 context.printer.writeError(

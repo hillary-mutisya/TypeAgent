@@ -26,8 +26,8 @@ const limiter = rateLimit({
 const staticPath = fileURLToPath(new URL("../../../dist/view/site", import.meta.url));
 
 app.use(limiter);
-app.use(express.static(staticPath));
 
+// Root route
 app.get("/", (req: Request, res: Response) => {
     res.sendFile(path.join(staticPath, "index.html"));
 });
@@ -234,6 +234,9 @@ app.get("/events", (req: Request, res: Response) => {
         clients = clients.filter((client) => client !== res);
     });
 });
+
+// Serve static files AFTER API routes to avoid conflicts
+app.use(express.static(staticPath));
 
 function renderFileToClients(filePath: string) {
     const fileContent = fs.readFileSync(filePath, "utf-8");

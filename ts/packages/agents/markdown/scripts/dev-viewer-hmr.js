@@ -11,7 +11,7 @@ import fs from "fs";
 // Parse command line arguments
 const args = process.argv.slice(2);
 let filePath = "";
-let backendPort = 3000;
+let backendPort = 3010;
 let frontendPort = 5173;
 let hmr = false;
 

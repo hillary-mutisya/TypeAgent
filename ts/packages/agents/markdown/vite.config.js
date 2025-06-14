@@ -18,19 +18,19 @@ export default defineConfig({
     proxy: {
       // Proxy API requests to the backend during development
       '/document': {
-        target: 'http://localhost:3000',
+        target: 'http://localhost:3010',
         changeOrigin: true
       },
       '/preview': {
-        target: 'http://localhost:3000',
+        target: 'http://localhost:3010',
         changeOrigin: true
       },
       '/events': {
-        target: 'http://localhost:3000',
+        target: 'http://localhost:3010',
         changeOrigin: true
       },
       '/agent': {
-        target: 'http://localhost:3000',
+        target: 'http://localhost:3010',
         changeOrigin: true
       }
     }

@@ -10,6 +10,7 @@ import '@milkdown/crepe/theme/frame.css'
 
 // Import custom styles
 import './styles/milkdown-integration.css'
+import './styles.css'
 
 // Types for operations
 interface DocumentOperation {

@@ -6,25 +6,49 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Makrdown Preview</title>
+    <title>AI-Enhanced Markdown Editor</title>
+    
+    <!-- Milkdown Theme -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@milkdown/theme-nord@7.3.6/style.css" />
+    
+    <!-- Existing feature support -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@5.7.0/github-markdown-light.min.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/katex.css" />
+    
+    <!-- Custom styles -->
     <link rel="stylesheet" href="styles.css" />
-    <link
-      rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/github-markdown-css@5.7.0/github-markdown-light.min.css"
-    />
-    <link
-      rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    />
-    <link
-      rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/katex.css"
-    />
   </head>
   <body>
-    <div id="content" class="markdown-body"></div>
+    <div id="toolbar">
+      <div class="toolbar-section">
+        <h1>AI-Enhanced Markdown Editor</h1>
+        <span id="save-status" class="save-status"></span>
+      </div>
+      <div class="toolbar-section">
+        <button id="theme-toggle">🎨 Theme</button>
+        <button id="save-btn">💾 Save</button>
+      </div>
+    </div>
+    
+    <div id="editor-container">
+      <div id="editor-panel">
+        <div id="editor"></div>
+      </div>
+      <div id="preview-panel">
+        <div id="preview" class="markdown-body"></div>
+      </div>
+    </div>
+    
+    <!-- Status and notifications -->
+    <div id="connection-status" class="status"></div>
+    
+    <!-- External libraries -->
     <script src="https://unpkg.com/mermaid@11.3.0/dist/mermaid.min.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/katex.min.js"></script>
+    
+    <!-- Main application -->
+    <script type="module" src="./index.ts"></script>
   </body>
 </html>

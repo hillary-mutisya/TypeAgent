@@ -12,6 +12,7 @@ import {
 } from "@typeagent/agent-sdk";
 import { createActionResult } from "@typeagent/agent-sdk/helpers/action";
 import { MarkdownAction } from "./markdownActionSchema.js";
+import { DocumentOperation } from "./markdownOperationSchema.js";
 import { createMarkdownAgent } from "./translator.js";
 import { ChildProcess, fork } from "child_process";
 import { fileURLToPath } from "node:url";
@@ -163,19 +164,34 @@ async function handleMarkdownAction(
             );
 
             if (response.success) {
-                const mdResult = response.data;
+                const updateResult = response.data;
 
-                // write to file
-                if (mdResult.content) {
-                    await storage?.write(filePath, mdResult.content);
+                // Apply operations to the document
+                if (updateResult.operations && updateResult.operations.length > 0) {
+                    // Send operations to the view process
+                    if (actionContext.sessionContext.agentContext.viewProcess) {
+                        actionContext.sessionContext.agentContext.viewProcess.send({
+                            type: "applyOperations",
+                            operations: updateResult.operations,
+                        });
+                    }
+                    
+                    // For now, also apply operations to the file directly
+                    // This is a simplified implementation
+                    if (markdownContent) {
+                        const updatedContent = applyOperationsToMarkdown(markdownContent, updateResult.operations);
+                        await storage?.write(filePath, updatedContent);
+                    }
                 }
-                if (mdResult.operationSummary) {
-                    result = createActionResult(mdResult.operationSummary);
+                
+                if (updateResult.operationSummary) {
+                    result = createActionResult(updateResult.operationSummary);
                 } else {
                     result = createActionResult("Updated document");
                 }
             } else {
                 console.error(response.message);
+                result = createActionResult("Failed to update document: " + response.message);
             }
             break;
         }
@@ -232,4 +248,83 @@ export async function createViewServiceHost(filePath: string, port: number) {
         clearTimeout(timeoutHandle);
         return result;
     });
+}
+
+function applyOperationsToMarkdown(content: string, operations: DocumentOperation[]): string {
+    const lines = content.split('\n');
+    
+    // Sort operations by position (reverse order for insertions)
+    const sortedOps = [...operations].sort((a, b) => {
+        if (a.type === 'insert' || a.type === 'replace') {
+            return (b as any).position - (a as any).position || ((b as any).from || 0) - ((a as any).from || 0);
+        }
+        return (a as any).position - (b as any).position || ((a as any).from || 0) - ((b as any).from || 0);
+    });
+    
+    for (const operation of sortedOps) {
+        try {
+            switch (operation.type) {
+                case 'insert': {
+                    const insertContent = operation.content.map(item => 
+                        contentItemToText(item)
+                    ).join('');
+                    
+                    // Simple position-based insertion (by line for simplicity)
+                    const lineIndex = Math.min(operation.position || 0, lines.length);
+                    lines.splice(lineIndex, 0, insertContent);
+                    break;
+                }
+                
+                case 'replace': {
+                    const replaceContent = operation.content.map(item => 
+                        contentItemToText(item)
+                    ).join('');
+                    
+                    const fromLine = Math.min(operation.from || 0, lines.length - 1);
+                    const toLine = Math.min(operation.to || fromLine + 1, lines.length);
+                    lines.splice(fromLine, toLine - fromLine, replaceContent);
+                    break;
+                }
+                
+                case 'delete': {
+                    const fromLine = Math.min(operation.from || 0, lines.length - 1);
+                    const toLine = Math.min(operation.to || fromLine + 1, lines.length);
+                    lines.splice(fromLine, toLine - fromLine);
+                    break;
+                }
+            }
+        } catch (error) {
+            console.error(`Failed to apply operation ${operation.type}:`, error);
+        }
+    }
+    
+    return lines.join('\n');
+}
+
+function contentItemToText(item: any): string {
+    if (item.text) {
+        return item.text;
+    }
+    
+    if (item.content) {
+        return item.content.map((child: any) => contentItemToText(child)).join('');
+    }
+    
+    // Handle special node types
+    switch (item.type) {
+        case 'paragraph':
+            return '\n' + (item.content ? item.content.map(contentItemToText).join('') : '') + '\n';
+        case 'heading':
+            const level = item.attrs?.level || 1;
+            const prefix = '#'.repeat(level) + ' ';
+            return '\n' + prefix + (item.content ? item.content.map(contentItemToText).join('') : '') + '\n';
+        case 'code_block':
+            return '\n```\n' + (item.content ? item.content.map(contentItemToText).join('') : '') + '\n```\n';
+        case 'mermaid':
+            return '\n```mermaid\n' + (item.attrs?.content || '') + '\n```\n';
+        case 'math_display':
+            return '\n$$\n' + (item.attrs?.content || '') + '\n$$\n';
+        default:
+            return item.content ? item.content.map(contentItemToText).join('') : '';
+    }
 }

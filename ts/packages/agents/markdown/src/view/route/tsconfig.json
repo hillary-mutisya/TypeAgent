@@ -2,10 +2,10 @@
   "extends": "../../../../../../tsconfig.base.json",
   "compilerOptions": {
     "composite": true,
-    "rootDir": ".",
+    "rootDir": "../..",
     "outDir": "../../../dist/view/route",
   },
-  "include": ["./*","./plugins/*"],
+  "include": ["./*","./plugins/*", "../../agent/markdownOperationSchema.ts", "../../agent/translator.ts"],
   "ts-node": {
     "esm": true
   }

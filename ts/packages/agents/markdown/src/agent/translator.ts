@@ -8,7 +8,7 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-import { MarkdownContent } from "./markdownDocumentSchema.js";
+import { MarkdownUpdateResult } from "./markdownOperationSchema.js";
 
 export async function createMarkdownAgent(
     model: "GPT_35_TURBO" | "GPT_4" | "GPT-v" | "GPT_4o",
@@ -17,16 +17,16 @@ export async function createMarkdownAgent(
     const schemaText = await fs.promises.readFile(
         fileURLToPath(
             new URL(
-                path.join(packageRoot, "./src/agent/markdownDocumentSchema.ts"),
+                path.join(packageRoot, "./src/agent/markdownOperationSchema.ts"),
                 import.meta.url,
             ),
         ),
         "utf8",
     );
 
-    const agent = new MarkdownAgent<MarkdownContent>(
+    const agent = new MarkdownAgent<MarkdownUpdateResult>(
         schemaText,
-        "MarkdownContent",
+        "MarkdownUpdateResult",
         model,
     );
     return agent;
@@ -63,7 +63,7 @@ export class MarkdownAgent<T extends object> {
             contentPrompt.push({
                 type: "text",
                 text: `
-            Here is the current markdown for the document.
+            Here is the current markdown for the document:
             '''
             ${currentMarkdown}
             '''
@@ -74,25 +74,36 @@ export class MarkdownAgent<T extends object> {
         const promptSections = [
             {
                 type: "text",
-                text: "You are a virtual assistant that can help users to edit a markdown document. The document uses the github markdown flavor.",
+                text: `You are a virtual assistant that helps users edit markdown documents. The document uses GitHub-flavored markdown.
+
+Instead of returning the full document, you should return a series of operations that describe the changes to make to the document. This allows for more precise and efficient updates.
+
+Available operation types:
+- insert: Add new content at a specific position (by line number)
+- replace: Replace content between two line positions
+- delete: Remove content between two line positions
+- format: Apply formatting marks (not implemented in simple version)
+
+For content items, use these types:
+- paragraph: Regular text paragraph
+- heading: Heading with level attribute (1-6)
+- code_block: Code block with optional language
+- mermaid: Mermaid diagram block
+- math_display: LaTeX math block
+- text: Plain text with optional marks
+
+Position references should be line numbers (0-based) in the document.`,
             },
             ...contentPrompt,
             {
                 type: "text",
                 text: `
-            Create an updated markdown document that applies the changes requested by the user below. Format your response as a "MarkdownContent" 
-            object using the typescript schema below:
-            '''
-            ${this.schema}
+            Create operations to update the markdown document based on the user's request below. Format your response as a "MarkdownUpdateResult" 
+            object using the typescript schema provided.
             
-            '''
+            User request: ${intent}
             
-            user:
-            The following is a user request:
-            '''
-            ${intent}
-            '''
-            The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
+            The following is the response formatted as a JSON object with 2 spaces of indentation and no properties with the value undefined:
         `,
             },
         ];

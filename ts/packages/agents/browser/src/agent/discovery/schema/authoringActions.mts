@@ -16,6 +16,10 @@ export type CreateOrUpdateWebPlan = {
         webPlanSteps?: string[];
         // The parameter names for the values that must be provided when users invoke this web plan
         requiredParameterNames?: string[];
+        // Whether to show visualization during authoring
+        showVisualization?: boolean;
+        // Visualization mode for authoring workflow
+        visualizationMode?: "authoring" | "review" | "execution";
     };
 };
 
@@ -31,6 +35,8 @@ export type RunCurrentWebPlan = {
         // by the user for the test run.
         // The value for this field is a JSON serialization of a dictionary whose properties are the required properties for this task
         taskRunParameters?: string;
+        // Whether to show execution visualization
+        showExecutionVisualization?: boolean;
     };
 };
 
@@ -56,8 +62,33 @@ export type GetSuggestedSteps = {
     };
 };
 
+// New visualization-specific actions for enhanced authoring experience
+export type ShowPlanVisualization = {
+    actionName: "showPlanVisualization";
+    parameters: {
+        // Mode for visualization display
+        mode: "authoring" | "review" | "execution";
+        // Optional plan name to visualize
+        planName?: string;
+    };
+};
+
+export type UpdateVisualizationState = {
+    actionName: "updateVisualizationState";
+    parameters: {
+        // Current step being authored
+        currentStep?: number;
+        // Whether to highlight the current step
+        highlightCurrent?: boolean;
+        // Screenshot to add to current step
+        stepScreenshot?: string;
+    };
+};
+
 export type PlanAuthoringActions =
     | CreateOrUpdateWebPlan
     | RunCurrentWebPlan
     | SaveCurrentWebPlan
-    | GetSuggestedSteps;
+    | GetSuggestedSteps
+    | ShowPlanVisualization
+    | UpdateVisualizationState;

@@ -11,6 +11,15 @@
     }
   },
   "subActionManifests": {
+    "planVisualization": {
+      "defaultEnabled": true,
+      "transient": false,
+      "schema": {
+        "description": "Real-time web plan visualization during authoring and execution",
+        "schemaFile": "./discovery/visualization/integration/visualizationActions.mts",
+        "schemaType": "PlanVisualizationActions"
+      }
+    },
     "externalBrowser": {
       "defaultEnabled": false,
       "transient": true,

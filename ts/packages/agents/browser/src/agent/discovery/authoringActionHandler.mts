@@ -14,6 +14,10 @@ import { UserIntent } from "./schema/recordedActions.mjs";
 import { SchemaDiscoveryActions } from "./schema/discoveryActions.mjs";
 import { SchemaDiscoveryAgent } from "./translator.mjs";
 import { WebPlanResult, WebPlanSuggestions } from "./schema/evaluatePlan.mjs";
+import { VisualizationManager } from "./visualization/integration/visualizationManager.js";
+import { StateSynchronizer } from "./visualization/integration/stateSync.js";
+import { PlanVisualizationSync } from "./visualization/integration/planVisualizationSync.js";
+import { AuthoringState } from "./visualization/shared/types.js";
 
 type WebPlanInfo = {
     webPlanName?: string | undefined;
@@ -22,16 +26,52 @@ type WebPlanInfo = {
     requiredParameterNames?: string[] | undefined;
 };
 
+type WebPlanAuthoringContext = {
+    visualizationManager?: VisualizationManager;
+    stateSynchronizer?: StateSynchronizer;
+    planVisualizationSync?: PlanVisualizationSync;
+    visualizationActive?: boolean;
+    localHostPort?: number;
+};
+
 export function createSchemaAuthoringAgent(
     browser: BrowserConnector,
     agent: SchemaDiscoveryAgent<SchemaDiscoveryActions>,
-    context: any,
+    context: WebPlanAuthoringContext,
+    sessionContext?: any, // Add session context for WebSocket access
 ): AppAgent {
     const actionUtils = setupAuthoringActions(browser, agent, context);
     let intentInfo: { intentJson: UserIntent; actions: any } | undefined =
         undefined;
 
     let webPlanDraft: WebPlanInfo = {};
+
+    // Initialize visualization if port is available
+    const initializeVisualization = async (): Promise<void> => {
+        if (context.localHostPort && !context.visualizationManager) {
+            try {
+                context.visualizationManager = new VisualizationManager(context.localHostPort);
+                
+                // Initialize WebSocket synchronization if session context is available
+                if (sessionContext) {
+                    context.planVisualizationSync = new PlanVisualizationSync(sessionContext);
+                    context.planVisualizationSync.enable();
+                }
+                
+                context.stateSynchronizer = new StateSynchronizer(
+                    context.visualizationManager, 
+                    context.planVisualizationSync
+                );
+                
+                await context.visualizationManager.start();
+                context.visualizationActive = true;
+                console.log("Visualization initialized for authoring with WebSocket sync");
+            } catch (error) {
+                console.warn("Failed to initialize visualization:", error);
+                context.visualizationActive = false;
+            }
+        }
+    };
 
     return {
         async executeAction(
@@ -80,6 +120,19 @@ export function createSchemaAuthoringAgent(
             speak: true,
             content: question,
         });
+
+        // Update visualization with current plan state
+        if (context.stateSynchronizer && webPlanDraft) {
+            const authoringState: AuthoringState = {
+                planName: webPlanDraft.webPlanName,
+                planDescription: webPlanDraft.webPlanDescription,
+                planSteps: webPlanDraft.webPlanSteps,
+                currentStep: webPlanDraft.webPlanSteps?.length ? webPlanDraft.webPlanSteps.length - 1 : 0,
+                isEditing: true,
+            };
+            
+            await context.stateSynchronizer.syncAuthoringToVisualization(authoringState);
+        }
 
         const result = createActionResultNoDisplay(question);
         if (additionalInstructions.length > 0) {

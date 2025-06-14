@@ -278,6 +278,16 @@ async function updateBrowserContext(
                                     result: discoveryResult.data,
                                 }),
                             );
+                            break;
+                        }
+
+                        case "planVisualization/updatePlan":
+                        case "planVisualization/stateChange":
+                        case "planVisualization/addScreenshot":
+                        case "planVisualization/validation": {
+                            // Handle plan visualization messages
+                            await handlePlanVisualizationMessage(data, context);
+                            break;
                         }
                     }
                 }
@@ -1472,6 +1482,46 @@ async function handleTabIndexActions(
         throw new Error("No websocket connection.");
     }
     return undefined;
+}
+
+/**
+ * Handle plan visualization WebSocket messages
+ */
+async function handlePlanVisualizationMessage(
+    data: any,
+    context: SessionContext<BrowserActionContext>,
+) {
+    debug("Handling plan visualization message:", data.method);
+    
+    try {
+        switch (data.method) {
+            case "planVisualization/updatePlan":
+                // Forward plan update to visualization server
+                debug("Plan update received via WebSocket:", data.params.planData);
+                // Here we could forward to the visualization server or update local state
+                break;
+                
+            case "planVisualization/stateChange":
+                // Handle state changes (authoring, executing, completed)
+                debug("Plan state change:", data.params.state, data.params.stepIndex);
+                break;
+                
+            case "planVisualization/addScreenshot":
+                // Handle screenshot updates
+                debug("Screenshot update for step:", data.params.stepName);
+                break;
+                
+            case "planVisualization/validation":
+                // Handle validation results
+                debug("Plan validation result:", data.params.isValid, data.params.errors);
+                break;
+                
+            default:
+                debug("Unknown plan visualization message:", data.method);
+        }
+    } catch (error) {
+        debug("Error handling plan visualization message:", error);
+    }
 }
 
 export async function createAutomationBrowser(isVisible?: boolean) {

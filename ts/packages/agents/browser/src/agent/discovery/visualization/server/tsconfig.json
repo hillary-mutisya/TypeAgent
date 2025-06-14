@@ -2,9 +2,9 @@
   "extends": "../../../../../tsconfig.json",
   "compilerOptions": {
     "outDir": "../../../../../dist/agent/discovery/visualization/server",
-    "rootDir": ".",
+    "rootDir": "..",
     "lib": ["ES2020", "DOM"]
   },
-  "include": ["./**/*.ts", "../shared/**/*.ts"],
+  "include": ["./server/**/*.ts", "../shared/**/*.ts"],
   "references": [{ "path": "../shared" }]
 }

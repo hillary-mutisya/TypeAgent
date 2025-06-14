@@ -22,8 +22,8 @@ const limiter = rateLimit({
     max: 100, // limit each IP to 100 requests per windowMs
 });
 
-// Serve static content
-const staticPath = fileURLToPath(new URL("../site", import.meta.url));
+// Serve static content from built directory
+const staticPath = fileURLToPath(new URL("../../../dist/view/site", import.meta.url));
 
 app.use(limiter);
 app.use(express.static(staticPath));

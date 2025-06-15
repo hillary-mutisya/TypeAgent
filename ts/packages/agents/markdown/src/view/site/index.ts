@@ -171,10 +171,10 @@ async function initializeFullEditor(container: HTMLElement, initialContent: stri
         // Configure editor with plugins including collaboration and custom plugins
         await crepe.editor
             .use(commonmark)                // Basic markdown support
+            .use(mermaidPlugin)             // Mermaid diagram support - BEFORE GFM to handle mermaid code blocks
             .use(gfm)                       // GitHub flavored markdown
             .use(history)                   // Undo/redo
-            .use(collab)                    // Yjs collaboration
-            .use(mermaidPlugin)             // Mermaid diagram support
+            .use(collab)                    // Yjs collaboration - plugin loaded but not bound yet
             .use(slashCommandHandler)       // Enhanced slash command handling
             .create()
         
@@ -185,11 +185,11 @@ async function initializeFullEditor(container: HTMLElement, initialContent: stri
             editor.action((ctx) => {
                 const collabService = ctx.get(collabServiceCtx)
                 collabService.bindDoc(yjsDoc!).setAwareness(websocketProvider!.awareness).connect()
+                console.log('🔄 Collaboration connected (no auto-save conflicts)')
             })
         }
         
-        // Setup auto-save
-        setupAutoSave(crepe);
+        // setupAutoSave(crepe);
         
         console.log('✅ Full Editor with AI integration, Mermaid support and collaboration initialized successfully');
         console.log('🤖 Available AI commands:');
@@ -628,7 +628,7 @@ function contentItemToNode(item: any, schema: any): any {
 
 function setupAutoSave(crepe: Crepe): void {
     let saveTimeout: number | null = null;
-    
+
     // Listen for content changes
     crepe.editor.action((ctx) => {
         const view = ctx.get(editorViewCtx)
@@ -831,6 +831,8 @@ function setupRawMarkdownPanel(): void {
         updateRawMarkdownContent();
         
         // Listen for editor changes to update raw markdown
+        // DISABLED - No dispatch override 
+        /*
         editor.action((ctx) => {
             const view = ctx.get(editorViewCtx);
             
@@ -845,6 +847,8 @@ function setupRawMarkdownPanel(): void {
                 }
             };
         });
+        */
+        console.log('ℹ️ Raw markdown panel dispatch override disabled for debugging')
     }
 }
 

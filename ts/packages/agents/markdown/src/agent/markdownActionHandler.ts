@@ -19,6 +19,8 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { TypeAgentYjsProvider } from "./TypeAgentYjsProvider.js";
 import { CollaborationContext } from "./collaborationTypes.js";
+import { AIAgentCollaborator } from "./AIAgentCollaborator.js";
+import { AsyncResearchHandler } from "./AsyncResearchHandler.js";
 
 export function instantiate(): AppAgent {
     return {
@@ -35,6 +37,8 @@ type MarkdownActionContext = {
     localHostPort: number;
     collaborationProvider?: TypeAgentYjsProvider | undefined;
     collaborationContext?: CollaborationContext | undefined;
+    aiCollaborator?: AIAgentCollaborator | undefined;
+    researchHandler?: AsyncResearchHandler | undefined;
 };
 
 async function executeMarkdownAction(
@@ -80,6 +84,42 @@ async function updateMarkdownContext(
             await storage?.write(fileName, "");
         }
 
+        // Initialize collaboration provider
+        if (!context.agentContext.collaborationProvider) {
+            try {
+                const collaborationConfig = {
+                    documentId: fileName.replace('.md', ''), // Use filename as document ID
+                    websocketUrl: 'ws://localhost:1234', // Standard y-websocket-server port
+                    userInfo: {
+                        id: `user-${Date.now()}`, // Generate unique user ID
+                        name: 'User',
+                        avatar: '👤',
+                        color: '#4A90E2'
+                    },
+                    enableAI: true
+                };
+
+                context.agentContext.collaborationProvider = new TypeAgentYjsProvider(collaborationConfig);
+                context.agentContext.collaborationContext = context.agentContext.collaborationProvider.getContext();
+
+                // Initialize AI collaborator and research handler
+                context.agentContext.aiCollaborator = new AIAgentCollaborator(context.agentContext.collaborationProvider);
+                context.agentContext.researchHandler = new AsyncResearchHandler(context.agentContext.aiCollaborator);
+
+                // Load existing content into Yjs document
+                const existingContent = await storage?.read(fileName, "utf8") || "";
+                if (existingContent) {
+                    context.agentContext.collaborationProvider.setMarkdownContent(existingContent);
+                }
+
+                console.log('✅ Collaboration provider initialized for:', fileName);
+                console.log('🤖 AI collaborator initialized and ready');
+            } catch (error) {
+                console.error('❌ Failed to initialize collaboration provider:', error);
+                // Continue without collaboration if it fails
+            }
+        }
+
         if (!context.agentContext.viewProcess) {
             const fullPath = await getFullMarkdownFilePath(fileName, storage!);
             if (fullPath) {
@@ -91,7 +131,22 @@ async function updateMarkdownContext(
             }
         }
     } else {
-        // shut down service
+        // Shut down services
+        if (context.agentContext.collaborationProvider) {
+            context.agentContext.collaborationProvider.disconnect();
+            context.agentContext.collaborationProvider = undefined;
+            context.agentContext.collaborationContext = undefined;
+        }
+        
+        if (context.agentContext.aiCollaborator) {
+            context.agentContext.aiCollaborator = undefined;
+        }
+        
+        if (context.agentContext.researchHandler) {
+            context.agentContext.researchHandler.cleanup();
+            context.agentContext.researchHandler = undefined;
+        }
+        
         if (context.agentContext.viewProcess) {
             context.agentContext.viewProcess.kill();
         }
@@ -165,53 +220,66 @@ async function handleMarkdownAction(
             
             // Use collaboration provider if available
             const collaborationProvider = actionContext.sessionContext.agentContext.collaborationProvider;
+            const researchHandler = actionContext.sessionContext.agentContext.researchHandler;
+            
             if (collaborationProvider) {
                 // Update collaboration document content
                 markdownContent = collaborationProvider.getMarkdownContent();
             }
 
-            const response = await agent.updateDocument(
-                markdownContent,
-                action.parameters.originalRequest,
-            );
+            // Check if this is an AI command that should be handled asynchronously
+            const request = action.parameters.originalRequest;
+            const position = 0; // Default position for now - can be enhanced later
+            
+            if (researchHandler && isAsyncAICommand(request)) {
+                // Handle async AI requests through the research handler
+                const requestId = await handleAsyncAIRequest(researchHandler, request, position);
+                result = createActionResult(`AI request queued (${requestId}). Working asynchronously...`);
+            } else {
+                // Handle synchronous requests through the agent
+                const response = await agent.updateDocument(
+                    markdownContent,
+                    action.parameters.originalRequest,
+                );
 
-            if (response.success) {
-                const updateResult = response.data;
+                if (response.success) {
+                    const updateResult = response.data;
 
-                // Apply operations to the document
-                if (updateResult.operations && updateResult.operations.length > 0) {
-                    // Apply to collaboration provider first
-                    if (collaborationProvider) {
-                        applyOperationsToYjsDocument(collaborationProvider, updateResult.operations);
-                        
-                        // Sync back to storage
-                        const updatedContent = collaborationProvider.getMarkdownContent();
-                        await storage?.write(filePath, updatedContent);
-                    } else {
-                        // Fallback to direct file operations
-                        if (markdownContent) {
-                            const updatedContent = applyOperationsToMarkdown(markdownContent, updateResult.operations);
+                    // Apply operations to the document
+                    if (updateResult.operations && updateResult.operations.length > 0) {
+                        // Apply to collaboration provider first
+                        if (collaborationProvider) {
+                            applyOperationsToYjsDocument(collaborationProvider, updateResult.operations);
+                            
+                            // Sync back to storage
+                            const updatedContent = collaborationProvider.getMarkdownContent();
                             await storage?.write(filePath, updatedContent);
+                        } else {
+                            // Fallback to direct file operations
+                            if (markdownContent) {
+                                const updatedContent = applyOperationsToMarkdown(markdownContent, updateResult.operations);
+                                await storage?.write(filePath, updatedContent);
+                            }
+                        }
+
+                        // Send operations to the view process
+                        if (actionContext.sessionContext.agentContext.viewProcess) {
+                            actionContext.sessionContext.agentContext.viewProcess.send({
+                                type: "applyOperations",
+                                operations: updateResult.operations,
+                            });
                         }
                     }
-
-                    // Send operations to the view process
-                    if (actionContext.sessionContext.agentContext.viewProcess) {
-                        actionContext.sessionContext.agentContext.viewProcess.send({
-                            type: "applyOperations",
-                            operations: updateResult.operations,
-                        });
+                    
+                    if (updateResult.operationSummary) {
+                        result = createActionResult(updateResult.operationSummary);
+                    } else {
+                        result = createActionResult("Updated document");
                     }
-                }
-                
-                if (updateResult.operationSummary) {
-                    result = createActionResult(updateResult.operationSummary);
                 } else {
-                    result = createActionResult("Updated document");
+                    console.error(response.message);
+                    result = createActionResult("Failed to update document: " + response.message);
                 }
-            } else {
-                console.error(response.message);
-                result = createActionResult("Failed to update document: " + response.message);
             }
             break;
         }
@@ -369,6 +437,49 @@ function applyOperationsToMarkdown(content: string, operations: DocumentOperatio
     }
     
     return lines.join('\n');
+}
+
+/**
+ * Check if a request should be handled asynchronously by the AI collaborator
+ */
+function isAsyncAICommand(request: string): boolean {
+    // Commands that benefit from async processing
+    const asyncCommands = ['/continue', '/diagram', '/augment', '/research'];
+    return asyncCommands.some(cmd => request.toLowerCase().startsWith(cmd));
+}
+
+/**
+ * Handle async AI requests through the research handler
+ */
+async function handleAsyncAIRequest(
+    researchHandler: AsyncResearchHandler, 
+    request: string, 
+    position: number
+): Promise<string> {
+    const command = request.toLowerCase().trim();
+    
+    if (command.startsWith('/continue')) {
+        const hint = command.replace('/continue', '').trim();
+        return await researchHandler.handleContinueRequest(position, hint || undefined);
+    } 
+    else if (command.startsWith('/diagram')) {
+        const description = command.replace('/diagram', '').trim() || 'process diagram';
+        return await researchHandler.handleDiagramRequest(description, 'auto', position);
+    }
+    else if (command.startsWith('/augment')) {
+        const instruction = command.replace('/augment', '').trim() || 'improve formatting';
+        return await researchHandler.handleAugmentRequest(instruction, 'section', position);
+    }
+    else if (command.startsWith('/research')) {
+        const query = command.replace('/research', '').trim() || 'general research';
+        return await researchHandler.handleResearchRequest(query, {
+            fullContent: '',
+            position,
+            timestamp: Date.now()
+        }, position);
+    }
+    
+    throw new Error(`Unknown async AI command: ${command}`);
 }
 
 function contentItemToText(item: any): string {

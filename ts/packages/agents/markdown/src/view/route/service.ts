@@ -124,6 +124,134 @@ app.post("/agent/execute", express.json(), (req: Request, res: Response) => {
   }
 });
 
+// Add streaming agent execution endpoint
+app.post("/agent/stream", express.json(), (req: Request, res: Response) => {
+  if (!filePath) {
+    res.status(404).json({ error: "No document loaded" });
+    return;
+  }
+  
+  // Set up SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  
+  try {
+    const { action, parameters } = req.body;
+    
+    // Start streaming response
+    streamAgentResponse(action, parameters, res)
+      .catch(error => {
+        res.write(`data: ${JSON.stringify({ type: 'error', error: error.message })}\n\n`);
+        res.end();
+      });
+      
+  } catch (error) {
+    res.write(`data: ${JSON.stringify({ type: 'error', error: 'Streaming failed' })}\n\n`);
+    res.end();
+  }
+});
+
+async function streamAgentResponse(action: string, parameters: any, res: Response): Promise<void> {
+  try {
+    // Send start event
+    res.write(`data: ${JSON.stringify({ type: 'start', message: 'AI is thinking...' })}\n\n`);
+    
+    // Check if this is a test command
+    if (parameters.originalRequest?.includes('/test:')) {
+      await streamTestResponse(parameters.originalRequest, parameters.context, res);
+    } else {
+      await streamRealAgentResponse(action, parameters, res);
+    }
+    
+    // Send completion event
+    res.write(`data: ${JSON.stringify({ type: 'complete' })}\n\n`);
+    res.end();
+    
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.write(`data: ${JSON.stringify({ type: 'error', error: errorMessage })}\n\n`);
+    res.end();
+  }
+}
+
+async function streamTestResponse(originalRequest: string, context: any, res: Response): Promise<void> {
+  console.log('🧪 Streaming test response for:', originalRequest);
+  
+  let content = '';
+  let description = '';
+  
+  // Handle both /test:continue and /continue patterns
+  if (originalRequest.includes('continue')) {
+    content = 'This is a test continuation of the document. The AI would normally analyze the context and generate appropriate content here. ';
+    content += 'It would consider the preceding paragraphs, the overall document structure, and the intended audience to create relevant content. ';
+    content += 'The response would be contextually aware and maintain consistent tone and style throughout.';
+    description = 'AI continuing document...';
+  } else if (originalRequest.includes('diagram')) {
+    // Extract description from either /test:diagram or /diagram format
+    const diagramDesc = originalRequest.replace(/\/test:diagram|\/diagram/, '').trim() || 'test process';
+    content = `\`\`\`mermaid\ngraph TD\n    A[Start: ${diagramDesc}] --> B{Process}\n    B --> C[Analysis]\n    C --> D[Decision]\n    D --> E[Implementation]\n    E --> F[End]\n\`\`\``;
+    description = 'AI generating diagram...';
+  } else if (originalRequest.includes('augment')) {
+    // Extract instruction from either /test:augment or /augment format  
+    const instruction = originalRequest.replace(/\/test:augment|\/augment/, '').trim() || 'improve formatting';
+    content = `\n> ✨ **Enhancement Applied**: ${instruction}\n\n`;
+    content += 'This is a test augmentation of the document. The AI would normally analyze the content and apply the requested improvements.\n\n';
+    content += '**Potential improvements could include:**\n- Better formatting and structure\n- Enhanced readability\n- Additional context and examples\n- Improved flow and transitions';
+    description = 'AI enhancing document...';
+  } else {
+    // Fallback for unknown commands
+    content = 'This is a test response for an unrecognized command. The AI system would normally process the specific request and generate appropriate content.';
+    description = 'AI processing request...';
+  }
+  
+  // Send typing indicator
+  res.write(`data: ${JSON.stringify({ type: 'typing', message: description })}\n\n`);
+  await new Promise(resolve => setTimeout(resolve, 500));
+  
+  // Stream content in chunks
+  const words = content.split(' ');
+  let currentChunk = '';
+  
+  for (let i = 0; i < words.length; i++) {
+    currentChunk += words[i] + ' ';
+    
+    // Send chunk every 3-5 words
+    if (i % 4 === 0 || i === words.length - 1) {
+      res.write(`data: ${JSON.stringify({ 
+        type: 'content', 
+        chunk: currentChunk,
+        position: context?.position || 0
+      })}\n\n`);
+      
+      currentChunk = '';
+      // Simulate typing delay
+      await new Promise(resolve => setTimeout(resolve, 150 + Math.random() * 100));
+    }
+  }
+  
+  // Send final operation
+  const operation = {
+    type: 'insert',
+    position: context?.position || 0,
+    content: [{
+      type: 'paragraph',
+      content: [{ type: 'text', text: content }]
+    }],
+    description: description
+  };
+  
+  res.write(`data: ${JSON.stringify({ type: 'operation', operation })}\n\n`);
+}
+
+async function streamRealAgentResponse(action: string, parameters: any, res: Response): Promise<void> {
+  // TODO: Implement real LLM streaming via TypeAgent
+  // For now, fall back to test response
+  console.log('🤖 Real LLM streaming not implemented yet, using test response');
+  await streamTestResponse('/test:continue', parameters.context, res);
+}
+
 async function forwardToMarkdownAgent(action: string, parameters: any): Promise<any> {
   try {
     // Import dynamically to avoid circular dependencies

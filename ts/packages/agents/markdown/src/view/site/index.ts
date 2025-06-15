@@ -358,34 +358,8 @@ async function executeAgentCommand(command: string, params: any): Promise<void> 
     try {
         console.log(`🤖 Executing agent command: ${command}`, params)
         
-        if (params.testMode) {
-            // Test mode - simulate response without API call
-            await simulateAgentResponse(command, params)
-            return
-        }
-        
-        // Build request for the markdown agent
-        const request = buildAgentRequest(command, params)
-        
-        // Call the agent via TypeAgent infrastructure
-        const response = await fetch('/agent/execute', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(request)
-        })
-        
-        if (!response.ok) {
-            throw new Error(`Agent call failed: ${response.status}`)
-        }
-        
-        const result = await response.json()
-        
-        if (result.operations && result.operations.length > 0) {
-            applyAgentOperations(result.operations)
-        }
-        
-        console.log('✅ Agent command completed successfully')
-        showNotification(`✅ ${command} completed successfully!`, 'success')
+        // Always use streaming for better UX
+        await executeStreamingAgentCommand(command, params);
         
     } catch (error) {
         console.error(`❌ Agent command failed:`, error)
@@ -393,18 +367,163 @@ async function executeAgentCommand(command: string, params: any): Promise<void> 
     }
 }
 
+async function executeStreamingAgentCommand(command: string, params: any): Promise<void> {
+    const request = buildAgentRequest(command, params);
+    
+    // Show AI presence cursor
+    showAIPresence(params.position || 0, true);
+    
+    try {
+        // Call streaming endpoint
+        const response = await fetch('/agent/stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(request)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Streaming failed: ${response.status}`);
+        }
+        
+        const reader = response.body?.getReader();
+        if (!reader) {
+            throw new Error('No response stream available');
+        }
+        
+        const decoder = new TextDecoder();
+        let buffer = '';
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            buffer += decoder.decode(value, { stream: true });
+            
+            // Process complete lines
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ''; // Keep incomplete line in buffer
+            
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        await handleStreamEvent(data, params.position || 0);
+                    } catch (e) {
+                        console.warn('Failed to parse stream data:', line);
+                    }
+                }
+            }
+        }
+        
+        console.log('✅ Streaming command completed successfully');
+        showNotification(`✅ ${command} completed successfully!`, 'success');
+        
+    } finally {
+        // Hide AI presence cursor
+        showAIPresence(params.position || 0, false);
+    }
+}
+
+async function handleStreamEvent(data: any, position: number): Promise<void> {
+    switch (data.type) {
+        case 'start':
+            console.log('🎬 Stream started:', data.message);
+            break;
+            
+        case 'typing':
+            updateAIPresenceMessage(data.message || 'AI is thinking...');
+            break;
+            
+        case 'content':
+            // Insert content chunk at position
+            await insertContentChunk(data.chunk, data.position || position);
+            break;
+            
+        case 'operation':
+            // Apply operation to document
+            if (data.operation) {
+                applyAgentOperations([data.operation]);
+            }
+            break;
+            
+        case 'complete':
+            console.log('✅ Stream completed');
+            break;
+            
+        case 'error':
+            console.error('❌ Stream error:', data.error);
+            showNotification(`Stream error: ${data.error}`, 'error');
+            break;
+    }
+}
+
+async function insertContentChunk(chunk: string, position: number): Promise<void> {
+    if (!editor || !chunk.trim()) return;
+    
+    editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        let tr = view.state.tr;
+        
+        // Insert text at position
+        tr = tr.insertText(chunk, position);
+        
+        if (tr.docChanged) {
+            view.dispatch(tr);
+        }
+    });
+}
+
+function showAIPresence(position: number, show: boolean): void {
+    // Create or update AI presence indicator
+    let indicator = document.getElementById('ai-presence-indicator');
+    
+    if (show) {
+        if (!indicator) {
+            indicator = document.createElement('div');
+            indicator.id = 'ai-presence-indicator';
+            indicator.className = 'ai-presence-indicator';
+            indicator.innerHTML = `
+                <div class="ai-avatar">🤖</div>
+                <div class="ai-message">AI is thinking...</div>
+                <div class="ai-typing-dots">
+                    <span></span><span></span><span></span>
+                </div>
+            `;
+            document.body.appendChild(indicator);
+        }
+        indicator.style.display = 'block';
+    } else {
+        if (indicator) {
+            indicator.style.display = 'none';
+        }
+    }
+}
+
+function updateAIPresenceMessage(message: string): void {
+    const indicator = document.getElementById('ai-presence-indicator');
+    if (indicator) {
+        const messageEl = indicator.querySelector('.ai-message');
+        if (messageEl) {
+            messageEl.textContent = message;
+        }
+    }
+}
+
 function buildAgentRequest(command: string, params: any): any {
     let originalRequest = ''
     
+    // Add test prefix if in test mode
+    const prefix = params.testMode ? '/test:' : '/'
+    
     switch (command) {
         case 'continue':
-            originalRequest = '/continue'
+            originalRequest = `${prefix}continue`
             break
         case 'diagram':
-            originalRequest = `/diagram ${params.description}`
+            originalRequest = `${prefix}diagram ${params.description || ''}`
             break
         case 'augment':
-            originalRequest = `/augment ${params.instruction}`
+            originalRequest = `${prefix}augment ${params.instruction || ''}`
             break
     }
     
@@ -419,71 +538,6 @@ function buildAgentRequest(command: string, params: any): any {
             }
         }
     }
-}
-
-/**
- * Simulate agent response for testing
- */
-async function simulateAgentResponse(command: string, params: any): Promise<void> {
-    console.log(`🧪 Simulating ${command} command in test mode`)
-    showNotification(`🧪 Testing ${command} command...`, 'info')
-    
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    let operations: DocumentOperation[] = []
-    
-    switch (command) {
-        case 'continue':
-            operations = [{
-                type: 'insert',
-                position: params.position,
-                content: [{
-                    type: 'paragraph',
-                    content: [{
-                        type: 'text',
-                        text: 'This is simulated AI-generated content for testing purposes. The actual AI would generate contextually relevant content based on the document.'
-                    }]
-                }],
-                description: 'Test continuation'
-            }]
-            break
-            
-        case 'diagram':
-            operations = [{
-                type: 'insert',
-                position: params.position,
-                content: [{
-                    type: 'code_block',
-                    attrs: { params: 'mermaid' },
-                    content: [{
-                        type: 'text',
-                        text: `graph TD\n    A[${params.description}] --> B[Test Node 1]\n    B --> C[Test Node 2]\n    C --> D[Result]`
-                    }]
-                }],
-                description: `Test diagram for: ${params.description}`
-            }]
-            break
-            
-        case 'augment':
-            operations = [{
-                type: 'insert',
-                position: params.position,
-                content: [{
-                    type: 'paragraph',
-                    content: [{
-                        type: 'text',
-                        text: `\n**Test Augmentation**: ${params.instruction}\n\nThis is a test augmentation of the document. The actual AI would analyze the content and apply the requested improvements.\n`
-                    }]
-                }],
-                description: `Test augmentation: ${params.instruction}`
-            }]
-            break
-    }
-    
-    // Apply simulated operations
-    applyAgentOperations(operations)
-    showNotification(`✅ Test ${command} completed`, 'success')
 }
 
 /**
@@ -652,7 +706,71 @@ function setupKeyboardShortcuts(): void {
             e.preventDefault();
             saveDocument();
         }
+        
+        // Handle Enter key for slash commands
+        if (e.key === 'Enter' && editor) {
+            handleEnterKeyForCommands(e);
+        }
     });
+}
+
+function handleEnterKeyForCommands(e: KeyboardEvent): void {
+    if (!editor) return;
+    
+    editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        const { from } = view.state.selection;
+        
+        // Get the current line content
+        const line = view.state.doc.cut(
+            view.state.doc.resolve(from).before(),
+            view.state.doc.resolve(from).after()
+        );
+        const lineText = line.textContent.trim();
+        
+        // Check if this is a slash command
+        if (lineText.startsWith('/test:') || lineText.startsWith('/')) {
+            const command = lineText.trim();
+            console.log('🎯 Detected slash command:', command);
+            
+            // Prevent default Enter behavior
+            e.preventDefault();
+            
+            // Handle the command
+            handleSlashCommand(command, from);
+        }
+    });
+}
+
+async function handleSlashCommand(command: string, position: number): Promise<void> {
+    console.log(`⚡ Executing slash command: ${command} at position ${position}`);
+    
+    try {
+        // Parse command
+        if (command.startsWith('/test:continue')) {
+            await executeAgentCommand('continue', { position, testMode: true });
+        } else if (command.startsWith('/continue')) {
+            await executeAgentCommand('continue', { position, testMode: false });
+        } else if (command.startsWith('/test:diagram')) {
+            const description = command.replace('/test:diagram', '').trim() || 'test process';
+            await executeAgentCommand('diagram', { description, position, testMode: true });
+        } else if (command.startsWith('/diagram')) {
+            const description = command.replace('/diagram', '').trim() || 'diagram';
+            await executeAgentCommand('diagram', { description, position, testMode: false });
+        } else if (command.startsWith('/test:augment')) {
+            const instruction = command.replace('/test:augment', '').trim() || 'improve formatting';
+            await executeAgentCommand('augment', { instruction, position, testMode: true });
+        } else if (command.startsWith('/augment')) {
+            const instruction = command.replace('/augment', '').trim() || 'improve formatting';
+            await executeAgentCommand('augment', { instruction, position, testMode: false });
+        } else {
+            console.warn('⚠️ Unknown slash command:', command);
+            showNotification(`Unknown command: ${command}`, 'error');
+        }
+    } catch (error) {
+        console.error('❌ Slash command execution failed:', error);
+        showNotification(`Failed to execute command: ${command}`, 'error');
+    }
 }
 
 function setupThemeToggle(): void {

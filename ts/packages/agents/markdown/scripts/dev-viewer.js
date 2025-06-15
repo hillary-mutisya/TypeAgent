@@ -75,6 +75,7 @@ console.log(`URL: http://localhost:${port}`);
 try {
     const serviceScript = fileURLToPath(
         new URL("../dist/view/route/service.js", import.meta.url)
+        // new URL("../dist/view/route/view/route/service.js", import.meta.url)
     );
 
     // Check if the built service exists

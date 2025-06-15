@@ -3,6 +3,9 @@ import { Crepe, CrepeFeature } from '@milkdown/crepe'
 import { commonmark } from '@milkdown/preset-commonmark'
 import { gfm } from '@milkdown/preset-gfm'
 import { history } from '@milkdown/plugin-history'
+import { collab, collabServiceCtx } from '@milkdown/plugin-collab'
+import { WebsocketProvider } from 'y-websocket'
+import { Doc } from 'yjs'
 
 // Import Crepe CSS
 import '@milkdown/crepe/theme/common/style.css'
@@ -21,6 +24,8 @@ interface DocumentOperation {
 }
 
 let editor: Editor | null = null;
+let yjsDoc: Doc | null = null;
+let websocketProvider: WebsocketProvider | null = null;
 
 document.addEventListener("DOMContentLoaded", async () => {
     await initializeEditor();
@@ -36,10 +41,13 @@ async function initializeEditor(): Promise<void> {
     }
     
     try {
+        // Initialize Yjs collaboration
+        await initializeCollaboration();
+        
         // Load initial content
         const initialContent = await loadInitialContent();
         
-        // Create Crepe editor with AI integration
+        // Create Crepe editor with AI integration and collaboration
         const crepe = new Crepe({
             root: editorElement,
             defaultValue: initialContent,
@@ -134,28 +142,143 @@ async function initializeEditor(): Promise<void> {
             }
         });
         
-        // Configure editor with plugins
+        // Configure editor with plugins including collaboration
         await crepe.editor
             .use(commonmark)                // Basic markdown support
             .use(gfm)                       // GitHub flavored markdown
             .use(history)                   // Undo/redo
+            .use(collab)                    // Yjs collaboration
             .create()
         
         editor = crepe.editor
         
+        // Setup collaboration after editor is created
+        if (yjsDoc && websocketProvider) {
+            editor.action((ctx) => {
+                const collabService = ctx.get(collabServiceCtx)
+                collabService.bindDoc(yjsDoc!).setAwareness(websocketProvider!.awareness).connect()
+            })
+        }
+        
         // Setup auto-save
         setupAutoSave(crepe);
         
-        console.log('✅ Milkdown editor with AI integration initialized successfully');
+        console.log('✅ Milkdown editor with AI integration and collaboration initialized successfully');
         console.log('🤖 Available AI commands:');
         console.log('   • Type "/" to open block edit menu with AI tools');
         console.log('   • Available: Continue Writing, Generate Diagram, Augment Document');
         console.log('   • Test versions available for testing without API calls');
+        console.log('🔄 Real-time collaboration enabled');
         
     } catch (error) {
         console.error('❌ Failed to initialize Milkdown editor:', error);
         showError('Failed to initialize editor. Please refresh the page.');
     }
+}
+
+async function initializeCollaboration(): Promise<void> {
+    try {
+        // Try to get collaboration info from server
+        let collabInfo;
+        try {
+            const response = await fetch('/collaboration/info');
+            if (response.ok) {
+                collabInfo = await response.json();
+                console.log('🔄 Initializing collaboration:', collabInfo);
+            } else {
+                throw new Error(`Server returned ${response.status}`);
+            }
+        } catch (fetchError) {
+            console.warn('⚠️ Could not get collaboration info from server, using defaults:', fetchError);
+            // Use default configuration if server endpoint is not available
+            collabInfo = {
+                websocketServerUrl: 'ws://localhost:1234',
+                currentDocument: 'live',
+                documents: 0,
+                totalClients: 0
+            };
+        }
+        
+        // Create Yjs document
+        yjsDoc = new Doc();
+        
+        // Determine document ID (use current document name or default)
+        const documentId = collabInfo.currentDocument ? 
+            collabInfo.currentDocument.replace('.md', '') : 
+            'live';
+        
+        // Create WebSocket provider
+        websocketProvider = new WebsocketProvider(
+            collabInfo.websocketServerUrl || 'ws://localhost:1234',
+            documentId,
+            yjsDoc
+        );
+        
+        // Setup connection status monitoring
+        setupCollaborationStatus(websocketProvider);
+        
+        console.log('✅ Collaboration initialized for document:', documentId);
+        
+    } catch (error) {
+        console.error('❌ Failed to initialize collaboration:', error);
+        console.log('⚠️ Continuing without collaboration features');
+        
+        // Create a local-only Yjs document as fallback
+        yjsDoc = new Doc();
+    }
+}
+
+function setupCollaborationStatus(provider: WebsocketProvider): void {
+    const statusElement = document.getElementById('collaboration-status') || createCollaborationStatusElement();
+    
+    provider.on('status', ({ status }: { status: string }) => {
+        console.log('Collaboration status:', status);
+        
+        statusElement.className = `collaboration-status ${status}`;
+        
+        switch (status) {
+            case 'connected':
+                statusElement.textContent = '🔄 Connected to collaboration server';
+                statusElement.style.display = 'block';
+                setTimeout(() => {
+                    statusElement.style.display = 'none';
+                }, 3000);
+                break;
+            case 'disconnected':
+                statusElement.textContent = '❌ Disconnected from collaboration server';
+                statusElement.style.display = 'block';
+                break;
+            case 'connecting':
+                statusElement.textContent = '🔄 Connecting to collaboration server...';
+                statusElement.style.display = 'block';
+                break;
+        }
+    });
+
+    provider.on('sync', (isSynced: boolean) => {
+        if (isSynced) {
+            console.log('📄 Document synchronized');
+        }
+    });
+}
+
+function createCollaborationStatusElement(): HTMLElement {
+    const statusElement = document.createElement('div');
+    statusElement.id = 'collaboration-status';
+    statusElement.className = 'collaboration-status';
+    statusElement.style.cssText = `
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        padding: 8px 12px;
+        border-radius: 4px;
+        font-size: 14px;
+        z-index: 1000;
+        display: none;
+        transition: opacity 0.3s ease;
+    `;
+    document.body.appendChild(statusElement);
+    return statusElement;
 }
 
 async function loadInitialContent(): Promise<string> {

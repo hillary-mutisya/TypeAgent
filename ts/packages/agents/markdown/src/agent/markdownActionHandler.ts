@@ -17,6 +17,8 @@ import { createMarkdownAgent } from "./translator.js";
 import { ChildProcess, fork } from "child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { TypeAgentYjsProvider } from "./TypeAgentYjsProvider.js";
+import { CollaborationContext } from "./collaborationTypes.js";
 
 export function instantiate(): AppAgent {
     return {
@@ -31,6 +33,8 @@ type MarkdownActionContext = {
     currentFileName?: string | undefined;
     viewProcess?: ChildProcess | undefined;
     localHostPort: number;
+    collaborationProvider?: TypeAgentYjsProvider | undefined;
+    collaborationContext?: CollaborationContext | undefined;
 };
 
 async function executeMarkdownAction(
@@ -158,6 +162,14 @@ async function handleMarkdownAction(
             if (await storage?.exists(filePath)) {
                 markdownContent = await storage?.read(filePath, "utf8");
             }
+            
+            // Use collaboration provider if available
+            const collaborationProvider = actionContext.sessionContext.agentContext.collaborationProvider;
+            if (collaborationProvider) {
+                // Update collaboration document content
+                markdownContent = collaborationProvider.getMarkdownContent();
+            }
+
             const response = await agent.updateDocument(
                 markdownContent,
                 action.parameters.originalRequest,
@@ -168,19 +180,27 @@ async function handleMarkdownAction(
 
                 // Apply operations to the document
                 if (updateResult.operations && updateResult.operations.length > 0) {
+                    // Apply to collaboration provider first
+                    if (collaborationProvider) {
+                        applyOperationsToYjsDocument(collaborationProvider, updateResult.operations);
+                        
+                        // Sync back to storage
+                        const updatedContent = collaborationProvider.getMarkdownContent();
+                        await storage?.write(filePath, updatedContent);
+                    } else {
+                        // Fallback to direct file operations
+                        if (markdownContent) {
+                            const updatedContent = applyOperationsToMarkdown(markdownContent, updateResult.operations);
+                            await storage?.write(filePath, updatedContent);
+                        }
+                    }
+
                     // Send operations to the view process
                     if (actionContext.sessionContext.agentContext.viewProcess) {
                         actionContext.sessionContext.agentContext.viewProcess.send({
                             type: "applyOperations",
                             operations: updateResult.operations,
                         });
-                    }
-                    
-                    // For now, also apply operations to the file directly
-                    // This is a simplified implementation
-                    if (markdownContent) {
-                        const updatedContent = applyOperationsToMarkdown(markdownContent, updateResult.operations);
-                        await storage?.write(filePath, updatedContent);
                     }
                 }
                 
@@ -248,6 +268,56 @@ export async function createViewServiceHost(filePath: string, port: number) {
         clearTimeout(timeoutHandle);
         return result;
     });
+}
+
+function applyOperationsToYjsDocument(provider: TypeAgentYjsProvider, operations: DocumentOperation[]): void {
+    const ytext = provider.getText();
+    
+    // Sort operations by position (reverse order for insertions to avoid position shifts)
+    const sortedOps = [...operations].sort((a, b) => {
+        if (a.type === 'insert' || a.type === 'replace') {
+            return ((b as any).position || (b as any).from || 0) - ((a as any).position || (a as any).from || 0);
+        }
+        return ((a as any).position || (a as any).from || 0) - ((b as any).position || (b as any).from || 0);
+    });
+    
+    for (const operation of sortedOps) {
+        try {
+            switch (operation.type) {
+                case 'insert': {
+                    const insertText = operation.content.map(item => 
+                        contentItemToText(item)
+                    ).join('');
+                    
+                    const position = Math.min(operation.position || 0, ytext.length);
+                    provider.applyTextOperation(position, insertText);
+                    break;
+                }
+                case 'replace': {
+                    const replaceText = operation.content.map(item => 
+                        contentItemToText(item)
+                    ).join('');
+                    
+                    const fromPos = Math.min(operation.from || 0, ytext.length);
+                    const toPos = Math.min(operation.to || fromPos + 1, ytext.length);
+                    const deleteLength = toPos - fromPos;
+                    
+                    provider.applyTextOperation(fromPos, replaceText, deleteLength);
+                    break;
+                }
+                case 'delete': {
+                    const fromPos = Math.min(operation.from || 0, ytext.length);
+                    const toPos = Math.min(operation.to || fromPos + 1, ytext.length);
+                    const deleteLength = toPos - fromPos;
+                    
+                    provider.applyTextOperation(fromPos, '', deleteLength);
+                    break;
+                }
+            }
+        } catch (error) {
+            console.error(`Failed to apply Yjs operation ${operation.type}:`, error);
+        }
+    }
 }
 
 function applyOperationsToMarkdown(content: string, operations: DocumentOperation[]): string {

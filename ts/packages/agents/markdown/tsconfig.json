@@ -7,6 +7,7 @@
   "references": [
     { "path": "./src/agent" },
     { "path": "./src/view/site" },
+    // { "path": "./src/view/editor" },
     { "path": "./src/view/route" }
   ],
   "ts-node": {

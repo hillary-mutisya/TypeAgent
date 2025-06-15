@@ -8,6 +8,7 @@ import { GeoJSONPlugin } from "./plugins/geoJson.js";
 import { MermaidPlugin } from "./plugins/mermaid.js";
 import { LatexPlugin } from "./plugins/latex.js";
 import { DocumentOperation } from "../../agent/markdownOperationSchema.js";
+import { CollaborationManager } from "./collaborationManager.js";
 import { fileURLToPath } from "url";
 import path from "path";
 import fs from "fs";
@@ -40,6 +41,10 @@ md.use(LatexPlugin);
 
 let clients: any[] = [];
 let filePath: string;
+let collaborationManager: CollaborationManager;
+
+// Initialize collaboration manager
+collaborationManager = new CollaborationManager();
 
 app.get("/preview", (req: Request, res: Response) => {
     if (!filePath) {
@@ -83,6 +88,16 @@ app.post("/document", express.json(), (req: Request, res: Response) => {
     } catch (error) {
         res.status(500).json({ error: "Failed to save document", details: error });
     }
+});
+
+// Add collaboration info endpoint
+app.get("/collaboration/info", (req: Request, res: Response) => {
+    const stats = collaborationManager.getStats();
+    res.json({
+        ...stats,
+        websocketServerUrl: 'ws://localhost:1234',
+        currentDocument: filePath ? path.basename(filePath) : null
+    });
 });
 
 // Add agent execution endpoint
@@ -335,6 +350,16 @@ process.on("message", (message: any) => {
         if (message.filePath) {
             filePath = message.filePath;
 
+            // Initialize collaboration for this document
+            const documentId = path.basename(message.filePath, '.md');
+            collaborationManager.initializeDocument(documentId, message.filePath);
+
+            // Load existing content into collaboration manager
+            if (fs.existsSync(message.filePath)) {
+                const content = fs.readFileSync(message.filePath, 'utf-8');
+                collaborationManager.setDocumentContent(documentId, content);
+            }
+
             // initial render/reset for clients
             renderFileToClients(filePath!);
 
@@ -351,6 +376,9 @@ process.on("message", (message: any) => {
                 operations: message.operations
             })}\n\n`);
         });
+    } else if (message.type == "initCollaboration") {
+        // Handle collaboration initialization from action handler
+        console.log('🔄 Collaboration initialized from action handler:', message.config);
     }
 });
 

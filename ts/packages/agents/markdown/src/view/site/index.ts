@@ -29,7 +29,6 @@ let websocketProvider: WebsocketProvider | null = null;
 
 document.addEventListener("DOMContentLoaded", async () => {
     await initializeEditor();
-    setupPreview();
     setupUI();
 });
 
@@ -47,7 +46,7 @@ async function initializeEditor(): Promise<void> {
         // Load initial content
         const initialContent = await loadInitialContent();
         
-        // Create Crepe editor with AI integration and collaboration
+        // Create Crepe editor with AI integration, collaboration, and live preview
         const crepe = new Crepe({
             root: editorElement,
             defaultValue: initialContent,
@@ -612,59 +611,6 @@ async function getMarkdownContent(): Promise<string> {
     })
 }
 
-function setupPreview(): void {
-    const eventSource = new EventSource("/events");
-    const mermaid = (window as any).mermaid;
-
-    eventSource.onmessage = function (event: MessageEvent) {
-        const data = decodeURIComponent(event.data);
-        
-        // Check if this is an operations message
-        try {
-            const parsed = JSON.parse(data);
-            if (parsed.type === "operations") {
-                console.log('📨 Received operations from server:', parsed.operations);
-                // Operations are now handled directly by the Milkdown editor
-                // via the agent integration, so we don't need to apply them here
-                return;
-            }
-        } catch (e) {
-            // Not JSON, treat as HTML content
-        }
-        
-        const previewElement = document.getElementById("preview");
-        if (previewElement) {
-            previewElement.innerHTML = data;
-            
-            // Re-initialize features in preview
-            if (mermaid) {
-                mermaid.init(undefined, previewElement.querySelectorAll(".mermaid"));
-            }
-            
-            processGeoJson(previewElement);
-            processMath(previewElement);
-        }
-    };
-
-    // Initial preview load
-    fetch("/preview")
-        .then((response) => response.text())
-        .then((content) => {
-            const previewElement = document.getElementById("preview");
-            if (previewElement) {
-                previewElement.innerHTML = content;
-                if (mermaid) {
-                    mermaid.init(undefined, previewElement.querySelectorAll(".mermaid"));
-                }
-                processGeoJson(previewElement);
-                processMath(previewElement);
-            }
-        })
-        .catch(error => {
-            console.error('Failed to load initial preview:', error);
-        });
-}
-
 function setupUI(): void {
     // Setup toolbar buttons
     setupToolbarButtons();
@@ -769,64 +715,6 @@ function showNotification(message: string, type: 'success' | 'error' | 'info' = 
     setTimeout(() => {
         notification.remove()
     }, 4000)
-}
-
-// Keep existing helper functions for preview features
-function processGeoJson(contentElement: HTMLElement): void {
-    const L = (window as any).L;
-    if (!L) return;
-    
-    const nodes = Array.from(contentElement.querySelectorAll(".geojson"));
-    for (const node of nodes) {
-        try {
-            const element = node as HTMLElement;
-            const mapId = element.id;
-            const mapContent = element.innerHTML;
-            const geojson = JSON.parse(mapContent);
-            element.innerHTML = "";
-
-            const map = L.map(mapId).setView(
-                [geojson.features[0].geometry.coordinates[1], geojson.features[0].geometry.coordinates[0]],
-                10,
-            );
-
-            L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-                maxZoom: 19,
-                attribution: "© OpenStreetMap",
-            }).addTo(map);
-
-            L.geoJSON(geojson).addTo(map);
-        } catch (error) {
-            console.error("Failed to process GeoJSON:", error);
-        }
-    }
-}
-
-function processMath(contentElement: HTMLElement): void {
-    const katex = (window as any).katex;
-    if (!katex) return;
-    
-    const displayMath = contentElement.querySelectorAll(".math-display");
-    displayMath.forEach((element: Element) => {
-        try {
-            const mathElement = element as HTMLElement;
-            const mathText = mathElement.textContent || "";
-            katex.render(mathText, mathElement, { displayMode: true });
-        } catch (error) {
-            console.error("Failed to render display math:", error);
-        }
-    });
-    
-    const inlineMath = contentElement.querySelectorAll(".math-inline");
-    inlineMath.forEach((element: Element) => {
-        try {
-            const mathElement = element as HTMLElement;
-            const mathText = mathElement.textContent || "";
-            katex.render(mathText, mathElement, { displayMode: false });
-        } catch (error) {
-            console.error("Failed to render inline math:", error);
-        }
-    });
 }
 
 // Export for global access (for debugging)

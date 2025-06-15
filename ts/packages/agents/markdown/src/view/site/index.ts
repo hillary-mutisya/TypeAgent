@@ -14,6 +14,11 @@ import '@milkdown/crepe/theme/frame.css'
 // Import custom styles
 import './styles/milkdown-integration.css'
 import './styles.css'
+import './mermaid-styles.css'
+
+// Import our custom plugins
+import { mermaidPlugin } from './mermaid-plugin'
+import { slashCommandHandler } from './slash-commands'
 
 // Types for operations
 interface DocumentOperation {
@@ -30,6 +35,7 @@ let websocketProvider: WebsocketProvider | null = null;
 document.addEventListener("DOMContentLoaded", async () => {
     await initializeEditor();
     setupUI();
+    restoreRawMarkdownPanelState();
 });
 
 async function initializeEditor(): Promise<void> {
@@ -162,12 +168,14 @@ async function initializeFullEditor(container: HTMLElement, initialContent: stri
             }
         });
         
-        // Configure editor with plugins including collaboration
+        // Configure editor with plugins including collaboration and custom plugins
         await crepe.editor
             .use(commonmark)                // Basic markdown support
             .use(gfm)                       // GitHub flavored markdown
             .use(history)                   // Undo/redo
             .use(collab)                    // Yjs collaboration
+            .use(mermaidPlugin)             // Mermaid diagram support
+            .use(slashCommandHandler)       // Enhanced slash command handling
             .create()
         
         editor = crepe.editor
@@ -183,9 +191,11 @@ async function initializeFullEditor(container: HTMLElement, initialContent: stri
         // Setup auto-save
         setupAutoSave(crepe);
         
-        console.log('✅ Full Editor with AI integration and collaboration initialized successfully');
+        console.log('✅ Full Editor with AI integration, Mermaid support and collaboration initialized successfully');
         console.log('🤖 Available AI commands:');
         console.log('   • Type "/" to open block edit menu with AI tools');
+        console.log('   • Type slash commands directly: /test:continue, /test:diagram, /test:augment');
+        console.log('   • Mermaid diagrams: Type ```mermaid code ``` or click diagrams to edit');
         console.log('   • Available: Continue Writing, Generate Diagram, Augment Document');
         console.log('   • Test versions available for testing without API calls');
         console.log('🔄 Real-time collaboration enabled');
@@ -667,16 +677,25 @@ async function saveDocument(): Promise<void> {
 }
 
 async function getMarkdownContent(): Promise<string> {
-    if (!editor) return ''
+    if (!editor) return '';
     
+    try {
+        // First try to get content from server (most accurate)
+        const response = await fetch('/document');
+        if (response.ok) {
+            return await response.text();
+        }
+    } catch (error) {
+        console.warn('Failed to fetch document from server:', error);
+    }
+    
+    // Fallback to editor content
     return new Promise((resolve) => {
         editor!.action((ctx) => {
-            const view = ctx.get(editorViewCtx)
-            // For now, return the text content
-            // TODO: Implement proper markdown serialization
-            resolve(view.state.doc.textContent || "")
-        })
-    })
+            const view = ctx.get(editorViewCtx);
+            resolve(view.state.doc.textContent || "");
+        });
+    });
 }
 
 function setupUI(): void {
@@ -688,6 +707,9 @@ function setupUI(): void {
     
     // Setup theme toggle
     setupThemeToggle();
+    
+    // Setup raw markdown panel
+    setupRawMarkdownPanel();
 }
 
 function setupToolbarButtons(): void {
@@ -695,6 +717,13 @@ function setupToolbarButtons(): void {
     if (saveBtn) {
         saveBtn.addEventListener('click', () => {
             saveDocument();
+        });
+    }
+    
+    const rawMarkdownToggle = document.getElementById('raw-markdown-toggle');
+    if (rawMarkdownToggle) {
+        rawMarkdownToggle.addEventListener('click', () => {
+            toggleRawMarkdownPanel();
         });
     }
 }
@@ -789,6 +818,111 @@ function setupThemeToggle(): void {
     }
 }
 
+function setupRawMarkdownPanel(): void {
+    const closeButton = document.getElementById('close-raw-panel');
+    if (closeButton) {
+        closeButton.addEventListener('click', () => {
+            hideRawMarkdownPanel();
+        });
+    }
+    
+    // Update panel content when editor changes
+    if (editor) {
+        updateRawMarkdownContent();
+        
+        // Listen for editor changes to update raw markdown
+        editor.action((ctx) => {
+            const view = ctx.get(editorViewCtx);
+            
+            // Override dispatchTransaction to detect changes
+            const originalDispatch = view.dispatch;
+            view.dispatch = (tr) => {
+                originalDispatch.call(view, tr);
+                
+                // Update raw markdown panel if visible
+                if (tr.docChanged && isRawMarkdownPanelVisible()) {
+                    setTimeout(() => updateRawMarkdownContent(), 100);
+                }
+            };
+        });
+    }
+}
+
+function toggleRawMarkdownPanel(): void {
+    const panel = document.getElementById('raw-markdown-panel');
+    const button = document.getElementById('raw-markdown-toggle');
+    const container = document.getElementById('editor-container');
+    
+    if (panel && button && container) {
+        const isVisible = panel.classList.contains('visible');
+        
+        if (isVisible) {
+            hideRawMarkdownPanel();
+        } else {
+            showRawMarkdownPanel();
+        }
+    }
+}
+
+function showRawMarkdownPanel(): void {
+    const panel = document.getElementById('raw-markdown-panel');
+    const button = document.getElementById('raw-markdown-toggle');
+    const container = document.getElementById('editor-container');
+    
+    if (panel && button && container) {
+        panel.classList.add('visible');
+        button.classList.add('active');
+        container.classList.add('panel-visible');
+        
+        // Update content when showing
+        updateRawMarkdownContent();
+        
+        // Store state
+        localStorage.setItem('rawMarkdownPanelVisible', 'true');
+    }
+}
+
+function hideRawMarkdownPanel(): void {
+    const panel = document.getElementById('raw-markdown-panel');
+    const button = document.getElementById('raw-markdown-toggle');
+    const container = document.getElementById('editor-container');
+    
+    if (panel && button && container) {
+        panel.classList.remove('visible');
+        button.classList.remove('active');
+        container.classList.remove('panel-visible');
+        
+        // Store state
+        localStorage.setItem('rawMarkdownPanelVisible', 'false');
+    }
+}
+
+function isRawMarkdownPanelVisible(): boolean {
+    const panel = document.getElementById('raw-markdown-panel');
+    return panel ? panel.classList.contains('visible') : false;
+}
+
+async function updateRawMarkdownContent(): Promise<void> {
+    const textElement = document.getElementById('raw-markdown-text');
+    if (textElement && editor) {
+        try {
+            const content = await getMarkdownContent();
+            textElement.textContent = content || '# Empty Document\n\nStart typing to see content here...';
+        } catch (error) {
+            console.error('Failed to get markdown content:', error);
+            textElement.textContent = '// Error loading content\n// Please try refreshing the page';
+        }
+    }
+}
+
+// Restore panel state on page load
+function restoreRawMarkdownPanelState(): void {
+    const savedState = localStorage.getItem('rawMarkdownPanelVisible');
+    if (savedState === 'true') {
+        setTimeout(() => showRawMarkdownPanel(), 500); // Delay to ensure editor is ready
+    }
+}
+
 function showSaveStatus(status: 'saving' | 'saved' | 'error'): void {
     const statusElement = document.getElementById('save-status');
     if (statusElement) {
@@ -849,6 +983,6 @@ function showNotification(message: string, type: 'success' | 'error' | 'info' = 
     }, 4000)
 }
 
-// Export for global access (for debugging)
+// Export for global access (for debugging and slash commands)
 (window as any).editor = editor;
 (window as any).executeAgentCommand = executeAgentCommand;

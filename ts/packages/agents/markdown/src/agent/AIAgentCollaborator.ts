@@ -5,6 +5,22 @@ import * as Y from "yjs";
 import { TypeAgentYjsProvider } from "./TypeAgentYjsProvider.js";
 import { UserPresence, InsertionContext } from "./collaborationTypes.js";
 
+// Local AI Result interface to avoid conflicts
+interface LocalAIResult {
+    type: "text" | "mermaid" | "code";
+    content: string;
+    confidence: number;
+}
+
+// Forward declaration for LLMIntegrationService to avoid circular dependency
+interface LLMIntegrationService {
+    processAIRequest(
+        command: "continue" | "diagram" | "augment" | "research",
+        parameters: any,
+        context: any
+    ): Promise<LocalAIResult>;
+}
+
 /**
  * AI Agent that appears as a collaborative user in the editing session
  * Handles asynchronous AI operations while maintaining real-time collaboration
@@ -18,10 +34,19 @@ export class AIAgentCollaborator {
     private collaborationProvider: TypeAgentYjsProvider;
     private activeRequests: Map<string, AIRequest> = new Map();
     private insertionContexts: Map<string, InsertionContext> = new Map();
+    private llmService?: LLMIntegrationService;
 
     constructor(collaborationProvider: TypeAgentYjsProvider) {
         this.collaborationProvider = collaborationProvider;
         this.setupAIPresence();
+    }
+
+    /**
+     * Set the LLM service for real AI integration
+     */
+    setLLMService(llmService: LLMIntegrationService): void {
+        this.llmService = llmService;
+        console.log("🧠 AI Collaborator connected to LLM service");
     }
 
     /**
@@ -164,26 +189,53 @@ export class AIAgentCollaborator {
     }
 
     /**
-     * Execute the actual AI command (placeholder for real AI integration)
+     * Execute the actual AI command using LLM Integration Service
      */
-    private async executeAICommand(request: AIRequest): Promise<AIResult> {
-        // For Phase 2, we'll use test responses
-        // In production, this would call the actual AI agent
+    private async executeAICommand(request: AIRequest): Promise<LocalAIResult> {
+        if (this.llmService) {
+            // Use real LLM integration
+            const context = {
+                currentContent: this.collaborationProvider.getMarkdownContent(),
+                cursorPosition: request.insertionContext.originalPosition,
+                surroundingText: request.insertionContext.surroundingText,
+                sectionHeading: request.insertionContext.sectionHeading,
+            };
 
-        await new Promise((resolve) => setTimeout(resolve, 2000)); // Simulate processing time
+            console.log(`🤖 Processing ${request.command} with LLM service`);
+            
+            const result = await this.llmService.processAIRequest(
+                request.command,
+                request.parameters,
+                context
+            );
 
+            return {
+                type: result.type,
+                content: result.content,
+                confidence: result.confidence
+            };
+        } else {
+            // Fallback to mock responses for backward compatibility
+            console.log(`🤖 Using mock response for ${request.command} (LLM service not available)`);
+            return this.getMockResponse(request);
+        }
+    }
+
+    /**
+     * Fallback mock responses when LLM service is not available
+     */
+    private getMockResponse(request: AIRequest): LocalAIResult {
+        // Simulate processing time
         switch (request.command) {
             case "continue":
                 return {
                     type: "text",
-                    content:
-                        "This is AI-generated content that continues the document. The AI analyzed the context and generated relevant content that fits naturally with the existing text.",
+                    content: "This is AI-generated content that continues the document. The AI analyzed the context and generated relevant content that fits naturally with the existing text.",
                     confidence: 0.85,
                 };
 
             case "diagram":
-                const description =
-                    request.parameters.description || "process flow";
+                const description = request.parameters.description || "process flow";
                 return {
                     type: "mermaid",
                     content: `graph TD\n    A[Start: ${description}] --> B{Decision}\n    B -->|Yes| C[Process A]\n    B -->|No| D[Process B]\n    C --> E[End]\n    D --> E`,
@@ -191,8 +243,7 @@ export class AIAgentCollaborator {
                 };
 
             case "augment":
-                const instruction =
-                    request.parameters.instruction || "improve formatting";
+                const instruction = request.parameters.instruction || "improve formatting";
                 return {
                     type: "text",
                     content: `\n> ✨ **AI Enhancement Applied**: ${instruction}\n\nThe AI has analyzed the document and applied the requested improvements. This includes better structure, formatting, and content organization.\n`,
@@ -382,7 +433,7 @@ export class AIAgentCollaborator {
     /**
      * Apply AI result to document at optimal position
      */
-    private applyAIResult(result: AIResult, position: number): void {
+    private applyAIResult(result: LocalAIResult, position: number): void {
         let insertText: string;
 
         switch (result.type) {
@@ -489,7 +540,7 @@ interface AIRequest {
 /**
  * AI Result interface
  */
-interface AIResult {
+interface LocalAIResult {
     type: "text" | "mermaid" | "code";
     content: string;
     confidence: number;

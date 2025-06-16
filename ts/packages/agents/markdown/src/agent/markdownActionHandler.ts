@@ -21,6 +21,45 @@ import { TypeAgentYjsProvider } from "./TypeAgentYjsProvider.js";
 import { CollaborationContext } from "./collaborationTypes.js";
 import { AIAgentCollaborator } from "./AIAgentCollaborator.js";
 import { AsyncResearchHandler } from "./AsyncResearchHandler.js";
+import { LLMIntegrationService, DEFAULT_LLM_CONFIG } from "./LLMIntegrationService.js";
+import findConfig from "find-config";
+import dotenv from "dotenv";
+
+// Load environment variables from .env file if needed
+if (!process.env["AZURE_OPENAI_ENDPOINT"] && !process.env["OPENAI_ENDPOINT"]) {
+    const dotEnvPath = findConfig(".env");
+    if (dotEnvPath) {
+        console.log(`🔧 [Action Handler] Loading environment variables from: ${dotEnvPath}`);
+        dotenv.config({ path: dotEnvPath });
+    } else {
+        console.log("⚠️ [Action Handler] No .env file found, using system environment variables");
+    }
+}
+
+// Debug: Log Azure OpenAI configuration status in action handler
+console.log("🔍 [Action Handler] Azure OpenAI Configuration Debug:");
+const azureEnvVars = [
+    'AZURE_OPENAI_API_KEY',
+    'AZURE_OPENAI_API_INSTANCE_NAME', 
+    'AZURE_OPENAI_API_DEPLOYMENT_NAME',
+    'AZURE_OPENAI_API_VERSION',
+    'AZURE_OPENAI_ENDPOINT'
+];
+
+azureEnvVars.forEach(varName => {
+    const value = process.env[varName];
+    if (value) {
+        // Show partial value for security
+        const maskedValue = varName.includes('KEY') 
+            ? `${value.substring(0, 8)}...` 
+            : value;
+        console.log(`✅ [Action Handler] ${varName}: ${maskedValue}`);
+    } else {
+        console.log(`❌ [Action Handler] ${varName}: NOT SET`);
+    }
+});
+
+console.log("🔧 [Action Handler] Environment configuration check complete.\n");
 
 export function instantiate(): AppAgent {
     return {
@@ -28,6 +67,7 @@ export function instantiate(): AppAgent {
         updateAgentContext: updateMarkdownContext,
         executeAction: executeMarkdownAction,
         validateWildcardMatch: markdownValidateWildcardMatch,
+        streamPartialAction: streamPartialMarkdownAction,
     };
 }
 
@@ -39,6 +79,7 @@ type MarkdownActionContext = {
     collaborationContext?: CollaborationContext | undefined;
     aiCollaborator?: AIAgentCollaborator | undefined;
     researchHandler?: AsyncResearchHandler | undefined;
+    llmService?: LLMIntegrationService | undefined;
 };
 
 async function executeMarkdownAction(
@@ -47,6 +88,101 @@ async function executeMarkdownAction(
 ) {
     let result = await handleMarkdownAction(action as MarkdownAction, context);
     return result;
+}
+
+async function streamPartialMarkdownAction(
+    actionName: string,
+    name: string,
+    value: string,
+    delta: string | undefined,
+    context: ActionContext<MarkdownActionContext>,
+): Promise<void> {
+    if (actionName !== "streamingUpdateDocument") {
+        return;
+    }
+
+    console.log(`🌊 Streaming ${name}: delta="${delta}"`);
+
+    const collaborationProvider = context.sessionContext.agentContext.collaborationProvider;
+    
+    switch (name) {
+        case "parameters.generatedContent":
+            // Stream text content in real-time
+            handleStreamingContent(delta, context, collaborationProvider);
+            break;
+            
+        case "parameters.progressStatus":
+            // Show progress updates for research operations
+            handleProgressUpdate(delta, context);
+            break;
+            
+        case "parameters.validationResults":
+            // Show validation feedback
+            handleValidationFeedback(delta, context);
+            break;
+    }
+}
+
+function handleStreamingContent(
+    delta: string | undefined,
+    context: ActionContext<MarkdownActionContext>,
+    collaborationProvider?: TypeAgentYjsProvider
+): void {
+    if (delta === undefined) {
+        // Streaming completed - finalize
+        context.actionIO.appendDisplay("");
+        console.log("🏁 Streaming completed");
+        return;
+    }
+
+    if (delta) {
+        // Accumulate streaming content
+        if (context.streamingContext === undefined) {
+            context.streamingContext = "";
+        }
+        context.streamingContext += delta;
+
+        // Show delta to user
+        context.actionIO.appendDisplay({
+            type: "text",
+            content: delta,
+            speak: false, // Don't speak markdown content
+        }, "inline");
+
+        // Apply to collaborative document in real-time
+        if (collaborationProvider) {
+            const currentContent = collaborationProvider.getMarkdownContent();
+            const insertPosition = currentContent.length; // Append at end
+            collaborationProvider.applyTextOperation(insertPosition, delta);
+            console.log(`📝 Applied delta to collaboration doc at position ${insertPosition}`);
+        }
+    }
+}
+
+function handleProgressUpdate(
+    delta: string | undefined,
+    context: ActionContext<MarkdownActionContext>
+): void {
+    if (delta) {
+        context.actionIO.appendDisplay({
+            type: "text",
+            content: `🔄 ${delta}`,
+            kind: "status"
+        }, "temporary");
+    }
+}
+
+function handleValidationFeedback(
+    delta: string | undefined,
+    context: ActionContext<MarkdownActionContext>
+): void {
+    if (delta) {
+        context.actionIO.appendDisplay({
+            type: "text",
+            content: `✓ ${delta}`,
+            kind: "info"
+        }, "block");
+    }
 }
 
 async function markdownValidateWildcardMatch(
@@ -111,6 +247,21 @@ async function updateMarkdownContext(
                 context.agentContext.researchHandler = new AsyncResearchHandler(
                     context.agentContext.aiCollaborator,
                 );
+
+                // Initialize LLM Integration Service
+                if (!context.agentContext.llmService) {
+                    context.agentContext.llmService = new LLMIntegrationService(
+                        "GPT_4o", // Default model
+                        DEFAULT_LLM_CONFIG
+                    );
+                    
+                    // Connect LLM service to AI collaborator
+                    context.agentContext.aiCollaborator.setLLMService(
+                        context.agentContext.llmService
+                    );
+                    
+                    console.log("🧠 LLM Integration Service initialized and connected");
+                }
 
                 // Load existing content into Yjs document
                 const existingContent =
@@ -326,8 +477,113 @@ async function handleMarkdownAction(
             }
             break;
         }
+        case "streamingUpdateDocument": {
+            // Handle streaming AI commands with real-time updates
+            result = createActionResult("Processing AI request with streaming...");
+
+            const filePath = `${actionContext.sessionContext.agentContext.currentFileName}`;
+            let markdownContent = "";
+            if (await storage?.exists(filePath)) {
+                markdownContent = (await storage?.read(filePath, "utf8")) || "";
+            }
+
+            const collaborationProvider = actionContext.sessionContext.agentContext.collaborationProvider;
+            const llmService = actionContext.sessionContext.agentContext.llmService;
+
+            if (collaborationProvider) {
+                markdownContent = collaborationProvider.getMarkdownContent();
+            }
+
+            if (llmService) {
+                // Use streaming LLM integration
+                const request = action.parameters.originalRequest;
+                const aiCommand = action.parameters.aiCommand || detectAICommand(request);
+                
+                try {
+                    // Build context for AI request
+                    const context = {
+                        currentContent: markdownContent,
+                        cursorPosition: markdownContent.length,
+                        surroundingText: markdownContent,
+                    };
+
+                    // Process with streaming callback
+                    const aiResult = await llmService.processAIRequest(
+                        aiCommand,
+                        { hint: extractHintFromRequest(request) },
+                        context,
+                        {
+                            onContent: (delta) => {
+                                // This will be handled by streamPartialAction
+                                console.log(`📝 Streaming content: ${delta.substring(0, 50)}...`);
+                            },
+                            onProgress: (status) => {
+                                console.log(`🔄 Progress: ${status}`);
+                            }
+                        }
+                    );
+
+                    // Apply the complete result to the document
+                    if (aiResult.operations) {
+                        if (collaborationProvider) {
+                            applyOperationsToYjsDocument(collaborationProvider, aiResult.operations);
+                            const updatedContent = collaborationProvider.getMarkdownContent();
+                            await storage?.write(filePath, updatedContent);
+                        } else if (markdownContent) {
+                            const updatedContent = applyOperationsToMarkdown(markdownContent, aiResult.operations);
+                            await storage?.write(filePath, updatedContent);
+                        }
+                    }
+
+                    result = createActionResult(
+                        `AI ${aiCommand} command completed successfully`
+                    );
+                } catch (error) {
+                    console.error("Streaming AI request failed:", error);
+                    result = createActionResult(
+                        `Failed to process AI request: ${(error as Error).message}`
+                    );
+                }
+            } else {
+                result = createActionResult(
+                    "LLM service not available - using fallback"
+                );
+            }
+            break;
+        }
     }
     return result;
+}
+
+/**
+ * Detect AI command from user request
+ */
+function detectAICommand(request: string): "continue" | "diagram" | "augment" | "research" {
+    const lowerRequest = request.toLowerCase();
+    
+    if (lowerRequest.includes("/continue") || lowerRequest.includes("continue writing")) {
+        return "continue";
+    }
+    if (lowerRequest.includes("/diagram") || lowerRequest.includes("create diagram")) {
+        return "diagram";
+    }
+    if (lowerRequest.includes("/augment") || lowerRequest.includes("improve") || lowerRequest.includes("enhance")) {
+        return "augment";
+    }
+    if (lowerRequest.includes("/research") || lowerRequest.includes("research")) {
+        return "research";
+    }
+    
+    // Default to continue for general content requests
+    return "continue";
+}
+
+/**
+ * Extract hint from user request
+ */
+function extractHintFromRequest(request: string): string | undefined {
+    const match = request.match(/\/continue\s+(.+)/i) || request.match(/continue writing\s+(.+)/i);
+    return match ? match[1].trim() : undefined;
 }
 
 export async function createViewServiceHost(filePath: string, port: number) {
@@ -350,7 +606,10 @@ export async function createViewServiceHost(filePath: string, port: number) {
                     ),
                 );
 
-                const childProcess = fork(expressService, [port.toString()]);
+                const childProcess = fork(expressService, [port.toString()], {
+                    // Explicitly inherit environment variables to ensure .env values are passed
+                    env: process.env
+                });
 
                 childProcess.send({
                     type: "setFile",

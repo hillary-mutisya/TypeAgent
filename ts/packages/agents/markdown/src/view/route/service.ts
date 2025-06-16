@@ -12,6 +12,8 @@ import { CollaborationManager } from "./collaborationManager.js";
 import { fileURLToPath } from "url";
 import path from "path";
 import fs from "fs";
+import findConfig from "find-config";
+import dotenv from "dotenv";
 
 const app: Express = express();
 const port = parseInt(process.argv[2]);
@@ -47,6 +49,56 @@ let collaborationManager: CollaborationManager;
 
 // Initialize collaboration manager
 collaborationManager = new CollaborationManager();
+
+if (!process.env["AZURE_OPENAI_ENDPOINT"] && !process.env["OPENAI_ENDPOINT"]) {
+    const dotEnvPath = findConfig(".env");
+    if (dotEnvPath) {
+        console.log(`🔧 Loading environment variables from: ${dotEnvPath}`);
+        dotenv.config({ path: dotEnvPath });
+    } else {
+        console.log("⚠️ No .env file found, using system environment variables");
+    }
+}
+
+// Debug: Log Azure OpenAI configuration status
+console.log("🔍 Azure OpenAI Configuration Debug:");
+const azureEnvVars = [
+    'AZURE_OPENAI_API_KEY',
+    'AZURE_OPENAI_API_INSTANCE_NAME', 
+    'AZURE_OPENAI_API_DEPLOYMENT_NAME',
+    'AZURE_OPENAI_API_VERSION',
+    'AZURE_OPENAI_ENDPOINT'
+];
+
+azureEnvVars.forEach(varName => {
+    const value = process.env[varName];
+    if (value) {
+        // Show partial value for security (first 8 chars + ...)
+        const maskedValue = varName.includes('KEY') 
+            ? `${value.substring(0, 8)}...` 
+            : value;
+        console.log(`✅ ${varName}: ${maskedValue}`);
+    } else {
+        console.log(`❌ ${varName}: NOT SET`);
+    }
+});
+
+// Also check OpenAI configuration as fallback
+console.log("🔍 OpenAI Configuration Debug:");
+const openaiEnvVars = ['OPENAI_API_KEY', 'OPENAI_ENDPOINT'];
+openaiEnvVars.forEach(varName => {
+    const value = process.env[varName];
+    if (value) {
+        const maskedValue = varName.includes('KEY') 
+            ? `${value.substring(0, 8)}...` 
+            : value;
+        console.log(`✅ ${varName}: ${maskedValue}`);
+    } else {
+        console.log(`❌ ${varName}: NOT SET`);
+    }
+});
+
+console.log("🔧 Environment configuration check complete.\n");
 
 app.get("/preview", (req: Request, res: Response) => {
     if (!filePath) {
@@ -365,12 +417,243 @@ async function streamRealAgentResponse(
     parameters: any,
     res: Response,
 ): Promise<void> {
-    // TODO: Implement real LLM streaming via TypeAgent
-    // For now, fall back to test response
-    console.log(
-        "🤖 Real LLM streaming not implemented yet, using test response",
-    );
-    await streamTestResponse("/test:continue", parameters.context, res);
+    console.log("🤖 Streaming real LLM response via TypeAgent integration");
+
+    try {
+        // Import our LLM integration components
+        const { LLMIntegrationService, DEFAULT_LLM_CONFIG } = await import(
+            "../../agent/LLMIntegrationService.js"
+        );
+
+        // Initialize LLM service if not already done
+        const llmService = new LLMIntegrationService(
+            "GPT_4o",
+            DEFAULT_LLM_CONFIG,
+        );
+
+        // Extract AI command from the original request
+        const originalRequest = parameters.originalRequest || "";
+        const aiCommand = detectAICommand(originalRequest);
+
+        // Load current document content
+        const markdownContent = fs.readFileSync(filePath, "utf-8");
+
+        // Build context for AI request
+        const context = {
+            currentContent: markdownContent,
+            cursorPosition:
+                parameters.context?.position || markdownContent.length,
+            surroundingText: markdownContent,
+        };
+
+        // Extract parameters for specific commands
+        let commandParams = {};
+        if (aiCommand === "continue") {
+            commandParams = { hint: extractHintFromRequest(originalRequest) };
+        } else if (aiCommand === "diagram") {
+            commandParams = {
+                description:
+                    originalRequest.replace(/\/diagram|diagram/, "").trim() ||
+                    "process flow",
+                diagramType: "mermaid",
+            };
+        } else if (aiCommand === "augment") {
+            commandParams = {
+                instruction:
+                    originalRequest.replace(/\/augment|augment/, "").trim() ||
+                    "improve formatting",
+                scope: "section",
+            };
+        }
+
+        // Set up streaming callback to send updates to client
+        const streamingCallback = {
+            onContent: (delta: string) => {
+                // Send content chunk to client
+                res.write(
+                    `data: ${JSON.stringify({
+                        type: "content",
+                        chunk: delta,
+                        position: parameters.context?.position || 0,
+                    })}\n\n`,
+                );
+            },
+            onProgress: (status: string) => {
+                // Send progress update to client
+                res.write(
+                    `data: ${JSON.stringify({
+                        type: "typing",
+                        message: status,
+                    })}\n\n`,
+                );
+            },
+            onComplete: () => {
+                console.log("✅ LLM streaming completed");
+            },
+            onError: (error: Error) => {
+                console.error("❌ LLM streaming error:", error);
+                res.write(
+                    `data: ${JSON.stringify({
+                        type: "error",
+                        error: error.message,
+                    })}\n\n`,
+                );
+            },
+        };
+
+        // Send initial status
+        res.write(
+            `data: ${JSON.stringify({
+                type: "typing",
+                message: `AI processing ${aiCommand} command...`,
+            })}\n\n`,
+        );
+
+        // Process AI request with streaming
+        const aiResult = await llmService.processAIRequest(
+            aiCommand,
+            commandParams,
+            context,
+            streamingCallback,
+        );
+
+        // Apply operations to the document if successful
+        if (aiResult.operations && aiResult.operations.length > 0) {
+            // Apply operations to file
+            const updatedContent = applyOperationsToMarkdown(
+                markdownContent,
+                aiResult.operations,
+            );
+            fs.writeFileSync(filePath, updatedContent, "utf-8");
+
+            // Send operations to client for immediate UI update
+            for (const operation of aiResult.operations) {
+                res.write(
+                    `data: ${JSON.stringify({
+                        type: "operation",
+                        operation: operation,
+                    })}\n\n`,
+                );
+            }
+
+            // Trigger preview update for other clients
+            renderFileToClients(filePath);
+        } else {
+            // Fallback: send content as a simple operation
+            const operation = {
+                type: "insert",
+                position: parameters.context?.position || 0,
+                content: [
+                    {
+                        type: "paragraph",
+                        content: [{ type: "text", text: aiResult.content }],
+                    },
+                ],
+                description: `Generated ${aiCommand} content`,
+            };
+
+            res.write(
+                `data: ${JSON.stringify({ type: "operation", operation })}\n\n`,
+            );
+
+            // Update file with the generated content
+            const lines = markdownContent.split("\n");
+            const insertPosition = Math.min(
+                parameters.context?.position || lines.length,
+                lines.length,
+            );
+            lines.splice(insertPosition, 0, aiResult.content);
+            const updatedContent = lines.join("\n");
+            fs.writeFileSync(filePath, updatedContent, "utf-8");
+            renderFileToClients(filePath);
+        }
+
+        console.log(`✅ Real LLM ${aiCommand} command completed successfully`);
+    } catch (error) {
+        console.error("❌ Real LLM streaming failed:", error);
+
+        // Enhanced error logging for debugging
+        const err = error as Error;
+        console.error("Error details:", {
+            name: err.name,
+            message: err.message,
+            stack: err.stack
+        });
+        
+        // Check if it's a specific type of error we can handle
+        if (err.message.includes("Azure") || err.message.includes("API")) {
+            console.log("💡 Azure OpenAI API issue detected - check environment variables");
+        } else if (err.message.includes("schema") || err.message.includes("validation")) {
+            console.log("💡 Schema validation issue detected - check TypeChat setup");
+        }
+        
+        // Provide enhanced fallback with error info
+        console.log("🔄 Falling back to enhanced test response with error context");
+        
+        // Send error info to client
+        res.write(
+            `data: ${JSON.stringify({
+                type: "typing",
+                message: "LLM service unavailable, using fallback mode..."
+            })}\n\n`,
+        );
+
+        // Fallback to test response if LLM integration fails
+        await streamTestResponse(
+            "/test:" +
+                detectAICommand(parameters.originalRequest || "continue"),
+            parameters.context,
+            res,
+        );
+    }
+}
+
+/**
+ * Detect AI command from user request (helper function for service.ts)
+ */
+function detectAICommand(
+    request: string,
+): "continue" | "diagram" | "augment" | "research" {
+    const lowerRequest = request.toLowerCase();
+
+    if (
+        lowerRequest.includes("/continue") ||
+        lowerRequest.includes("continue writing")
+    ) {
+        return "continue";
+    }
+    if (
+        lowerRequest.includes("/diagram") ||
+        lowerRequest.includes("create diagram")
+    ) {
+        return "diagram";
+    }
+    if (
+        lowerRequest.includes("/augment") ||
+        lowerRequest.includes("improve") ||
+        lowerRequest.includes("enhance")
+    ) {
+        return "augment";
+    }
+    if (
+        lowerRequest.includes("/research") ||
+        lowerRequest.includes("research")
+    ) {
+        return "research";
+    }
+
+    // Default to continue for general content requests
+    return "continue";
+}
+
+/**
+ * Extract hint from user request (helper function for service.ts)
+ */
+function extractHintFromRequest(request: string): string | undefined {
+    const match =
+        request.match(/\/continue\s+(.+)/i) ||
+        request.match(/continue writing\s+(.+)/i);
+    return match ? match[1].trim() : undefined;
 }
 
 async function forwardToMarkdownAgent(
@@ -378,78 +661,155 @@ async function forwardToMarkdownAgent(
     parameters: any,
 ): Promise<any> {
     try {
-        // Import dynamically to avoid circular dependencies
-        const { createMarkdownAgent } = await import(
-            "../../agent/translator.js"
+        console.log("🤖 Forwarding to TypeAgent LLM integration");
+
+        // Import our LLM integration components
+        const { LLMIntegrationService, DEFAULT_LLM_CONFIG } = await import(
+            "../../agent/LLMIntegrationService.js"
         );
 
-        // Load current document
+        // Initialize LLM service
+        const llmService = new LLMIntegrationService(
+            "GPT_4o",
+            DEFAULT_LLM_CONFIG,
+        );
+
+        // Load current document content
         const markdownContent = fs.readFileSync(filePath, "utf-8");
 
-        // Create and call the agent
-        const agent = await createMarkdownAgent("GPT_4o");
-        const response = await agent.updateDocument(
-            markdownContent,
-            parameters.originalRequest,
-        );
+        // Extract AI command from the original request
+        const originalRequest = parameters.originalRequest || "";
+        const aiCommand = detectAICommand(originalRequest);
 
-        if (response.success) {
-            const updateResult = response.data;
+        // Build context for AI request
+        const context = {
+            currentContent: markdownContent,
+            cursorPosition:
+                parameters.context?.position || markdownContent.length,
+            surroundingText: markdownContent,
+        };
 
-            // Apply operations to file if they exist
-            if (updateResult.operations && updateResult.operations.length > 0) {
-                // Apply operations to markdown locally
-                const updatedContent = applyOperationsToMarkdown(
-                    markdownContent,
-                    updateResult.operations,
-                );
-                fs.writeFileSync(filePath, updatedContent, "utf-8");
-
-                // Trigger preview update
-                renderFileToClients(filePath);
-
-                return {
-                    operations: updateResult.operations,
-                    summary: updateResult.operationSummary,
-                    success: true,
-                };
-            } else {
-                // Fallback: treat as simple content update
-                return {
-                    operations: [
-                        {
-                            type: "continue",
-                            position: parameters.context?.position || 0,
-                            content: [
-                                {
-                                    type: "paragraph",
-                                    content: [
-                                        {
-                                            type: "text",
-                                            text:
-                                                updateResult.operationSummary ||
-                                                "AI response generated",
-                                        },
-                                    ],
-                                },
-                            ],
-                            description:
-                                updateResult.operationSummary ||
-                                "Generated content",
-                        },
-                    ],
-                    summary:
-                        updateResult.operationSummary || "Content generated",
-                    success: true,
-                };
-            }
+        // Extract parameters for specific commands
+        let commandParams = {};
+        if (aiCommand === "continue") {
+            commandParams = { hint: extractHintFromRequest(originalRequest) };
+        } else if (aiCommand === "diagram") {
+            commandParams = {
+                description:
+                    originalRequest.replace(/\/diagram|diagram/, "").trim() ||
+                    "process flow",
+                diagramType: "mermaid",
+            };
+        } else if (aiCommand === "augment") {
+            commandParams = {
+                instruction:
+                    originalRequest.replace(/\/augment|augment/, "").trim() ||
+                    "improve formatting",
+                scope: "section",
+            };
         }
 
-        throw new Error(`Agent execution failed: ${response.message}`);
-    } catch (error) {
-        console.error("Agent forwarding failed:", error);
+        // Process AI request (non-streaming for direct API calls)
+        const aiResult = await llmService.processAIRequest(
+            aiCommand,
+            commandParams,
+            context,
+            // No streaming callback for direct API calls
+        );
 
-        // Return a test response if agent fails (for development)
+        // Apply operations to file if successful
+        if (aiResult.operations && aiResult.operations.length > 0) {
+            const updatedContent = applyOperationsToMarkdown(
+                markdownContent,
+                aiResult.operations,
+            );
+            fs.writeFileSync(filePath, updatedContent, "utf-8");
+
+            // Trigger preview update
+            renderFileToClients(filePath);
+
+            return {
+                operations: aiResult.operations,
+                summary: `Generated ${aiCommand} content successfully`,
+                success: true,
+            };
+        } else {
+            // Fallback: treat as simple content update
+            const operation = {
+                type: "insert",
+                position: parameters.context?.position || 0,
+                content: [
+                    {
+                        type: "paragraph",
+                        content: [
+                            {
+                                type: "text",
+                                text:
+                                    aiResult.content || "AI response generated",
+                            },
+                        ],
+                    },
+                ],
+                description: `Generated ${aiCommand} content`,
+            };
+
+            return {
+                operations: [operation],
+                summary: `Generated ${aiCommand} content successfully`,
+                success: true,
+            };
+        }
+    } catch (error) {
+        console.error("❌ LLM integration failed:", error);
+
+        // Fallback to legacy agent if LLM integration fails
+        console.log("🔄 Falling back to legacy agent");
+
+        try {
+            // Import dynamically to avoid circular dependencies
+            const { createMarkdownAgent } = await import(
+                "../../agent/translator.js"
+            );
+
+            // Load current document
+            const markdownContent = fs.readFileSync(filePath, "utf-8");
+
+            // Create and call the legacy agent
+            const agent = await createMarkdownAgent("GPT_4o");
+            const response = await agent.updateDocument(
+                markdownContent,
+                parameters.originalRequest,
+            );
+
+            if (response.success) {
+                const updateResult = response.data;
+
+                // Apply operations to file if they exist
+                if (
+                    updateResult.operations &&
+                    updateResult.operations.length > 0
+                ) {
+                    const updatedContent = applyOperationsToMarkdown(
+                        markdownContent,
+                        updateResult.operations,
+                    );
+                    fs.writeFileSync(filePath, updatedContent, "utf-8");
+
+                    // Trigger preview update
+                    renderFileToClients(filePath);
+
+                    return {
+                        operations: updateResult.operations,
+                        summary: updateResult.operationSummary,
+                        success: true,
+                    };
+                }
+            }
+        } catch (legacyError) {
+            console.error("❌ Legacy agent also failed:", legacyError);
+        }
+
+        // Final fallback to test response for development
         if (parameters.originalRequest?.includes("/test:")) {
             return generateTestResponse(
                 parameters.originalRequest,

@@ -3,6 +3,7 @@
 
 import { $prose } from "@milkdown/utils";
 import { Plugin, PluginKey } from "prosemirror-state";
+import { Decoration, DecorationSet } from "prosemirror-view";
 
 /**
  * Enhanced slash command handler that properly detects and executes typed commands
@@ -179,6 +180,12 @@ async function executeSlashCommand(
         ...params,
     };
 
+    // For test mode commands, only trigger the backend - don't create any frontend content
+    // This prevents duplicate content creation between frontend and backend
+    if (testMode) {
+        console.log(`🧪 Test mode: Delegating ${command} to backend only`);
+    }
+
     // Use the existing executeAgentCommand function
     setTimeout(() => {
         if (
@@ -199,13 +206,22 @@ export const slashCommandPreview = $prose(() => {
     return new Plugin({
         key: new PluginKey("slash-command-preview"),
 
+        state: {
+            init() {
+                return DecorationSet.empty;
+            },
+            apply(tr: any, decorationSet: DecorationSet) {
+                return decorationSet.map(tr.mapping, tr.doc);
+            },
+        },
+
         props: {
             decorations(state: any) {
                 const { selection } = state;
                 const { $from } = selection;
 
                 // Only show preview if cursor is at end of line
-                if (!selection.empty) return null;
+                if (!selection.empty) return DecorationSet.empty;
 
                 const lineStart = $from.start($from.depth);
                 const lineEnd = $from.end($from.depth);
@@ -213,50 +229,65 @@ export const slashCommandPreview = $prose(() => {
                 const cursorPos = selection.head;
 
                 // Check if cursor is at the end of the line
-                if (cursorPos !== lineEnd) return null;
+                if (cursorPos !== lineEnd) return DecorationSet.empty;
 
-                // Check for partial slash commands
-                const slashCommands = [
+                // Define command patterns for styling
+                const commandPatterns = [
                     {
-                        pattern: /^\/test:continue$/,
-                        preview: " (press Enter to continue with AI test mode)",
+                        pattern: /^(\/test:continue)(\s+(.+))?$/,
+                        commandEnd: 14, // "/test:continue".length
                     },
                     {
-                        pattern: /^\/continue$/,
-                        preview: " (press Enter to continue with AI)",
+                        pattern: /^(\/continue)(\s+(.+))?$/,
+                        commandEnd: 9, // "/continue".length
                     },
                     {
-                        pattern: /^\/test:diagram$/,
-                        preview:
-                            " [description] (press Enter for test diagram)",
+                        pattern: /^(\/test:diagram)(\s+(.+))?$/,
+                        commandEnd: 13, // "/test:diagram".length
                     },
                     {
-                        pattern: /^\/diagram$/,
-                        preview:
-                            " <description> (press Enter to generate diagram)",
+                        pattern: /^(\/diagram)(\s+(.+))?$/,
+                        commandEnd: 8, // "/diagram".length
                     },
                     {
-                        pattern: /^\/test:augment$/,
-                        preview:
-                            " [instruction] (press Enter for test augmentation)",
+                        pattern: /^(\/test:augment)(\s+(.+))?$/,
+                        commandEnd: 13, // "/test:augment".length
                     },
                     {
-                        pattern: /^\/augment$/,
-                        preview:
-                            " <instruction> (press Enter to augment document)",
+                        pattern: /^(\/augment)(\s+(.+))?$/,
+                        commandEnd: 8, // "/augment".length
                     },
                 ];
 
-                for (const cmd of slashCommands) {
-                    if (lineText.match(cmd.pattern)) {
-                        // This is a simple implementation - in a real app you'd create proper decorations
-                        // For now we'll just log it since the working example shows this is complex
-                        console.log("Preview would show:", cmd.preview);
+                let decorations: Decoration[] = [];
+
+                for (const cmd of commandPatterns) {
+                    const match = lineText.match(cmd.pattern);
+                    if (match) {
+                        // Style the command part
+                        const commandDecoration = Decoration.inline(
+                            lineStart,
+                            lineStart + cmd.commandEnd,
+                            { class: "slash-command-name" }
+                        );
+                        decorations.push(commandDecoration);
+
+                        // Style the instruction part if it exists
+                        if (match[3]) { // The instruction part
+                            const instructionStart = lineStart + match[1].length + (match[2].length - match[3].length);
+                            const instructionEnd = lineStart + lineText.length;
+                            const instructionDecoration = Decoration.inline(
+                                instructionStart,
+                                instructionEnd,
+                                { class: "slash-command-instruction" }
+                            );
+                            decorations.push(instructionDecoration);
+                        }
                         break;
                     }
                 }
 
-                return null; // Return null for now - decorations are complex to implement correctly
+                return DecorationSet.create(state.doc, decorations);
             },
         },
     });

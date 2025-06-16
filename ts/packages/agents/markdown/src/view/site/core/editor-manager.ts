@@ -101,7 +101,7 @@ export class EditorManager {
     private async configureEditorPlugins(crepe: Crepe): Promise<void> {
         // Import plugins dynamically to avoid circular dependencies
         const { mermaidPlugin } = await import("../mermaid-plugin");
-        const { slashCommandHandler } = await import("../slash-commands");
+        const { slashCommandHandler, slashCommandPreview } = await import("../slash-commands");
 
         await crepe.editor
             .use(commonmark) // Basic markdown support
@@ -110,6 +110,7 @@ export class EditorManager {
             .use(history) // Undo/redo
             .use(collab) // Yjs collaboration plugin
             .use(slashCommandHandler) // Enhanced slash command handling
+            .use(slashCommandPreview) // Real-time command styling
             .create();
     }
 

@@ -3,7 +3,6 @@
 import type { Editor } from "@milkdown/core";
 import { editorViewCtx } from "@milkdown/core";
 import type { ContentItem } from "./types";
-import { aiAgentManager } from "./core/ai-agent-manager";
 import { EDITOR_CONFIG } from "./config";
 
 // ============================================================================
@@ -403,108 +402,15 @@ export class EventHandlers {
         });
     }
 
-    private handleEnterKeyForCommands(e: KeyboardEvent): void {
-        if (!this.editor) return;
-
-        this.editor.action((ctx) => {
-            const view = ctx.get(editorViewCtx);
-            const { from } = view.state.selection;
-
-            // Get the current line content
-            const line = view.state.doc.cut(
-                view.state.doc.resolve(from).before(),
-                view.state.doc.resolve(from).after(),
-            );
-            const lineText = line.textContent.trim();
-
-            // Check if this is a slash command
-            if (lineText.startsWith("/test:") || lineText.startsWith("/")) {
-                const command = lineText.trim();
-                console.log("🎯 Detected slash command:", command);
-
-                // Prevent default Enter behavior
-                e.preventDefault();
-
-                // Handle the command
-                this.handleSlashCommand(command, from);
-            }
-        });
-    }
-
-    private async handleSlashCommand(
-        command: string,
-        position: number,
-    ): Promise<void> {
-        console.log(
-            `⚡ Executing slash command: ${command} at position ${position}`,
-        );
-
-        try {
-            // Parse command
-            if (command.startsWith("/test:continue")) {
-                await aiAgentManager.executeAgentCommand("continue", {
-                    position,
-                    testMode: true,
-                });
-            } else if (command.startsWith("/continue")) {
-                await aiAgentManager.executeAgentCommand("continue", {
-                    position,
-                    testMode: false,
-                });
-            } else if (command.startsWith("/test:diagram")) {
-                const description =
-                    command.replace("/test:diagram", "").trim() ||
-                    "test process";
-                await aiAgentManager.executeAgentCommand("diagram", {
-                    description,
-                    position,
-                    testMode: true,
-                });
-            } else if (command.startsWith("/diagram")) {
-                const description =
-                    command.replace("/diagram", "").trim() || "diagram";
-                await aiAgentManager.executeAgentCommand("diagram", {
-                    description,
-                    position,
-                    testMode: false,
-                });
-            } else if (command.startsWith("/test:augment")) {
-                const instruction =
-                    command.replace("/test:augment", "").trim() ||
-                    "improve formatting";
-                await aiAgentManager.executeAgentCommand("augment", {
-                    instruction,
-                    position,
-                    testMode: true,
-                });
-            } else if (command.startsWith("/augment")) {
-                const instruction =
-                    command.replace("/augment", "").trim() ||
-                    "improve formatting";
-                await aiAgentManager.executeAgentCommand("augment", {
-                    instruction,
-                    position,
-                    testMode: false,
-                });
-            } else {
-                console.warn("⚠️ Unknown slash command:", command);
-                // Show notification through AI agent manager
-                if (aiAgentManager) {
-                    aiAgentManager["showNotification"]?.(
-                        `Unknown command: ${command}`,
-                        "error",
-                    );
-                }
-            }
-        } catch (error) {
-            console.error("❌ Slash command execution failed:", error);
-            if (aiAgentManager) {
-                aiAgentManager["showNotification"]?.(
-                    `Failed to execute command: ${command}`,
-                    "error",
-                );
-            }
-        }
+    private handleEnterKeyForCommands(_e: KeyboardEvent): void {
+        // Slash command handling is now done by the ProseMirror plugin system
+        // in slash-commands.ts. This event handler is disabled to prevent 
+        // duplicate command execution.
+        
+        // NOTE: The original slash command handling logic has been moved to
+        // the ProseMirror plugin system for better integration and to prevent
+        // conflicts between multiple command handlers.
+        return;
     }
 
     public parseSlashCommand(command: string): {

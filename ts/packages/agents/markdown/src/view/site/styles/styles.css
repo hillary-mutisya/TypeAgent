@@ -610,3 +610,24 @@ body {
     display: flex;
   }
 }
+
+/* Slash command styling */
+.slash-command-name {
+  font-style: italic;
+  color: #4a90e2;
+  font-weight: 500;
+}
+
+.dark-theme .slash-command-name {
+  color: #63b3ed;
+}
+
+.slash-command-instruction {
+  font-style: italic;
+  color: #718096;
+  opacity: 0.8;
+}
+
+.dark-theme .slash-command-instruction {
+  color: #a0aec0;
+}

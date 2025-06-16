@@ -706,43 +706,51 @@ async function insertHeadingAtEnd(view: any, text: string, level: number): Promi
 async function insertMathBlockAtEnd(view: any, mathContent: string): Promise<void> {
     const schema = view.state.schema
     
-    // Check what math-related nodes are available
-    console.log('🔍 Looking for math nodes in schema:', {
-        math_display: !!schema.nodes.math_display,
-        math_block: !!schema.nodes.math_block,
-        code_block: !!schema.nodes.code_block,
-        math: !!schema.nodes.math
-    })
+    // Match working version exactly: use code_block with language='latex'
+    console.log('🔍 Looking for code_block node for math:', !!schema.nodes.code_block)
     
-    // Try different approaches for math rendering
-    if (schema.nodes.math_display) {
-        console.log('📐 Using math_display node')
+    if (schema.nodes.code_block) {
+        console.log('📐 Using code_block with language=latex (matching working version exactly)')
+        console.log('🔍 Code block spec:', schema.nodes.code_block.spec)
+        
         const tr = view.state.tr
         const docSize = tr.doc.content.size
         const endPos = Math.max(0, docSize - 2)
         
-        const mathNode = schema.nodes.math_display.create(
-            {},
-            schema.text(mathContent)
-        )
-        tr.insert(endPos, mathNode)
-        view.dispatch(tr)
-        console.log(`✅ Inserted math_display: ${mathContent.substring(0, 30)}...`)
-    } else if (schema.nodes.code_block) {
-        console.log('📐 Using code_block with latex language')
-        const tr = view.state.tr
-        const docSize = tr.doc.content.size
-        const endPos = Math.max(0, docSize - 2)
+        // Try different attribute formats
+        let codeNode;
+        try {
+            // Try language first (like working version)
+            codeNode = schema.nodes.code_block.create(
+                { language: 'latex' },
+                schema.text(mathContent)
+            )
+            console.log('✅ Created code block with language=latex')
+        } catch (e) {
+            console.log('❌ language attribute failed, trying params:', e)
+            try {
+                // Try params as fallback
+                codeNode = schema.nodes.code_block.create(
+                    { params: 'latex' },
+                    schema.text(mathContent)
+                )
+                console.log('✅ Created code block with params=latex')
+            } catch (e2) {
+                console.log('❌ params attribute failed too, trying no attributes:', e2)
+                // Try no attributes
+                codeNode = schema.nodes.code_block.create(
+                    {},
+                    schema.text(mathContent)
+                )
+                console.log('✅ Created code block with no attributes')
+            }
+        }
         
-        const codeNode = schema.nodes.code_block.create(
-            { params: 'latex' },
-            schema.text(mathContent)
-        )
         tr.insert(endPos, codeNode)
         view.dispatch(tr)
         console.log(`✅ Inserted math as code block: ${mathContent.substring(0, 30)}...`)
     } else {
-        console.log('❌ No suitable math node found, inserting as paragraph with $$')
+        console.log('❌ No code_block node found, inserting as paragraph with $$')
         await insertParagraphAtEnd(view, '$$' + mathContent + '$$')
     }
 }

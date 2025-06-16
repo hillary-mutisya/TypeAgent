@@ -610,9 +610,9 @@ function applyInsertMarkdownOperation(tr: any, operation: any, view: any): any {
         
         console.log('📝 Parsing and inserting markdown content properly')
         
-        // Parse markdown content and create proper nodes
+        // Parse markdown content and create proper nodes - append at END of document
         setTimeout(() => {
-            insertMarkdownContentAsParsedNodes(position, markdown, view)
+            insertMarkdownContentAtEnd(markdown, view)
         }, 100)
         
         // Return original transaction to avoid immediate text insertion
@@ -626,18 +626,209 @@ function applyInsertMarkdownOperation(tr: any, operation: any, view: any): any {
     }
 }
 
+async function insertMarkdownContentAtEnd(content: string, view: any): Promise<void> {
+    console.log('🔍 Starting markdown parsing with content:', content.substring(0, 100) + '...')
+    console.log('🔍 Available schema nodes:', Object.keys(view.state.schema.nodes))
+    console.log('🔍 Available schema marks:', Object.keys(view.state.schema.marks))
+    
+    const schema = view.state.schema
+    const lines = content.split('\n')
+    
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]
+        console.log(`🔍 Processing line ${i}: "${line}"`)
+        
+        if (!line.trim()) {
+            // Empty line - add empty paragraph
+            await insertEmptyParagraphAtEnd(view)
+            await new Promise(resolve => setTimeout(resolve, 100))
+            continue
+        }
+        
+        // Parse different markdown elements and always append at end
+        if (line.startsWith('##')) {
+            console.log('📝 Found H2 heading:', line)
+            await insertHeadingAtEnd(view, line.replace(/^##\s*/, ''), 2)
+        } else if (line.startsWith('###')) {
+            console.log('📝 Found H3 heading:', line)
+            await insertHeadingAtEnd(view, line.replace(/^###\s*/, ''), 3)
+        } else if (line.startsWith('![')) {
+            console.log('📝 Found image:', line)
+            await insertImageAtEnd(view, line)
+        } else if (line.startsWith('$$') && line.endsWith('$$')) {
+            console.log('📝 Found math block:', line)
+            await insertMathBlockAtEnd(view, line.slice(2, -2))
+        } else if (line.includes('$$')) {
+            console.log('📝 Found paragraph with inline math:', line)
+            await insertParagraphAtEnd(view, line)
+        } else if (line.startsWith('**') && line.endsWith('**')) {
+            console.log('📝 Found bold paragraph:', line)
+            await insertParagraphAtEnd(view, line)
+        } else if (line.startsWith('- ')) {
+            console.log('📝 Found list item:', line)
+            await insertParagraphAtEnd(view, line)
+        } else if (line.startsWith('> ')) {
+            console.log('📝 Found blockquote:', line)
+            await insertParagraphAtEnd(view, line)
+        } else {
+            console.log('📝 Found regular paragraph:', line)
+            await insertParagraphAtEnd(view, line)
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 150))
+    }
+    
+    console.log('✅ Finished processing all markdown lines')
+}
+
+async function insertHeadingAtEnd(view: any, text: string, level: number): Promise<void> {
+    const schema = view.state.schema
+    const headingType = schema.nodes.heading
+    
+    if (headingType) {
+        const tr = view.state.tr
+        const docSize = tr.doc.content.size
+        const endPos = Math.max(0, docSize - 2) // Before closing doc node
+        
+        const headingNode = headingType.create(
+            { level },
+            schema.text(text)
+        )
+        tr.insert(endPos, headingNode)
+        view.dispatch(tr)
+        console.log(`✅ Inserted heading level ${level}: ${text}`)
+    } else {
+        console.log('❌ No heading node type found, falling back to paragraph')
+        await insertParagraphAtEnd(view, '#'.repeat(level) + ' ' + text)
+    }
+}
+
+async function insertMathBlockAtEnd(view: any, mathContent: string): Promise<void> {
+    const schema = view.state.schema
+    
+    // Check what math-related nodes are available
+    console.log('🔍 Looking for math nodes in schema:', {
+        math_display: !!schema.nodes.math_display,
+        math_block: !!schema.nodes.math_block,
+        code_block: !!schema.nodes.code_block,
+        math: !!schema.nodes.math
+    })
+    
+    // Try different approaches for math rendering
+    if (schema.nodes.math_display) {
+        console.log('📐 Using math_display node')
+        const tr = view.state.tr
+        const docSize = tr.doc.content.size
+        const endPos = Math.max(0, docSize - 2)
+        
+        const mathNode = schema.nodes.math_display.create(
+            {},
+            schema.text(mathContent)
+        )
+        tr.insert(endPos, mathNode)
+        view.dispatch(tr)
+        console.log(`✅ Inserted math_display: ${mathContent.substring(0, 30)}...`)
+    } else if (schema.nodes.code_block) {
+        console.log('📐 Using code_block with latex language')
+        const tr = view.state.tr
+        const docSize = tr.doc.content.size
+        const endPos = Math.max(0, docSize - 2)
+        
+        const codeNode = schema.nodes.code_block.create(
+            { params: 'latex' },
+            schema.text(mathContent)
+        )
+        tr.insert(endPos, codeNode)
+        view.dispatch(tr)
+        console.log(`✅ Inserted math as code block: ${mathContent.substring(0, 30)}...`)
+    } else {
+        console.log('❌ No suitable math node found, inserting as paragraph with $$')
+        await insertParagraphAtEnd(view, '$$' + mathContent + '$$')
+    }
+}
+
+async function insertParagraphAtEnd(view: any, text: string): Promise<void> {
+    const schema = view.state.schema
+    const paragraphType = schema.nodes.paragraph
+    
+    if (paragraphType) {
+        const tr = view.state.tr
+        const docSize = tr.doc.content.size
+        const endPos = Math.max(0, docSize - 2)
+        
+        // Handle text with inline formatting
+        const textNodes = parseInlineText(text, schema)
+        const paragraphNode = paragraphType.create(null, textNodes)
+        
+        tr.insert(endPos, paragraphNode)
+        view.dispatch(tr)
+        console.log(`✅ Inserted paragraph: ${text.substring(0, 50)}...`)
+    } else {
+        console.log('❌ No paragraph node type found')
+    }
+}
+
+async function insertImageAtEnd(view: any, imageMarkdown: string): Promise<void> {
+    const schema = view.state.schema
+    
+    // Try to parse image markdown ![alt](url)
+    const imageMatch = imageMarkdown.match(/!\[([^\]]*)\]\(([^)]+)\)/)
+    
+    if (imageMatch && schema.nodes.image) {
+        const [, alt, src] = imageMatch
+        const tr = view.state.tr
+        const docSize = tr.doc.content.size
+        const endPos = Math.max(0, docSize - 2)
+        
+        const imageNode = schema.nodes.image.create({
+            src: src,
+            alt: alt || '',
+            title: alt || ''
+        })
+        tr.insert(endPos, imageNode)
+        view.dispatch(tr)
+        console.log(`✅ Inserted image node: ${alt}`)
+    } else {
+        console.log('❌ No image node type found or failed to parse, falling back to paragraph')
+        await insertParagraphAtEnd(view, imageMarkdown)
+    }
+}
+
+async function insertEmptyParagraphAtEnd(view: any): Promise<void> {
+    const schema = view.state.schema
+    if (schema.nodes.paragraph) {
+        const tr = view.state.tr
+        const docSize = tr.doc.content.size
+        const endPos = Math.max(0, docSize - 2)
+        
+        const emptyParagraph = schema.nodes.paragraph.create()
+        tr.insert(endPos, emptyParagraph)
+        view.dispatch(tr)
+    }
+}
+
 async function insertMarkdownContentAsParsedNodes(pos: number, content: string, view: any): Promise<void> {
+    console.log('🔍 Starting markdown parsing with content:', content.substring(0, 100) + '...')
+    console.log('🔍 Available schema nodes:', Object.keys(view.state.schema.nodes))
+    console.log('🔍 Available schema marks:', Object.keys(view.state.schema.marks))
+    
     const schema = view.state.schema
     const lines = content.split('\n')
     let currentPos = pos
     
-    for (const line of lines) {
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]
+        console.log(`🔍 Processing line ${i}: "${line}"`)
+        
         if (!line.trim()) {
-            // Empty line - just add a line break
-            const tr = view.state.tr
-            tr.insertText('\n', currentPos)
-            view.dispatch(tr)
-            currentPos += 1
+            // Empty line - add paragraph break
+            if (schema.nodes.paragraph) {
+                const tr = view.state.tr
+                const emptyParagraph = schema.nodes.paragraph.create()
+                tr.insert(currentPos, emptyParagraph)
+                view.dispatch(tr)
+                currentPos += 1
+            }
             await new Promise(resolve => setTimeout(resolve, 100))
             continue
         }
@@ -645,44 +836,86 @@ async function insertMarkdownContentAsParsedNodes(pos: number, content: string, 
         // Parse different markdown elements
         if (line.startsWith('##')) {
             // Heading level 2
+            console.log('📝 Found H2 heading:', line)
             await insertHeading(view, currentPos, line.replace(/^##\s*/, ''), 2)
-            currentPos += line.length + 1
+            // currentPos += 2 // Rough estimate for node size
         } else if (line.startsWith('###')) {
             // Heading level 3
+            console.log('📝 Found H3 heading:', line)
             await insertHeading(view, currentPos, line.replace(/^###\s*/, ''), 3)
-            currentPos += line.length + 1
+            //  currentPos += 2
         } else if (line.startsWith('![')) {
             // Image
+            console.log('📝 Found image:', line)
             await insertImageNode(view, currentPos, line)
-            currentPos += line.length + 1
+            // currentPos += 2
         } else if (line.startsWith('$$') && line.endsWith('$$')) {
             // Math block
+            console.log('📝 Found math block:', line)
             await insertMathBlock(view, currentPos, line.slice(2, -2))
-            currentPos += line.length + 1
+            // currentPos += 2
         } else if (line.includes('$$')) {
             // Inline math in paragraph
+            console.log('📝 Found paragraph with inline math:', line)
             await insertParagraphWithMath(view, currentPos, line)
-            currentPos += line.length + 1
+            // currentPos += 2
         } else if (line.startsWith('**') && line.endsWith('**')) {
             // Bold text as paragraph
+            console.log('📝 Found bold paragraph:', line)
             await insertBoldParagraph(view, currentPos, line.slice(2, -2))
-            currentPos += line.length + 1
+            // currentPos += 2
         } else if (line.startsWith('- ')) {
             // List item
+            console.log('📝 Found list item:', line)
             await insertParagraph(view, currentPos, line)
-            currentPos += line.length + 1
+            // currentPos += 2
         } else if (line.startsWith('> ')) {
             // Blockquote
+            console.log('📝 Found blockquote:', line)
             await insertParagraph(view, currentPos, line)
-            currentPos += line.length + 1
+            // currentPos += 2
         } else {
             // Regular paragraph
+            console.log('📝 Found regular paragraph:', line)
             await insertParagraph(view, currentPos, line)
-            currentPos += line.length + 1
+            // currentPos += 2
         }
         
         await new Promise(resolve => setTimeout(resolve, 150))
     }
+    
+    console.log('✅ Finished processing all markdown lines')
+}
+
+async function insertParagraphWithMath(view: any, pos: number, content: string): Promise<void> {
+    await insertParagraph(view, pos, content)
+}
+
+async function insertImageNode(view: any, pos: number, imageMarkdown: string): Promise<void> {
+    const schema = view.state.schema
+    
+    // Try to parse image markdown ![alt](url)
+    const imageMatch = imageMarkdown.match(/!\[([^\]]*)\]\(([^)]+)\)/)
+    
+    if (imageMatch && schema.nodes.image) {
+        const [, alt, src] = imageMatch
+        const tr = view.state.tr
+        const imageNode = schema.nodes.image.create({
+            src: src,
+            alt: alt || '',
+            title: alt || ''
+        })
+        tr.insert(pos, imageNode)
+        view.dispatch(tr)
+        console.log(`✅ Inserted image node: ${alt}`)
+    } else {
+        console.log('❌ No image node type found or failed to parse, falling back to paragraph')
+        await insertParagraph(view, pos, imageMarkdown)
+    }
+}
+
+async function insertBoldParagraph(view: any, pos: number, text: string): Promise<void> {
+    await insertParagraph(view, pos, '**' + text + '**')
 }
 
 async function insertHeading(view: any, pos: number, text: string, level: number): Promise<void> {
@@ -691,10 +924,15 @@ async function insertHeading(view: any, pos: number, text: string, level: number
     
     if (headingType) {
         const tr = view.state.tr
-        tr.insertText('\n', pos)
-        tr.insertText('#'.repeat(level) + ' ' + text + '\n', pos + 1)
+        const headingNode = headingType.create(
+            { level },
+            schema.text(text)
+        )
+        tr.insert(pos, headingNode)
         view.dispatch(tr)
+        console.log(`✅ Inserted heading level ${level}: ${text}`)
     } else {
+        console.log('❌ No heading node type found, falling back to text')
         const tr = view.state.tr
         tr.insertText('\n' + '#'.repeat(level) + ' ' + text + '\n', pos)
         view.dispatch(tr)
@@ -702,33 +940,81 @@ async function insertHeading(view: any, pos: number, text: string, level: number
 }
 
 async function insertMathBlock(view: any, pos: number, mathContent: string): Promise<void> {
-    const tr = view.state.tr
-    tr.insertText('\n$$' + mathContent + '$$\n', pos)
-    view.dispatch(tr)
-}
-
-async function insertParagraphWithMath(view: any, pos: number, content: string): Promise<void> {
-    const tr = view.state.tr
-    tr.insertText('\n' + content + '\n', pos)
-    view.dispatch(tr)
-}
-
-async function insertImageNode(view: any, pos: number, imageMarkdown: string): Promise<void> {
-    const tr = view.state.tr
-    tr.insertText('\n' + imageMarkdown + '\n', pos)
-    view.dispatch(tr)
-}
-
-async function insertBoldParagraph(view: any, pos: number, text: string): Promise<void> {
-    const tr = view.state.tr
-    tr.insertText('\n**' + text + '**\n', pos)
-    view.dispatch(tr)
+    const schema = view.state.schema
+    
+    // Try to find math node type first
+    const mathType = schema.nodes.math_display || schema.nodes.math_block || schema.nodes.code_block
+    
+    if (mathType && (schema.nodes.math_display || schema.nodes.math_block)) {
+        const tr = view.state.tr
+        const mathNode = mathType.create(
+            {},
+            schema.text(mathContent)
+        )
+        tr.insert(pos, mathNode)
+        view.dispatch(tr)
+        console.log(`✅ Inserted math block: ${mathContent.substring(0, 30)}...`)
+    } else if (schema.nodes.code_block) {
+        // Fallback to code block with math language
+        const tr = view.state.tr
+        const codeNode = schema.nodes.code_block.create(
+            { params: 'latex' },
+            schema.text(mathContent)
+        )
+        tr.insert(pos, codeNode)
+        view.dispatch(tr)
+        console.log(`✅ Inserted math as code block: ${mathContent.substring(0, 30)}...`)
+    } else {
+        console.log('❌ No math or code block type found, inserting as text')
+        const tr = view.state.tr
+        tr.insertText('\n$$' + mathContent + '$$\n', pos)
+        view.dispatch(tr)
+    }
 }
 
 async function insertParagraph(view: any, pos: number, text: string): Promise<void> {
-    const tr = view.state.tr
-    tr.insertText('\n' + text + '\n', pos)
-    view.dispatch(tr)
+    const schema = view.state.schema
+    const paragraphType = schema.nodes.paragraph
+    
+    if (paragraphType) {
+        const tr = view.state.tr
+        
+        // Handle text with inline formatting
+        const textNodes = parseInlineText(text, schema)
+        const paragraphNode = paragraphType.create(null, textNodes)
+        
+        tr.insert(pos, paragraphNode)
+        view.dispatch(tr)
+        console.log(`✅ Inserted paragraph: ${text.substring(0, 50)}...`)
+    } else {
+        console.log('❌ No paragraph node type found, falling back to text')
+        const tr = view.state.tr
+        tr.insertText('\n' + text + '\n', pos)
+        view.dispatch(tr)
+    }
+}
+
+function parseInlineText(text: string, schema: any): any[] {
+    const nodes = []
+    
+    // Simple inline parsing for bold text
+    const parts = text.split(/(\*\*[^*]+\*\*)/)
+    
+    for (const part of parts) {
+        if (part.startsWith('**') && part.endsWith('**')) {
+            // Bold text
+            const boldText = part.slice(2, -2)
+            if (schema.marks.strong) {
+                nodes.push(schema.text(boldText, [schema.marks.strong.create()]))
+            } else {
+                nodes.push(schema.text(part))
+            }
+        } else if (part.trim()) {
+            nodes.push(schema.text(part))
+        }
+    }
+    
+    return nodes.length > 0 ? nodes : [schema.text(text)]
 }
 
 function contentItemToNode(item: any, schema: any): any {

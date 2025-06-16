@@ -13,8 +13,8 @@ import '@milkdown/crepe/theme/frame.css'
 
 // Import custom styles
 import './styles/milkdown-integration.css'
-import './styles.css'
-import './mermaid-styles.css'
+import './styles/styles.css'
+import './styles/mermaid-styles.css'
 
 // Import our custom plugins
 import { mermaidPlugin } from './mermaid-plugin'

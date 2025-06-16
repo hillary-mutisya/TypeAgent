@@ -608,14 +608,11 @@ function applyInsertMarkdownOperation(tr: any, operation: any, view: any): any {
         const position = operation.position || tr.selection.head
         const markdown = operation.markdown || ''
         
-        console.log('📝 Parsing and inserting markdown content properly')
-        
-        // Parse markdown content and create proper nodes - append at END of document
+        // Parse markdown content and create proper nodes
         setTimeout(() => {
             insertMarkdownContentAtEnd(markdown, view)
         }, 100)
         
-        // Return original transaction to avoid immediate text insertion
         return tr
         
     } catch (error) {
@@ -638,10 +635,9 @@ async function insertMarkdownContentAtEnd(content: string, view: any): Promise<v
         const line = lines[i]
         console.log(`🔍 Processing line ${i}: "${line}"`)
         
+        // Skip empty lines completely to avoid extra spacing
         if (!line.trim()) {
-            // Empty line - add empty paragraph
-            await insertEmptyParagraphAtEnd(view)
-            await new Promise(resolve => setTimeout(resolve, 100))
+            console.log('⏭️ Skipping empty line to prevent extra spacing')
             continue
         }
         

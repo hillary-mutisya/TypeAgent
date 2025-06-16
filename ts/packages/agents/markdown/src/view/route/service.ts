@@ -200,23 +200,23 @@ async function streamTestResponse(originalRequest: string, context: any, res: Re
     // Check if equations are requested or use as enhanced default
     if (instruction.toLowerCase().includes('equation') || instruction.toLowerCase().includes('maxwell') || instruction === 'improve formatting') {
       content = `> ✨ **Enhancement Applied**: ${instruction}`;
-      content += `\n\n## Maxwell's Equations`;
-      content += `\n\nJames Clerk Maxwell formulated a set of four partial differential equations that describe the behavior of electric and magnetic fields and their interactions with matter. These equations unified electricity, magnetism, and optics into a single theoretical framework.`;
-      content += `\n\n### The Four Maxwell Equations`;
-      content += `\n\n**Gauss's Law for Electricity:**`;
+      content += `\n## Maxwell's Equations`;
+      content += `\nJames Clerk Maxwell formulated a set of four partial differential equations that describe the behavior of electric and magnetic fields and their interactions with matter. These equations unified electricity, magnetism, and optics into a single theoretical framework.`;
+      content += `\n### The Four Maxwell Equations`;
+      content += `\n**Gauss's Law for Electricity:**`;
       content += `\n$$\\nabla \\cdot \\mathbf{E} = \\frac{\\rho}{\\varepsilon_0}$$`;
-      content += `\n\n**Gauss's Law for Magnetism:**`;
+      content += `\n**Gauss's Law for Magnetism:**`;
       content += `\n$$\\nabla \\cdot \\mathbf{B} = 0$$`;
-      content += `\n\n**Faraday's Law of Induction:**`;
+      content += `\n**Faraday's Law of Induction:**`;
       content += `\n$$\\nabla \\times \\mathbf{E} = -\\frac{\\partial \\mathbf{B}}{\\partial t}$$`;
-      content += `\n\n**Ampère's Circuital Law (with Maxwell's correction):**`;
+      content += `\n**Ampère's Circuital Law (with Maxwell's correction):**`;
       content += `\n$$\\nabla \\times \\mathbf{B} = \\mu_0\\mathbf{J} + \\mu_0\\varepsilon_0\\frac{\\partial \\mathbf{E}}{\\partial t}$$`;
-      content += `\n\n### Historical Context`;
-      content += `\n\nThese equations were developed by James Clerk Maxwell in the 1860s, building upon the experimental work of Michael Faraday, André-Marie Ampère, and Carl Friedrich Gauss. Maxwell's theoretical insight was the addition of the "displacement current" term, which predicted the existence of electromagnetic waves traveling at the speed of light.`;
-      content += `\n\n![James Clerk Maxwell](https://upload.wikimedia.org/wikipedia/commons/thumb/5/57/James_Clerk_Maxwell.png/256px-James_Clerk_Maxwell.png)`;
-      content += `\n\n*James Clerk Maxwell (1831-1879), Scottish physicist and mathematician*`;
-      content += `\n\n### Significance`;
-      content += `\n\n- **Unified Theory**: Combined electricity, magnetism, and light into electromagnetic theory`;
+      content += `\n### Historical Context`;
+      content += `\nThese equations were developed by James Clerk Maxwell in the 1860s, building upon the experimental work of Michael Faraday, André-Marie Ampère, and Carl Friedrich Gauss. Maxwell's theoretical insight was the addition of the "displacement current" term, which predicted the existence of electromagnetic waves traveling at the speed of light.`;
+      content += `\n![James Clerk Maxwell](https://upload.wikimedia.org/wikipedia/commons/thumb/5/57/James_Clerk_Maxwell.png/256px-James_Clerk_Maxwell.png)`;
+      content += `\n*James Clerk Maxwell (1831-1879), Scottish physicist and mathematician*`;
+      content += `\n### Significance`;
+      content += `\n- **Unified Theory**: Combined electricity, magnetism, and light into electromagnetic theory`;
       content += `\n- **Predicted Radio Waves**: Led to Heinrich Hertz's discovery of radio waves`;
       content += `\n- **Foundation for Modern Physics**: Influenced Einstein's special relativity theory`;
       content += `\n- **Technological Impact**: Enabled development of wireless communication, radar, and countless electronic devices`;

@@ -570,6 +570,9 @@ function applyAgentOperations(operations: DocumentOperation[]): void {
                 case 'insert':
                     tr = applyInsertOperation(tr, operation, view)
                     break
+                case 'insertMarkdown':
+                    tr = applyInsertMarkdownOperation(tr, operation, view)
+                    break
                 // Add more operation types as needed
             }
         }
@@ -598,6 +601,134 @@ function applyInsertOperation(tr: any, operation: DocumentOperation, view: any):
     }
     
     return tr
+}
+
+function applyInsertMarkdownOperation(tr: any, operation: any, view: any): any {
+    try {
+        const position = operation.position || tr.selection.head
+        const markdown = operation.markdown || ''
+        
+        console.log('📝 Parsing and inserting markdown content properly')
+        
+        // Parse markdown content and create proper nodes
+        setTimeout(() => {
+            insertMarkdownContentAsParsedNodes(position, markdown, view)
+        }, 100)
+        
+        // Return original transaction to avoid immediate text insertion
+        return tr
+        
+    } catch (error) {
+        console.error('Failed to apply insert markdown operation:', error)
+        const position = operation.position || tr.selection.head
+        const markdown = operation.markdown || ''
+        return tr.insertText(markdown, position)
+    }
+}
+
+async function insertMarkdownContentAsParsedNodes(pos: number, content: string, view: any): Promise<void> {
+    const schema = view.state.schema
+    const lines = content.split('\n')
+    let currentPos = pos
+    
+    for (const line of lines) {
+        if (!line.trim()) {
+            // Empty line - just add a line break
+            const tr = view.state.tr
+            tr.insertText('\n', currentPos)
+            view.dispatch(tr)
+            currentPos += 1
+            await new Promise(resolve => setTimeout(resolve, 100))
+            continue
+        }
+        
+        // Parse different markdown elements
+        if (line.startsWith('##')) {
+            // Heading level 2
+            await insertHeading(view, currentPos, line.replace(/^##\s*/, ''), 2)
+            currentPos += line.length + 1
+        } else if (line.startsWith('###')) {
+            // Heading level 3
+            await insertHeading(view, currentPos, line.replace(/^###\s*/, ''), 3)
+            currentPos += line.length + 1
+        } else if (line.startsWith('![')) {
+            // Image
+            await insertImageNode(view, currentPos, line)
+            currentPos += line.length + 1
+        } else if (line.startsWith('$$') && line.endsWith('$$')) {
+            // Math block
+            await insertMathBlock(view, currentPos, line.slice(2, -2))
+            currentPos += line.length + 1
+        } else if (line.includes('$$')) {
+            // Inline math in paragraph
+            await insertParagraphWithMath(view, currentPos, line)
+            currentPos += line.length + 1
+        } else if (line.startsWith('**') && line.endsWith('**')) {
+            // Bold text as paragraph
+            await insertBoldParagraph(view, currentPos, line.slice(2, -2))
+            currentPos += line.length + 1
+        } else if (line.startsWith('- ')) {
+            // List item
+            await insertParagraph(view, currentPos, line)
+            currentPos += line.length + 1
+        } else if (line.startsWith('> ')) {
+            // Blockquote
+            await insertParagraph(view, currentPos, line)
+            currentPos += line.length + 1
+        } else {
+            // Regular paragraph
+            await insertParagraph(view, currentPos, line)
+            currentPos += line.length + 1
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 150))
+    }
+}
+
+async function insertHeading(view: any, pos: number, text: string, level: number): Promise<void> {
+    const schema = view.state.schema
+    const headingType = schema.nodes.heading
+    
+    if (headingType) {
+        const tr = view.state.tr
+        tr.insertText('\n', pos)
+        tr.insertText('#'.repeat(level) + ' ' + text + '\n', pos + 1)
+        view.dispatch(tr)
+    } else {
+        const tr = view.state.tr
+        tr.insertText('\n' + '#'.repeat(level) + ' ' + text + '\n', pos)
+        view.dispatch(tr)
+    }
+}
+
+async function insertMathBlock(view: any, pos: number, mathContent: string): Promise<void> {
+    const tr = view.state.tr
+    tr.insertText('\n$$' + mathContent + '$$\n', pos)
+    view.dispatch(tr)
+}
+
+async function insertParagraphWithMath(view: any, pos: number, content: string): Promise<void> {
+    const tr = view.state.tr
+    tr.insertText('\n' + content + '\n', pos)
+    view.dispatch(tr)
+}
+
+async function insertImageNode(view: any, pos: number, imageMarkdown: string): Promise<void> {
+    const tr = view.state.tr
+    tr.insertText('\n' + imageMarkdown + '\n', pos)
+    view.dispatch(tr)
+}
+
+async function insertBoldParagraph(view: any, pos: number, text: string): Promise<void> {
+    const tr = view.state.tr
+    tr.insertText('\n**' + text + '**\n', pos)
+    view.dispatch(tr)
+}
+
+async function insertParagraph(view: any, pos: number, text: string): Promise<void> {
+    const tr = view.state.tr
+    tr.insertText('\n' + text + '\n', pos)
+    view.dispatch(tr)
 }
 
 function contentItemToNode(item: any, schema: any): any {

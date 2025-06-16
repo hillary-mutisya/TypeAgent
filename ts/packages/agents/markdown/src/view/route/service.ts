@@ -196,10 +196,38 @@ async function streamTestResponse(originalRequest: string, context: any, res: Re
   } else if (originalRequest.includes('augment')) {
     // Extract instruction from either /test:augment or /augment format  
     const instruction = originalRequest.replace(/\/test:augment|\/augment/, '').trim() || 'improve formatting';
-    content = `\n> ✨ **Enhancement Applied**: ${instruction}\n\n`;
-    content += 'This is a test augmentation of the document. The AI would normally analyze the content and apply the requested improvements.\n\n';
-    content += '**Potential improvements could include:**\n- Better formatting and structure\n- Enhanced readability\n- Additional context and examples\n- Improved flow and transitions';
-    description = 'AI enhancing document...';
+    
+    // Check if equations are requested or use as enhanced default
+    if (instruction.toLowerCase().includes('equation') || instruction.toLowerCase().includes('maxwell') || instruction === 'improve formatting') {
+      content = `> ✨ **Enhancement Applied**: ${instruction}`;
+      content += `\n\n## Maxwell's Equations`;
+      content += `\n\nJames Clerk Maxwell formulated a set of four partial differential equations that describe the behavior of electric and magnetic fields and their interactions with matter. These equations unified electricity, magnetism, and optics into a single theoretical framework.`;
+      content += `\n\n### The Four Maxwell Equations`;
+      content += `\n\n**Gauss's Law for Electricity:**`;
+      content += `\n$$\\nabla \\cdot \\mathbf{E} = \\frac{\\rho}{\\varepsilon_0}$$`;
+      content += `\n\n**Gauss's Law for Magnetism:**`;
+      content += `\n$$\\nabla \\cdot \\mathbf{B} = 0$$`;
+      content += `\n\n**Faraday's Law of Induction:**`;
+      content += `\n$$\\nabla \\times \\mathbf{E} = -\\frac{\\partial \\mathbf{B}}{\\partial t}$$`;
+      content += `\n\n**Ampère's Circuital Law (with Maxwell's correction):**`;
+      content += `\n$$\\nabla \\times \\mathbf{B} = \\mu_0\\mathbf{J} + \\mu_0\\varepsilon_0\\frac{\\partial \\mathbf{E}}{\\partial t}$$`;
+      content += `\n\n### Historical Context`;
+      content += `\n\nThese equations were developed by James Clerk Maxwell in the 1860s, building upon the experimental work of Michael Faraday, André-Marie Ampère, and Carl Friedrich Gauss. Maxwell's theoretical insight was the addition of the "displacement current" term, which predicted the existence of electromagnetic waves traveling at the speed of light.`;
+      content += `\n\n![James Clerk Maxwell](https://upload.wikimedia.org/wikipedia/commons/thumb/5/57/James_Clerk_Maxwell.png/256px-James_Clerk_Maxwell.png)`;
+      content += `\n\n*James Clerk Maxwell (1831-1879), Scottish physicist and mathematician*`;
+      content += `\n\n### Significance`;
+      content += `\n\n- **Unified Theory**: Combined electricity, magnetism, and light into electromagnetic theory`;
+      content += `\n- **Predicted Radio Waves**: Led to Heinrich Hertz's discovery of radio waves`;
+      content += `\n- **Foundation for Modern Physics**: Influenced Einstein's special relativity theory`;
+      content += `\n- **Technological Impact**: Enabled development of wireless communication, radar, and countless electronic devices`;
+      description = 'AI adding Maxwell\'s equations and background...';
+    } else {
+      // Original augment content for other instructions
+      content = `\n> ✨ **Enhancement Applied**: ${instruction}\n\n`;
+      content += 'This is a test augmentation of the document. The AI would normally analyze the content and apply the requested improvements.\n\n';
+      content += '**Potential improvements could include:**\n- Better formatting and structure\n- Enhanced readability\n- Additional context and examples\n- Improved flow and transitions';
+      description = 'AI enhancing document...';
+    }
   } else {
     // Fallback for unknown commands
     content = 'This is a test response for an unrecognized command. The AI system would normally process the specific request and generate appropriate content.';
@@ -210,39 +238,67 @@ async function streamTestResponse(originalRequest: string, context: any, res: Re
   res.write(`data: ${JSON.stringify({ type: 'typing', message: description })}\n\n`);
   await new Promise(resolve => setTimeout(resolve, 500));
   
-  // Stream content in chunks
-  const words = content.split(' ');
-  let currentChunk = '';
+  // For enhanced content with equations, don't stream - just send final content
+  const hasEquations = content.includes('Maxwell') || content.includes('$$');
   
-  for (let i = 0; i < words.length; i++) {
-    currentChunk += words[i] + ' ';
+  if (hasEquations) {
+    // Send a message that we're generating complex content
+    res.write(`data: ${JSON.stringify({ 
+      type: 'content', 
+      chunk: 'Generating mathematical content...',
+      position: context?.position || 0
+    })}\n\n`);
     
-    // Send chunk every 3-5 words
-    if (i % 4 === 0 || i === words.length - 1) {
-      res.write(`data: ${JSON.stringify({ 
-        type: 'content', 
-        chunk: currentChunk,
-        position: context?.position || 0
-      })}\n\n`);
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Send the markdown content as a special operation
+    res.write(`data: ${JSON.stringify({ 
+      type: 'operation', 
+      operation: {
+        type: 'insertMarkdown',
+        position: context?.position || 0,
+        markdown: content,
+        description: description
+      }
+    })}\n\n`);
+  } else {
+    // Regular streaming for simple content
+    const words = content.split(' ');
+    let currentChunk = '';
+    
+    for (let i = 0; i < words.length; i++) {
+      currentChunk += words[i] + ' ';
       
-      currentChunk = '';
-      // Simulate typing delay
-      await new Promise(resolve => setTimeout(resolve, 150 + Math.random() * 100));
+      // Send chunk every 3-5 words for typing effect
+      if (i % 4 === 0 || i === words.length - 1) {
+        res.write(`data: ${JSON.stringify({ 
+          type: 'content', 
+          chunk: currentChunk,
+          position: context?.position || 0
+        })}\n\n`);
+        
+        currentChunk = '';
+        // Simulate typing delay
+        await new Promise(resolve => setTimeout(resolve, 150 + Math.random() * 100));
+      }
     }
+    
+    // Send final operation for simple content
+    const operation = {
+      type: 'insert',
+      position: context?.position || 0,
+      content: [{
+        type: 'paragraph',
+        content: [{ type: 'text', text: content }]
+      }],
+      description: description
+    };
+    
+    res.write(`data: ${JSON.stringify({ type: 'operation', operation })}\n\n`);
   }
   
-  // Send final operation
-  const operation = {
-    type: 'insert',
-    position: context?.position || 0,
-    content: [{
-      type: 'paragraph',
-      content: [{ type: 'text', text: content }]
-    }],
-    description: description
-  };
-  
-  res.write(`data: ${JSON.stringify({ type: 'operation', operation })}\n\n`);
+  // Send completion signal
+  res.write(`data: ${JSON.stringify({ type: 'complete' })}\n\n`);
 }
 
 async function streamRealAgentResponse(action: string, parameters: any, res: Response): Promise<void> {

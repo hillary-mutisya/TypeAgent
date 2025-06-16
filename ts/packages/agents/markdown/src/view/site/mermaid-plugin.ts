@@ -78,7 +78,7 @@ const mermaidLiveParser = $prose(() => {
   return new Plugin({
     key: new PluginKey('mermaid-live-parser'),
     
-    appendTransaction(transactions: readonly any[], oldState: any, newState: any) {
+    appendTransaction(transactions: readonly any[], _oldState: any, newState: any) {
       if (!transactions.some((tr: any) => tr.docChanged)) return null
       
       let tr: any = null

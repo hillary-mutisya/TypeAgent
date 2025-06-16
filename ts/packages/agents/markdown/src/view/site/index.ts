@@ -59,8 +59,6 @@ async function initializeEditor(): Promise<void> {
 }
 
 async function initializeFullEditor(container: HTMLElement, initialContent: string): Promise<void> {
-    console.log('🔄 Initializing Full Editor...');
-    
     // Clean up any existing editor
     if (editor) {
         editor.destroy();
@@ -381,7 +379,7 @@ async function executeStreamingAgentCommand(command: string, params: any): Promi
     const request = buildAgentRequest(command, params);
     
     // Show AI presence cursor
-    showAIPresence(params.position || 0, true);
+    showAIPresence(true);
     
     try {
         // Call streaming endpoint
@@ -430,7 +428,7 @@ async function executeStreamingAgentCommand(command: string, params: any): Promi
         
     } finally {
         // Hide AI presence cursor
-        showAIPresence(params.position || 0, false);
+        showAIPresence(false);
     }
 }
 
@@ -483,7 +481,7 @@ async function insertContentChunk(chunk: string, position: number): Promise<void
     });
 }
 
-function showAIPresence(position: number, show: boolean): void {
+function showAIPresence(show: boolean): void {
     // Create or update AI presence indicator
     let indicator = document.getElementById('ai-presence-indicator');
     
@@ -605,7 +603,6 @@ function applyInsertOperation(tr: any, operation: DocumentOperation, view: any):
 
 function applyInsertMarkdownOperation(tr: any, operation: any, view: any): any {
     try {
-        const position = operation.position || tr.selection.head
         const markdown = operation.markdown || ''
         
         // Parse markdown content and create proper nodes
@@ -628,7 +625,6 @@ async function insertMarkdownContentAtEnd(content: string, view: any): Promise<v
     console.log('🔍 Available schema nodes:', Object.keys(view.state.schema.nodes))
     console.log('🔍 Available schema marks:', Object.keys(view.state.schema.marks))
     
-    const schema = view.state.schema
     const lines = content.split('\n')
     
     for (let i = 0; i < lines.length; i++) {
@@ -702,13 +698,7 @@ async function insertHeadingAtEnd(view: any, text: string, level: number): Promi
 async function insertMathBlockAtEnd(view: any, mathContent: string): Promise<void> {
     const schema = view.state.schema
     
-    // Match working version exactly: use code_block with language='latex'
-    console.log('🔍 Looking for code_block node for math:', !!schema.nodes.code_block)
-    
     if (schema.nodes.code_block) {
-        console.log('📐 Using code_block with language=latex (matching working version exactly)')
-        console.log('🔍 Code block spec:', schema.nodes.code_block.spec)
-        
         const tr = view.state.tr
         const docSize = tr.doc.content.size
         const endPos = Math.max(0, docSize - 2)
@@ -716,37 +706,30 @@ async function insertMathBlockAtEnd(view: any, mathContent: string): Promise<voi
         // Try different attribute formats
         let codeNode;
         try {
-            // Try language first (like working version)
+            // Try language first
             codeNode = schema.nodes.code_block.create(
                 { language: 'latex' },
                 schema.text(mathContent)
             )
-            console.log('✅ Created code block with language=latex')
         } catch (e) {
-            console.log('❌ language attribute failed, trying params:', e)
             try {
                 // Try params as fallback
                 codeNode = schema.nodes.code_block.create(
                     { params: 'latex' },
                     schema.text(mathContent)
                 )
-                console.log('✅ Created code block with params=latex')
             } catch (e2) {
-                console.log('❌ params attribute failed too, trying no attributes:', e2)
                 // Try no attributes
                 codeNode = schema.nodes.code_block.create(
                     {},
                     schema.text(mathContent)
                 )
-                console.log('✅ Created code block with no attributes')
             }
         }
         
         tr.insert(endPos, codeNode)
         view.dispatch(tr)
-        console.log(`✅ Inserted math as code block: ${mathContent.substring(0, 30)}...`)
     } else {
-        console.log('❌ No code_block node found, inserting as paragraph with $$')
         await insertParagraphAtEnd(view, '$$' + mathContent + '$$')
     }
 }
@@ -766,7 +749,6 @@ async function insertParagraphAtEnd(view: any, text: string): Promise<void> {
         
         tr.insert(endPos, paragraphNode)
         view.dispatch(tr)
-        console.log(`✅ Inserted paragraph: ${text.substring(0, 50)}...`)
     } else {
         console.log('❌ No paragraph node type found')
     }
@@ -791,210 +773,8 @@ async function insertImageAtEnd(view: any, imageMarkdown: string): Promise<void>
         })
         tr.insert(endPos, imageNode)
         view.dispatch(tr)
-        console.log(`✅ Inserted image node: ${alt}`)
     } else {
-        console.log('❌ No image node type found or failed to parse, falling back to paragraph')
         await insertParagraphAtEnd(view, imageMarkdown)
-    }
-}
-
-async function insertEmptyParagraphAtEnd(view: any): Promise<void> {
-    const schema = view.state.schema
-    if (schema.nodes.paragraph) {
-        const tr = view.state.tr
-        const docSize = tr.doc.content.size
-        const endPos = Math.max(0, docSize - 2)
-        
-        const emptyParagraph = schema.nodes.paragraph.create()
-        tr.insert(endPos, emptyParagraph)
-        view.dispatch(tr)
-    }
-}
-
-async function insertMarkdownContentAsParsedNodes(pos: number, content: string, view: any): Promise<void> {
-    console.log('🔍 Starting markdown parsing with content:', content.substring(0, 100) + '...')
-    console.log('🔍 Available schema nodes:', Object.keys(view.state.schema.nodes))
-    console.log('🔍 Available schema marks:', Object.keys(view.state.schema.marks))
-    
-    const schema = view.state.schema
-    const lines = content.split('\n')
-    let currentPos = pos
-    
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i]
-        console.log(`🔍 Processing line ${i}: "${line}"`)
-        
-        if (!line.trim()) {
-            // Empty line - add paragraph break
-            if (schema.nodes.paragraph) {
-                const tr = view.state.tr
-                const emptyParagraph = schema.nodes.paragraph.create()
-                tr.insert(currentPos, emptyParagraph)
-                view.dispatch(tr)
-                currentPos += 1
-            }
-            await new Promise(resolve => setTimeout(resolve, 100))
-            continue
-        }
-        
-        // Parse different markdown elements
-        if (line.startsWith('##')) {
-            // Heading level 2
-            console.log('📝 Found H2 heading:', line)
-            await insertHeading(view, currentPos, line.replace(/^##\s*/, ''), 2)
-            // currentPos += 2 // Rough estimate for node size
-        } else if (line.startsWith('###')) {
-            // Heading level 3
-            console.log('📝 Found H3 heading:', line)
-            await insertHeading(view, currentPos, line.replace(/^###\s*/, ''), 3)
-            //  currentPos += 2
-        } else if (line.startsWith('![')) {
-            // Image
-            console.log('📝 Found image:', line)
-            await insertImageNode(view, currentPos, line)
-            // currentPos += 2
-        } else if (line.startsWith('$$') && line.endsWith('$$')) {
-            // Math block
-            console.log('📝 Found math block:', line)
-            await insertMathBlock(view, currentPos, line.slice(2, -2))
-            // currentPos += 2
-        } else if (line.includes('$$')) {
-            // Inline math in paragraph
-            console.log('📝 Found paragraph with inline math:', line)
-            await insertParagraphWithMath(view, currentPos, line)
-            // currentPos += 2
-        } else if (line.startsWith('**') && line.endsWith('**')) {
-            // Bold text as paragraph
-            console.log('📝 Found bold paragraph:', line)
-            await insertBoldParagraph(view, currentPos, line.slice(2, -2))
-            // currentPos += 2
-        } else if (line.startsWith('- ')) {
-            // List item
-            console.log('📝 Found list item:', line)
-            await insertParagraph(view, currentPos, line)
-            // currentPos += 2
-        } else if (line.startsWith('> ')) {
-            // Blockquote
-            console.log('📝 Found blockquote:', line)
-            await insertParagraph(view, currentPos, line)
-            // currentPos += 2
-        } else {
-            // Regular paragraph
-            console.log('📝 Found regular paragraph:', line)
-            await insertParagraph(view, currentPos, line)
-            // currentPos += 2
-        }
-        
-        await new Promise(resolve => setTimeout(resolve, 150))
-    }
-    
-    console.log('✅ Finished processing all markdown lines')
-}
-
-async function insertParagraphWithMath(view: any, pos: number, content: string): Promise<void> {
-    await insertParagraph(view, pos, content)
-}
-
-async function insertImageNode(view: any, pos: number, imageMarkdown: string): Promise<void> {
-    const schema = view.state.schema
-    
-    // Try to parse image markdown ![alt](url)
-    const imageMatch = imageMarkdown.match(/!\[([^\]]*)\]\(([^)]+)\)/)
-    
-    if (imageMatch && schema.nodes.image) {
-        const [, alt, src] = imageMatch
-        const tr = view.state.tr
-        const imageNode = schema.nodes.image.create({
-            src: src,
-            alt: alt || '',
-            title: alt || ''
-        })
-        tr.insert(pos, imageNode)
-        view.dispatch(tr)
-        console.log(`✅ Inserted image node: ${alt}`)
-    } else {
-        console.log('❌ No image node type found or failed to parse, falling back to paragraph')
-        await insertParagraph(view, pos, imageMarkdown)
-    }
-}
-
-async function insertBoldParagraph(view: any, pos: number, text: string): Promise<void> {
-    await insertParagraph(view, pos, '**' + text + '**')
-}
-
-async function insertHeading(view: any, pos: number, text: string, level: number): Promise<void> {
-    const schema = view.state.schema
-    const headingType = schema.nodes.heading
-    
-    if (headingType) {
-        const tr = view.state.tr
-        const headingNode = headingType.create(
-            { level },
-            schema.text(text)
-        )
-        tr.insert(pos, headingNode)
-        view.dispatch(tr)
-        console.log(`✅ Inserted heading level ${level}: ${text}`)
-    } else {
-        console.log('❌ No heading node type found, falling back to text')
-        const tr = view.state.tr
-        tr.insertText('\n' + '#'.repeat(level) + ' ' + text + '\n', pos)
-        view.dispatch(tr)
-    }
-}
-
-async function insertMathBlock(view: any, pos: number, mathContent: string): Promise<void> {
-    const schema = view.state.schema
-    
-    // Try to find math node type first
-    const mathType = schema.nodes.math_display || schema.nodes.math_block || schema.nodes.code_block
-    
-    if (mathType && (schema.nodes.math_display || schema.nodes.math_block)) {
-        const tr = view.state.tr
-        const mathNode = mathType.create(
-            {},
-            schema.text(mathContent)
-        )
-        tr.insert(pos, mathNode)
-        view.dispatch(tr)
-        console.log(`✅ Inserted math block: ${mathContent.substring(0, 30)}...`)
-    } else if (schema.nodes.code_block) {
-        // Fallback to code block with math language
-        const tr = view.state.tr
-        const codeNode = schema.nodes.code_block.create(
-            { params: 'latex' },
-            schema.text(mathContent)
-        )
-        tr.insert(pos, codeNode)
-        view.dispatch(tr)
-        console.log(`✅ Inserted math as code block: ${mathContent.substring(0, 30)}...`)
-    } else {
-        console.log('❌ No math or code block type found, inserting as text')
-        const tr = view.state.tr
-        tr.insertText('\n$$' + mathContent + '$$\n', pos)
-        view.dispatch(tr)
-    }
-}
-
-async function insertParagraph(view: any, pos: number, text: string): Promise<void> {
-    const schema = view.state.schema
-    const paragraphType = schema.nodes.paragraph
-    
-    if (paragraphType) {
-        const tr = view.state.tr
-        
-        // Handle text with inline formatting
-        const textNodes = parseInlineText(text, schema)
-        const paragraphNode = paragraphType.create(null, textNodes)
-        
-        tr.insert(pos, paragraphNode)
-        view.dispatch(tr)
-        console.log(`✅ Inserted paragraph: ${text.substring(0, 50)}...`)
-    } else {
-        console.log('❌ No paragraph node type found, falling back to text')
-        const tr = view.state.tr
-        tr.insertText('\n' + text + '\n', pos)
-        view.dispatch(tr)
     }
 }
 
@@ -1045,31 +825,6 @@ function contentItemToNode(item: any, schema: any): any {
         console.error('Failed to create node from content item:', error)
         return null
     }
-}
-
-function setupAutoSave(crepe: Crepe): void {
-    let saveTimeout: number | null = null;
-
-    // Listen for content changes
-    crepe.editor.action((ctx) => {
-        const view = ctx.get(editorViewCtx)
-        
-        // Override dispatchTransaction to detect changes
-        const originalDispatch = view.dispatch
-        view.dispatch = (tr) => {
-            originalDispatch.call(view, tr)
-            
-            // Debounce save
-            if (tr.docChanged) {
-                if (saveTimeout) {
-                    clearTimeout(saveTimeout)
-                }
-                saveTimeout = window.setTimeout(() => {
-                    saveDocument()
-                }, 1000)
-            }
-        }
-    })
 }
 
 async function saveDocument(): Promise<void> {
@@ -1322,10 +1077,6 @@ function hideRawMarkdownPanel(): void {
     }
 }
 
-function isRawMarkdownPanelVisible(): boolean {
-    const panel = document.getElementById('raw-markdown-panel');
-    return panel ? panel.classList.contains('visible') : false;
-}
 
 async function updateRawMarkdownContent(): Promise<void> {
     const textElement = document.getElementById('raw-markdown-text');

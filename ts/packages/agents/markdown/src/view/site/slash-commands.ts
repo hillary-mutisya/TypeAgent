@@ -4,7 +4,7 @@ import { Plugin, PluginKey } from 'prosemirror-state'
 /**
  * Enhanced slash command handler that properly detects and executes typed commands
  */
-export const slashCommandHandler = $prose((ctx) => {
+export const slashCommandHandler = $prose((_ctx) => {
   return new Plugin({
     key: new PluginKey('slash-command-handler'),
     

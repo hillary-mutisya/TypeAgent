@@ -88,34 +88,49 @@ async function updateMarkdownContext(
         if (!context.agentContext.collaborationProvider) {
             try {
                 const collaborationConfig = {
-                    documentId: fileName.replace('.md', ''), // Use filename as document ID
-                    websocketUrl: 'ws://localhost:1234', // Standard y-websocket-server port
+                    documentId: fileName.replace(".md", ""), // Use filename as document ID
+                    websocketUrl: "ws://localhost:1234", // Standard y-websocket-server port
                     userInfo: {
                         id: `user-${Date.now()}`, // Generate unique user ID
-                        name: 'User',
-                        avatar: '👤',
-                        color: '#4A90E2'
+                        name: "User",
+                        avatar: "👤",
+                        color: "#4A90E2",
                     },
-                    enableAI: true
+                    enableAI: true,
                 };
 
-                context.agentContext.collaborationProvider = new TypeAgentYjsProvider(collaborationConfig);
-                context.agentContext.collaborationContext = context.agentContext.collaborationProvider.getContext();
+                context.agentContext.collaborationProvider =
+                    new TypeAgentYjsProvider(collaborationConfig);
+                context.agentContext.collaborationContext =
+                    context.agentContext.collaborationProvider.getContext();
 
                 // Initialize AI collaborator and research handler
-                context.agentContext.aiCollaborator = new AIAgentCollaborator(context.agentContext.collaborationProvider);
-                context.agentContext.researchHandler = new AsyncResearchHandler(context.agentContext.aiCollaborator);
+                context.agentContext.aiCollaborator = new AIAgentCollaborator(
+                    context.agentContext.collaborationProvider,
+                );
+                context.agentContext.researchHandler = new AsyncResearchHandler(
+                    context.agentContext.aiCollaborator,
+                );
 
                 // Load existing content into Yjs document
-                const existingContent = await storage?.read(fileName, "utf8") || "";
+                const existingContent =
+                    (await storage?.read(fileName, "utf8")) || "";
                 if (existingContent) {
-                    context.agentContext.collaborationProvider.setMarkdownContent(existingContent);
+                    context.agentContext.collaborationProvider.setMarkdownContent(
+                        existingContent,
+                    );
                 }
 
-                console.log('✅ Collaboration provider initialized for:', fileName);
-                console.log('🤖 AI collaborator initialized and ready');
+                console.log(
+                    "✅ Collaboration provider initialized for:",
+                    fileName,
+                );
+                console.log("🤖 AI collaborator initialized and ready");
             } catch (error) {
-                console.error('❌ Failed to initialize collaboration provider:', error);
+                console.error(
+                    "❌ Failed to initialize collaboration provider:",
+                    error,
+                );
                 // Continue without collaboration if it fails
             }
         }
@@ -137,16 +152,16 @@ async function updateMarkdownContext(
             context.agentContext.collaborationProvider = undefined;
             context.agentContext.collaborationContext = undefined;
         }
-        
+
         if (context.agentContext.aiCollaborator) {
             context.agentContext.aiCollaborator = undefined;
         }
-        
+
         if (context.agentContext.researchHandler) {
             context.agentContext.researchHandler.cleanup();
             context.agentContext.researchHandler = undefined;
         }
-        
+
         if (context.agentContext.viewProcess) {
             context.agentContext.viewProcess.kill();
         }
@@ -217,11 +232,13 @@ async function handleMarkdownAction(
             if (await storage?.exists(filePath)) {
                 markdownContent = await storage?.read(filePath, "utf8");
             }
-            
+
             // Use collaboration provider if available
-            const collaborationProvider = actionContext.sessionContext.agentContext.collaborationProvider;
-            const researchHandler = actionContext.sessionContext.agentContext.researchHandler;
-            
+            const collaborationProvider =
+                actionContext.sessionContext.agentContext.collaborationProvider;
+            const researchHandler =
+                actionContext.sessionContext.agentContext.researchHandler;
+
             if (collaborationProvider) {
                 // Update collaboration document content
                 markdownContent = collaborationProvider.getMarkdownContent();
@@ -230,11 +247,17 @@ async function handleMarkdownAction(
             // Check if this is an AI command that should be handled asynchronously
             const request = action.parameters.originalRequest;
             const position = 0; // Default position for now - can be enhanced later
-            
+
             if (researchHandler && isAsyncAICommand(request)) {
                 // Handle async AI requests through the research handler
-                const requestId = await handleAsyncAIRequest(researchHandler, request, position);
-                result = createActionResult(`AI request queued (${requestId}). Working asynchronously...`);
+                const requestId = await handleAsyncAIRequest(
+                    researchHandler,
+                    request,
+                    position,
+                );
+                result = createActionResult(
+                    `AI request queued (${requestId}). Working asynchronously...`,
+                );
             } else {
                 // Handle synchronous requests through the agent
                 const response = await agent.updateDocument(
@@ -246,39 +269,59 @@ async function handleMarkdownAction(
                     const updateResult = response.data;
 
                     // Apply operations to the document
-                    if (updateResult.operations && updateResult.operations.length > 0) {
+                    if (
+                        updateResult.operations &&
+                        updateResult.operations.length > 0
+                    ) {
                         // Apply to collaboration provider first
                         if (collaborationProvider) {
-                            applyOperationsToYjsDocument(collaborationProvider, updateResult.operations);
-                            
+                            applyOperationsToYjsDocument(
+                                collaborationProvider,
+                                updateResult.operations,
+                            );
+
                             // Sync back to storage
-                            const updatedContent = collaborationProvider.getMarkdownContent();
+                            const updatedContent =
+                                collaborationProvider.getMarkdownContent();
                             await storage?.write(filePath, updatedContent);
                         } else {
                             // Fallback to direct file operations
                             if (markdownContent) {
-                                const updatedContent = applyOperationsToMarkdown(markdownContent, updateResult.operations);
+                                const updatedContent =
+                                    applyOperationsToMarkdown(
+                                        markdownContent,
+                                        updateResult.operations,
+                                    );
                                 await storage?.write(filePath, updatedContent);
                             }
                         }
 
                         // Send operations to the view process
-                        if (actionContext.sessionContext.agentContext.viewProcess) {
-                            actionContext.sessionContext.agentContext.viewProcess.send({
-                                type: "applyOperations",
-                                operations: updateResult.operations,
-                            });
+                        if (
+                            actionContext.sessionContext.agentContext
+                                .viewProcess
+                        ) {
+                            actionContext.sessionContext.agentContext.viewProcess.send(
+                                {
+                                    type: "applyOperations",
+                                    operations: updateResult.operations,
+                                },
+                            );
                         }
                     }
-                    
+
                     if (updateResult.operationSummary) {
-                        result = createActionResult(updateResult.operationSummary);
+                        result = createActionResult(
+                            updateResult.operationSummary,
+                        );
                     } else {
                         result = createActionResult("Updated document");
                     }
                 } else {
                     console.error(response.message);
-                    result = createActionResult("Failed to update document: " + response.message);
+                    result = createActionResult(
+                        "Failed to update document: " + response.message,
+                    );
                 }
             }
             break;
@@ -338,105 +381,157 @@ export async function createViewServiceHost(filePath: string, port: number) {
     });
 }
 
-function applyOperationsToYjsDocument(provider: TypeAgentYjsProvider, operations: DocumentOperation[]): void {
+function applyOperationsToYjsDocument(
+    provider: TypeAgentYjsProvider,
+    operations: DocumentOperation[],
+): void {
     const ytext = provider.getText();
-    
+
     // Sort operations by position (reverse order for insertions to avoid position shifts)
     const sortedOps = [...operations].sort((a, b) => {
-        if (a.type === 'insert' || a.type === 'replace') {
-            return ((b as any).position || (b as any).from || 0) - ((a as any).position || (a as any).from || 0);
+        if (a.type === "insert" || a.type === "replace") {
+            return (
+                ((b as any).position || (b as any).from || 0) -
+                ((a as any).position || (a as any).from || 0)
+            );
         }
-        return ((a as any).position || (a as any).from || 0) - ((b as any).position || (b as any).from || 0);
+        return (
+            ((a as any).position || (a as any).from || 0) -
+            ((b as any).position || (b as any).from || 0)
+        );
     });
-    
+
     for (const operation of sortedOps) {
         try {
             switch (operation.type) {
-                case 'insert': {
-                    const insertText = operation.content.map(item => 
-                        contentItemToText(item)
-                    ).join('');
-                    
-                    const position = Math.min(operation.position || 0, ytext.length);
+                case "insert": {
+                    const insertText = operation.content
+                        .map((item) => contentItemToText(item))
+                        .join("");
+
+                    const position = Math.min(
+                        operation.position || 0,
+                        ytext.length,
+                    );
                     provider.applyTextOperation(position, insertText);
                     break;
                 }
-                case 'replace': {
-                    const replaceText = operation.content.map(item => 
-                        contentItemToText(item)
-                    ).join('');
-                    
+                case "replace": {
+                    const replaceText = operation.content
+                        .map((item) => contentItemToText(item))
+                        .join("");
+
                     const fromPos = Math.min(operation.from || 0, ytext.length);
-                    const toPos = Math.min(operation.to || fromPos + 1, ytext.length);
+                    const toPos = Math.min(
+                        operation.to || fromPos + 1,
+                        ytext.length,
+                    );
                     const deleteLength = toPos - fromPos;
-                    
-                    provider.applyTextOperation(fromPos, replaceText, deleteLength);
+
+                    provider.applyTextOperation(
+                        fromPos,
+                        replaceText,
+                        deleteLength,
+                    );
                     break;
                 }
-                case 'delete': {
+                case "delete": {
                     const fromPos = Math.min(operation.from || 0, ytext.length);
-                    const toPos = Math.min(operation.to || fromPos + 1, ytext.length);
+                    const toPos = Math.min(
+                        operation.to || fromPos + 1,
+                        ytext.length,
+                    );
                     const deleteLength = toPos - fromPos;
-                    
-                    provider.applyTextOperation(fromPos, '', deleteLength);
+
+                    provider.applyTextOperation(fromPos, "", deleteLength);
                     break;
                 }
             }
         } catch (error) {
-            console.error(`Failed to apply Yjs operation ${operation.type}:`, error);
+            console.error(
+                `Failed to apply Yjs operation ${operation.type}:`,
+                error,
+            );
         }
     }
 }
 
-function applyOperationsToMarkdown(content: string, operations: DocumentOperation[]): string {
-    const lines = content.split('\n');
-    
+function applyOperationsToMarkdown(
+    content: string,
+    operations: DocumentOperation[],
+): string {
+    const lines = content.split("\n");
+
     // Sort operations by position (reverse order for insertions)
     const sortedOps = [...operations].sort((a, b) => {
-        if (a.type === 'insert' || a.type === 'replace') {
-            return (b as any).position - (a as any).position || ((b as any).from || 0) - ((a as any).from || 0);
+        if (a.type === "insert" || a.type === "replace") {
+            return (
+                (b as any).position - (a as any).position ||
+                ((b as any).from || 0) - ((a as any).from || 0)
+            );
         }
-        return (a as any).position - (b as any).position || ((a as any).from || 0) - ((b as any).from || 0);
+        return (
+            (a as any).position - (b as any).position ||
+            ((a as any).from || 0) - ((b as any).from || 0)
+        );
     });
-    
+
     for (const operation of sortedOps) {
         try {
             switch (operation.type) {
-                case 'insert': {
-                    const insertContent = operation.content.map(item => 
-                        contentItemToText(item)
-                    ).join('');
-                    
+                case "insert": {
+                    const insertContent = operation.content
+                        .map((item) => contentItemToText(item))
+                        .join("");
+
                     // Simple position-based insertion (by line for simplicity)
-                    const lineIndex = Math.min(operation.position || 0, lines.length);
+                    const lineIndex = Math.min(
+                        operation.position || 0,
+                        lines.length,
+                    );
                     lines.splice(lineIndex, 0, insertContent);
                     break;
                 }
-                
-                case 'replace': {
-                    const replaceContent = operation.content.map(item => 
-                        contentItemToText(item)
-                    ).join('');
-                    
-                    const fromLine = Math.min(operation.from || 0, lines.length - 1);
-                    const toLine = Math.min(operation.to || fromLine + 1, lines.length);
+
+                case "replace": {
+                    const replaceContent = operation.content
+                        .map((item) => contentItemToText(item))
+                        .join("");
+
+                    const fromLine = Math.min(
+                        operation.from || 0,
+                        lines.length - 1,
+                    );
+                    const toLine = Math.min(
+                        operation.to || fromLine + 1,
+                        lines.length,
+                    );
                     lines.splice(fromLine, toLine - fromLine, replaceContent);
                     break;
                 }
-                
-                case 'delete': {
-                    const fromLine = Math.min(operation.from || 0, lines.length - 1);
-                    const toLine = Math.min(operation.to || fromLine + 1, lines.length);
+
+                case "delete": {
+                    const fromLine = Math.min(
+                        operation.from || 0,
+                        lines.length - 1,
+                    );
+                    const toLine = Math.min(
+                        operation.to || fromLine + 1,
+                        lines.length,
+                    );
                     lines.splice(fromLine, toLine - fromLine);
                     break;
                 }
             }
         } catch (error) {
-            console.error(`Failed to apply operation ${operation.type}:`, error);
+            console.error(
+                `Failed to apply operation ${operation.type}:`,
+                error,
+            );
         }
     }
-    
-    return lines.join('\n');
+
+    return lines.join("\n");
 }
 
 /**
@@ -444,41 +539,56 @@ function applyOperationsToMarkdown(content: string, operations: DocumentOperatio
  */
 function isAsyncAICommand(request: string): boolean {
     // Commands that benefit from async processing
-    const asyncCommands = ['/continue', '/diagram', '/augment', '/research'];
-    return asyncCommands.some(cmd => request.toLowerCase().startsWith(cmd));
+    const asyncCommands = ["/continue", "/diagram", "/augment", "/research"];
+    return asyncCommands.some((cmd) => request.toLowerCase().startsWith(cmd));
 }
 
 /**
  * Handle async AI requests through the research handler
  */
 async function handleAsyncAIRequest(
-    researchHandler: AsyncResearchHandler, 
-    request: string, 
-    position: number
+    researchHandler: AsyncResearchHandler,
+    request: string,
+    position: number,
 ): Promise<string> {
     const command = request.toLowerCase().trim();
-    
-    if (command.startsWith('/continue')) {
-        const hint = command.replace('/continue', '').trim();
-        return await researchHandler.handleContinueRequest(position, hint || undefined);
-    } 
-    else if (command.startsWith('/diagram')) {
-        const description = command.replace('/diagram', '').trim() || 'process diagram';
-        return await researchHandler.handleDiagramRequest(description, 'auto', position);
-    }
-    else if (command.startsWith('/augment')) {
-        const instruction = command.replace('/augment', '').trim() || 'improve formatting';
-        return await researchHandler.handleAugmentRequest(instruction, 'section', position);
-    }
-    else if (command.startsWith('/research')) {
-        const query = command.replace('/research', '').trim() || 'general research';
-        return await researchHandler.handleResearchRequest(query, {
-            fullContent: '',
+
+    if (command.startsWith("/continue")) {
+        const hint = command.replace("/continue", "").trim();
+        return await researchHandler.handleContinueRequest(
             position,
-            timestamp: Date.now()
-        }, position);
+            hint || undefined,
+        );
+    } else if (command.startsWith("/diagram")) {
+        const description =
+            command.replace("/diagram", "").trim() || "process diagram";
+        return await researchHandler.handleDiagramRequest(
+            description,
+            "auto",
+            position,
+        );
+    } else if (command.startsWith("/augment")) {
+        const instruction =
+            command.replace("/augment", "").trim() || "improve formatting";
+        return await researchHandler.handleAugmentRequest(
+            instruction,
+            "section",
+            position,
+        );
+    } else if (command.startsWith("/research")) {
+        const query =
+            command.replace("/research", "").trim() || "general research";
+        return await researchHandler.handleResearchRequest(
+            query,
+            {
+                fullContent: "",
+                position,
+                timestamp: Date.now(),
+            },
+            position,
+        );
     }
-    
+
     throw new Error(`Unknown async AI command: ${command}`);
 }
 
@@ -486,26 +596,49 @@ function contentItemToText(item: any): string {
     if (item.text) {
         return item.text;
     }
-    
+
     if (item.content) {
-        return item.content.map((child: any) => contentItemToText(child)).join('');
+        return item.content
+            .map((child: any) => contentItemToText(child))
+            .join("");
     }
-    
+
     // Handle special node types
     switch (item.type) {
-        case 'paragraph':
-            return '\n' + (item.content ? item.content.map(contentItemToText).join('') : '') + '\n';
-        case 'heading':
+        case "paragraph":
+            return (
+                "\n" +
+                (item.content
+                    ? item.content.map(contentItemToText).join("")
+                    : "") +
+                "\n"
+            );
+        case "heading":
             const level = item.attrs?.level || 1;
-            const prefix = '#'.repeat(level) + ' ';
-            return '\n' + prefix + (item.content ? item.content.map(contentItemToText).join('') : '') + '\n';
-        case 'code_block':
-            return '\n```\n' + (item.content ? item.content.map(contentItemToText).join('') : '') + '\n```\n';
-        case 'mermaid':
-            return '\n```mermaid\n' + (item.attrs?.content || '') + '\n```\n';
-        case 'math_display':
-            return '\n$$\n' + (item.attrs?.content || '') + '\n$$\n';
+            const prefix = "#".repeat(level) + " ";
+            return (
+                "\n" +
+                prefix +
+                (item.content
+                    ? item.content.map(contentItemToText).join("")
+                    : "") +
+                "\n"
+            );
+        case "code_block":
+            return (
+                "\n```\n" +
+                (item.content
+                    ? item.content.map(contentItemToText).join("")
+                    : "") +
+                "\n```\n"
+            );
+        case "mermaid":
+            return "\n```mermaid\n" + (item.attrs?.content || "") + "\n```\n";
+        case "math_display":
+            return "\n$$\n" + (item.attrs?.content || "") + "\n$$\n";
         default:
-            return item.content ? item.content.map(contentItemToText).join('') : '';
+            return item.content
+                ? item.content.map(contentItemToText).join("")
+                : "";
     }
 }

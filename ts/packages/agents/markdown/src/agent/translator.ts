@@ -17,7 +17,10 @@ export async function createMarkdownAgent(
     const schemaText = await fs.promises.readFile(
         fileURLToPath(
             new URL(
-                path.join(packageRoot, "./src/agent/markdownOperationSchema.ts"),
+                path.join(
+                    packageRoot,
+                    "./src/agent/markdownOperationSchema.ts",
+                ),
                 import.meta.url,
             ),
         ),

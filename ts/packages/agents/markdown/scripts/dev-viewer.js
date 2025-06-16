@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
@@ -63,7 +65,9 @@ if (!fs.existsSync(filePath)) {
 
 // Check if it's a markdown file
 if (!filePath.match(/\.(md|markdown)$/i)) {
-    console.warn(`Warning: File does not have a markdown extension: ${filePath}`);
+    console.warn(
+        `Warning: File does not have a markdown extension: ${filePath}`,
+    );
 }
 
 console.log(`Starting markdown viewer...`);
@@ -74,13 +78,15 @@ console.log(`URL: http://localhost:${port}`);
 // Start the service
 try {
     const serviceScript = fileURLToPath(
-        new URL("../dist/view/route/service.js", import.meta.url)
+        new URL("../dist/view/route/service.js", import.meta.url),
         // new URL("../dist/view/route/view/route/service.js", import.meta.url)
     );
 
     // Check if the built service exists
     if (!fs.existsSync(serviceScript)) {
-        console.error("Error: Service script not found. Please run 'npm run build' first.");
+        console.error(
+            "Error: Service script not found. Please run 'npm run build' first.",
+        );
         process.exit(1);
     }
 
@@ -124,7 +130,6 @@ try {
         console.log("\n🛑 Stopping markdown viewer...");
         childProcess.kill();
     });
-
 } catch (error) {
     console.error("❌ Error starting markdown viewer:", error);
     process.exit(1);

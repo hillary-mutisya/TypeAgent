@@ -1,8 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import * as Y from 'yjs';
-import { WebSocket } from 'ws';
+import * as Y from "yjs";
+import { WebSocket } from "ws";
 
 /**
  * Server-side collaboration manager for handling Yjs synchronization
@@ -22,7 +22,7 @@ export class CollaborationManager {
             this.documents.set(documentId, ydoc);
             this.documentPaths.set(documentId, filePath);
             this.clients.set(documentId, []);
-            
+
             console.log(`📄 Initialized collaboration document: ${documentId}`);
         }
     }
@@ -33,8 +33,13 @@ export class CollaborationManager {
     getStats(): any {
         return {
             documents: this.documents.size,
-            totalClients: Array.from(this.clients.values()).reduce((sum, clients) => sum + clients.length, 0),
-            documentsWithClients: Array.from(this.clients.entries()).filter(([_, clients]) => clients.length > 0).length
+            totalClients: Array.from(this.clients.values()).reduce(
+                (sum, clients) => sum + clients.length,
+                0,
+            ),
+            documentsWithClients: Array.from(this.clients.entries()).filter(
+                ([_, clients]) => clients.length > 0,
+            ).length,
         };
     }
 
@@ -44,10 +49,10 @@ export class CollaborationManager {
     getDocumentContent(documentId: string): string {
         const ydoc = this.documents.get(documentId);
         if (ydoc) {
-            const ytext = ydoc.getText('content');
+            const ytext = ydoc.getText("content");
             return ytext.toString();
         }
-        return '';
+        return "";
     }
 
     /**
@@ -56,11 +61,11 @@ export class CollaborationManager {
     setDocumentContent(documentId: string, content: string): void {
         let ydoc = this.documents.get(documentId);
         if (!ydoc) {
-            this.initializeDocument(documentId, documentId + '.md');
+            this.initializeDocument(documentId, documentId + ".md");
             ydoc = this.documents.get(documentId)!;
         }
-        
-        const ytext = ydoc.getText('content');
+
+        const ytext = ydoc.getText("content");
         ytext.delete(0, ytext.length);
         ytext.insert(0, content);
     }

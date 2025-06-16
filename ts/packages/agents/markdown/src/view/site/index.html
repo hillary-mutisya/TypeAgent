@@ -7,15 +7,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI-Enhanced Markdown Editor</title>
-    
-    <!-- Milkdown Theme -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@milkdown/theme-nord@7.3.6/style.css" />
-    
-    <!-- Existing feature support -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@5.7.0/github-markdown-light.min.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/katex.css" />
 
+    <!-- Milkdown Theme -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@milkdown/theme-nord@7.3.6/style.css"
+    />
+
+    <!-- Existing feature support -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/github-markdown-css@5.7.0/github-markdown-light.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/katex.css"
+    />
   </head>
   <body>
     <div id="toolbar">
@@ -29,7 +40,7 @@
         <button id="save-btn">💾 Save</button>
       </div>
     </div>
-    
+
     <div id="editor-container">
       <div id="editor"></div>
       <div id="raw-markdown-panel" class="raw-markdown-panel">
@@ -42,14 +53,14 @@
         </div>
       </div>
     </div>
-    
+
     <!-- Status and notifications -->
     <div id="connection-status" class="status"></div>
-    
+
     <!-- External libraries -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/katex@0.15.6/dist/katex.min.js"></script>
-    
+
     <!-- Main application -->
     <script type="module" src="./index.ts"></script>
   </body>

@@ -58,8 +58,13 @@
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .mermaid-source {
@@ -79,7 +84,9 @@
   padding: 12px;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Source Code Pro', monospace;
+  font-family:
+    "SF Mono", "Monaco", "Inconsolata", "Roboto Mono", "Source Code Pro",
+    monospace;
   font-size: 13px;
   line-height: 1.5;
   resize: vertical;
@@ -173,7 +180,9 @@
 
 .mermaid-error-content p {
   margin: 0;
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Source Code Pro', monospace;
+  font-family:
+    "SF Mono", "Monaco", "Inconsolata", "Roboto Mono", "Source Code Pro",
+    monospace;
   font-size: 12px;
   background: rgba(255, 255, 255, 0.5);
   padding: 8px;

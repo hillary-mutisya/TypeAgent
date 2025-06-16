@@ -17,16 +17,16 @@
   },
   "scripts": {
     "build": "npm run tsc && npm run build:frontend",
-    "build:frontend": "vite build",
     "postbuild": "copyfiles -u 1 \"src/**/config.json\" dist",
+    "build:frontend": "vite build",
     "clean": "rimraf --glob dist *.tsbuildinfo *.done.build.log",
     "collab": "npx -y y-websocket --port 1234",
     "dev": "node scripts/dev-viewer.js",
-    "dev:hmr": "node scripts/dev-viewer-hmr.js",
-    "dev:full": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "dev:collab": "concurrently \"npm run collab\" \"npm run dev:full\"",
     "dev:backend": "npm run tsc && node scripts/dev-viewer.js",
+    "dev:collab": "concurrently \"npm run collab\" \"npm run dev:full\"",
     "dev:frontend": "vite --host",
+    "dev:full": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:hmr": "node scripts/dev-viewer-hmr.js",
     "prettier": "prettier --check . --ignore-path ../../../.prettierignore",
     "prettier:fix": "prettier --write . --ignore-path ../../../.prettierignore",
     "tsc": "tsc -b"
@@ -58,8 +58,8 @@
     "typechat": "^0.1.1",
     "unist-util-visit": "^4.1.2",
     "ws": "^8.14.2",
-    "yjs": "^13.6.8",
-    "y-websocket": "^1.5.0"
+    "y-websocket": "^1.5.0",
+    "yjs": "^13.6.8"
   },
   "devDependencies": {
     "@types/debug": "^4.1.12",

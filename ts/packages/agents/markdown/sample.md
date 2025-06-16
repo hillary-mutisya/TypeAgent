@@ -5,24 +5,29 @@ This is a test document to demonstrate the enhanced markdown viewer with editing
 ## Features
 
 ### Text Formatting
-You can use **bold text**, *italic text*, and `inline code`.
+
+You can use **bold text**, _italic text_, and `inline code`.
 
 ### Math Equations
+
 Inline math: $E = mc^2$
 
 Display math:
+
 $$
 \int_{-\infty}^{\infty} e^{-x^2} dx = \sqrt{\pi}
 $$
 
 ### Code Blocks
+
 ```javascript
 function hello() {
-    console.log("Hello, world!");
+  console.log("Hello, world!");
 }
 ```
 
 ### Mermaid Diagrams
+
 ```mermaid
 graph TD
     A[Start] --> B{Is it working?}
@@ -32,6 +37,7 @@ graph TD
 ```
 
 ### Lists
+
 1. First item
 2. Second item
    - Nested item
@@ -39,15 +45,18 @@ graph TD
 3. Third item
 
 ### Links and Images
+
 [TypeAgent GitHub](https://github.com/microsoft/TypeAgent)
 
 ### Blockquotes
+
 > This is a blockquote. It can contain multiple lines
 > and will be rendered with special styling.
 
 ## Testing the Editor
 
 Try editing this document directly in the left pane:
+
 - Add new content
 - Modify existing text
 - Use the toolbar buttons
@@ -57,4 +66,4 @@ The preview should update automatically as you type!
 
 ---
 
-*Happy editing!* 🎉
+_Happy editing!_ 🎉

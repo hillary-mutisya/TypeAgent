@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { AIAgentCollaborator } from './AIAgentCollaborator.js';
+import { AIAgentCollaborator } from "./AIAgentCollaborator.js";
 
 /**
  * Handles asynchronous research and content generation operations
@@ -21,13 +21,13 @@ export class AsyncResearchHandler {
      * Queue an AI research request with context preservation
      */
     async queueResearchRequest(
-        command: 'continue' | 'diagram' | 'augment' | 'research',
+        command: "continue" | "diagram" | "augment" | "research",
         parameters: any,
         position: number,
-        priority: 'high' | 'medium' | 'low' = 'medium'
+        priority: "high" | "medium" | "low" = "medium",
     ): Promise<string> {
         const requestId = this.generateRequestId();
-        
+
         const queuedRequest: QueuedRequest = {
             id: requestId,
             command,
@@ -35,16 +35,18 @@ export class AsyncResearchHandler {
             position,
             priority,
             queuedAt: Date.now(),
-            status: 'queued'
+            status: "queued",
         };
-        
+
         this.requestQueue.set(requestId, queuedRequest);
-        
-        console.log(`📋 Queued AI request: ${command} (${requestId}) with priority ${priority}`);
-        
+
+        console.log(
+            `📋 Queued AI request: ${command} (${requestId}) with priority ${priority}`,
+        );
+
         // Start processing if not already busy
         this.processNextRequest();
-        
+
         return requestId;
     }
 
@@ -56,33 +58,35 @@ export class AsyncResearchHandler {
         if (this.processingQueue.size >= this.getMaxConcurrentRequests()) {
             return;
         }
-        
+
         // Find highest priority queued request
         const nextRequest = this.getNextQueuedRequest();
         if (!nextRequest) {
             return;
         }
-        
+
         // Move from queue to processing
         this.requestQueue.delete(nextRequest.id);
         this.processingQueue.add(nextRequest.id);
-        nextRequest.status = 'processing';
-        
+        nextRequest.status = "processing";
+
         try {
             // Start the AI collaborator processing
             await this.aiCollaborator.startAsyncRequest(
                 nextRequest.id,
                 nextRequest.command as any,
                 nextRequest.parameters,
-                nextRequest.position
+                nextRequest.position,
             );
-            
         } catch (error) {
-            console.error(`Failed to process AI request ${nextRequest.id}:`, error);
+            console.error(
+                `Failed to process AI request ${nextRequest.id}:`,
+                error,
+            );
         } finally {
             // Remove from processing queue
             this.processingQueue.delete(nextRequest.id);
-            
+
             // Process next request if any
             this.processNextRequest();
         }
@@ -93,16 +97,17 @@ export class AsyncResearchHandler {
      */
     private getNextQueuedRequest(): QueuedRequest | null {
         const queuedRequests = Array.from(this.requestQueue.values())
-            .filter(req => req.status === 'queued')
+            .filter((req) => req.status === "queued")
             .sort((a, b) => {
                 // Sort by priority first, then by queue time
                 const priorityOrder = { high: 3, medium: 2, low: 1 };
-                const priorityDiff = priorityOrder[b.priority] - priorityOrder[a.priority];
+                const priorityDiff =
+                    priorityOrder[b.priority] - priorityOrder[a.priority];
                 if (priorityDiff !== 0) return priorityDiff;
-                
+
                 return a.queuedAt - b.queuedAt; // FIFO for same priority
             });
-        
+
         return queuedRequests[0] || null;
     }
 
@@ -115,14 +120,16 @@ export class AsyncResearchHandler {
             console.log(`❌ Cancelled queued AI request: ${requestId}`);
             return true;
         }
-        
+
         if (this.processingQueue.has(requestId)) {
             // For processing requests, we can't immediately cancel,
             // but we can mark them for cancellation
-            console.log(`⏹️ Marked processing AI request for cancellation: ${requestId}`);
+            console.log(
+                `⏹️ Marked processing AI request for cancellation: ${requestId}`,
+            );
             return true;
         }
-        
+
         return false;
     }
 
@@ -131,16 +138,16 @@ export class AsyncResearchHandler {
      */
     async handleResearchRequest(
         query: string,
-        context: { fullContent: string; position: number; timestamp: number; },
-        position: number
+        context: { fullContent: string; position: number; timestamp: number },
+        position: number,
     ): Promise<string> {
         const requestId = await this.queueResearchRequest(
-            'research',
+            "research",
             { query, context },
             position,
-            'medium'
+            "medium",
         );
-        
+
         console.log(`🔍 Started research request for: "${query}"`);
         return requestId;
     }
@@ -148,15 +155,20 @@ export class AsyncResearchHandler {
     /**
      * Handle continue writing requests with context analysis
      */
-    async handleContinueRequest(position: number, hint?: string): Promise<string> {
+    async handleContinueRequest(
+        position: number,
+        hint?: string,
+    ): Promise<string> {
         const requestId = await this.queueResearchRequest(
-            'continue',
+            "continue",
             { hint, contextAnalysis: true },
             position,
-            'high' // Continue requests are high priority for user experience
+            "high", // Continue requests are high priority for user experience
         );
-        
-        console.log(`✍️ Started continue writing request at position ${position}`);
+
+        console.log(
+            `✍️ Started continue writing request at position ${position}`,
+        );
         return requestId;
     }
 
@@ -165,16 +177,16 @@ export class AsyncResearchHandler {
      */
     async handleDiagramRequest(
         description: string,
-        diagramType: 'mermaid' | 'plantuml' | 'auto',
-        position: number
+        diagramType: "mermaid" | "plantuml" | "auto",
+        position: number,
     ): Promise<string> {
         const requestId = await this.queueResearchRequest(
-            'diagram',
+            "diagram",
             { description, diagramType },
             position,
-            'medium'
+            "medium",
         );
-        
+
         console.log(`📊 Started diagram generation for: "${description}"`);
         return requestId;
     }
@@ -184,16 +196,16 @@ export class AsyncResearchHandler {
      */
     async handleAugmentRequest(
         instruction: string,
-        scope: 'selection' | 'section' | 'document',
-        position: number
+        scope: "selection" | "section" | "document",
+        position: number,
     ): Promise<string> {
         const requestId = await this.queueResearchRequest(
-            'augment',
+            "augment",
             { instruction, scope },
             position,
-            'low' // Augmentation can wait
+            "low", // Augmentation can wait
         );
-        
+
         console.log(`🔧 Started document augmentation: "${instruction}"`);
         return requestId;
     }
@@ -204,18 +216,18 @@ export class AsyncResearchHandler {
     getQueueStatus(): QueueStatus {
         const queued = Array.from(this.requestQueue.values());
         const processing = Array.from(this.processingQueue);
-        
+
         return {
             queuedCount: queued.length,
             processingCount: processing.length,
-            queuedRequests: queued.map(req => ({
+            queuedRequests: queued.map((req) => ({
                 id: req.id,
                 command: req.command,
                 priority: req.priority,
                 queuedAt: req.queuedAt,
-                status: req.status
+                status: req.status,
             })),
-            processingRequests: processing
+            processingRequests: processing,
         };
     }
 
@@ -225,21 +237,21 @@ export class AsyncResearchHandler {
     estimateCompletionTime(requestId: string): number | null {
         const request = this.requestQueue.get(requestId);
         if (!request) return null;
-        
+
         // Base time estimates per command type (in milliseconds)
         const baseEstimates = {
             continue: 3000,
             diagram: 5000,
             augment: 4000,
-            research: 8000
+            research: 8000,
         };
-        
+
         const baseTime = baseEstimates[request.command] || 5000;
-        
+
         // Add queue wait time
         const queuePosition = this.getQueuePosition(requestId);
         const queueWaitTime = queuePosition * 2000; // Assume 2s per queued request
-        
+
         return baseTime + queueWaitTime;
     }
 
@@ -248,15 +260,16 @@ export class AsyncResearchHandler {
      */
     private getQueuePosition(requestId: string): number {
         const queuedRequests = Array.from(this.requestQueue.values())
-            .filter(req => req.status === 'queued')
+            .filter((req) => req.status === "queued")
             .sort((a, b) => {
                 const priorityOrder = { high: 3, medium: 2, low: 1 };
-                const priorityDiff = priorityOrder[b.priority] - priorityOrder[a.priority];
+                const priorityDiff =
+                    priorityOrder[b.priority] - priorityOrder[a.priority];
                 if (priorityDiff !== 0) return priorityDiff;
                 return a.queuedAt - b.queuedAt;
             });
-        
-        return queuedRequests.findIndex(req => req.id === requestId);
+
+        return queuedRequests.findIndex((req) => req.id === requestId);
     }
 
     /**
@@ -281,7 +294,7 @@ export class AsyncResearchHandler {
     cleanup(): void {
         const now = Date.now();
         const maxAge = 5 * 60 * 1000; // 5 minutes
-        
+
         for (const [id, request] of this.requestQueue.entries()) {
             if (now - request.queuedAt > maxAge) {
                 this.requestQueue.delete(id);
@@ -295,22 +308,30 @@ export class AsyncResearchHandler {
      */
     getAnalytics(): RequestAnalytics {
         const requests = Array.from(this.requestQueue.values());
-        
-        const commandCounts = requests.reduce((acc, req) => {
-            acc[req.command] = (acc[req.command] || 0) + 1;
-            return acc;
-        }, {} as Record<string, number>);
-        
-        const averageQueueTime = requests.length > 0 
-            ? requests.reduce((sum, req) => sum + (Date.now() - req.queuedAt), 0) / requests.length
-            : 0;
-        
+
+        const commandCounts = requests.reduce(
+            (acc, req) => {
+                acc[req.command] = (acc[req.command] || 0) + 1;
+                return acc;
+            },
+            {} as Record<string, number>,
+        );
+
+        const averageQueueTime =
+            requests.length > 0
+                ? requests.reduce(
+                      (sum, req) => sum + (Date.now() - req.queuedAt),
+                      0,
+                  ) / requests.length
+                : 0;
+
         return {
             totalRequests: requests.length,
             commandCounts,
             averageQueueTime,
             processingCapacity: this.getMaxConcurrentRequests(),
-            currentLoad: this.processingQueue.size / this.getMaxConcurrentRequests()
+            currentLoad:
+                this.processingQueue.size / this.getMaxConcurrentRequests(),
         };
     }
 }
@@ -320,12 +341,12 @@ export class AsyncResearchHandler {
  */
 interface QueuedRequest {
     id: string;
-    command: 'continue' | 'diagram' | 'augment' | 'research';
+    command: "continue" | "diagram" | "augment" | "research";
     parameters: any;
     position: number;
-    priority: 'high' | 'medium' | 'low';
+    priority: "high" | "medium" | "low";
     queuedAt: number;
-    status: 'queued' | 'processing' | 'completed' | 'failed';
+    status: "queued" | "processing" | "completed" | "failed";
 }
 
 /**

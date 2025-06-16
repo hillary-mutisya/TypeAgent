@@ -1,13 +1,13 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import * as Y from 'yjs';
-import { WebsocketProvider } from 'y-websocket';
-import { 
-    CollaborationConfig, 
-    CollaborationContext, 
-    UserPresence
-} from './collaborationTypes.js';
+import * as Y from "yjs";
+import { WebsocketProvider } from "y-websocket";
+import {
+    CollaborationConfig,
+    CollaborationContext,
+    UserPresence,
+} from "./collaborationTypes.js";
 
 export class TypeAgentYjsProvider {
     private ydoc: Y.Doc;
@@ -20,18 +20,18 @@ export class TypeAgentYjsProvider {
 
     constructor(config: CollaborationConfig) {
         this.config = config;
-        
+
         // Create Yjs document
         this.ydoc = new Y.Doc();
-        this.ytext = this.ydoc.getText('content');
-        
+        this.ytext = this.ydoc.getText("content");
+
         // Create websocket provider using the proven y-websocket pattern
         this.provider = new WebsocketProvider(
             config.websocketUrl,
             config.documentId,
-            this.ydoc
+            this.ydoc,
         );
-        
+
         // Initialize collaboration context
         this.context = {
             ydoc: this.ydoc,
@@ -39,9 +39,9 @@ export class TypeAgentYjsProvider {
             ytext: this.ytext,
             config: this.config,
             connected: this.connected,
-            userPresence: this.userPresence
+            userPresence: this.userPresence,
         };
-        
+
         this.setupEventHandlers();
         this.setupUserPresence();
     }
@@ -87,23 +87,23 @@ export class TypeAgentYjsProvider {
     async connect(): Promise<void> {
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
-                reject(new Error('Connection timeout'));
+                reject(new Error("Connection timeout"));
             }, 10000);
 
             const onConnect = () => {
                 clearTimeout(timeout);
-                this.provider.off('status', onStatusChange);
+                this.provider.off("status", onStatusChange);
                 resolve();
             };
 
             const onStatusChange = ({ status }: { status: string }) => {
-                if (status === 'connected') {
+                if (status === "connected") {
                     onConnect();
                 }
             };
 
-            this.provider.on('status', onStatusChange);
-            
+            this.provider.on("status", onStatusChange);
+
             // If already connected, resolve immediately
             if (this.connected) {
                 clearTimeout(timeout);
@@ -126,27 +126,27 @@ export class TypeAgentYjsProvider {
      */
     private setupEventHandlers(): void {
         // Connection status
-        this.provider.on('status', ({ status }: { status: string }) => {
-            console.log('Collaboration status:', status);
-            
-            this.connected = status === 'connected';
+        this.provider.on("status", ({ status }: { status: string }) => {
+            console.log("Collaboration status:", status);
+
+            this.connected = status === "connected";
             this.context.connected = this.connected;
-            
+
             if (this.context.onStatusChange) {
                 this.context.onStatusChange(status as any);
             }
         });
 
         // Document synchronization
-        this.provider.on('sync', (isSynced: boolean) => {
+        this.provider.on("sync", (isSynced: boolean) => {
             if (isSynced) {
-                console.log('Document synchronized');
+                console.log("Document synchronized");
             }
         });
 
         // Handle connection errors
-        this.provider.on('connection-error', (error: Error) => {
-            console.error('Collaboration connection error:', error);
+        this.provider.on("connection-error", (error: Error) => {
+            console.error("Collaboration connection error:", error);
         });
     }
 
@@ -155,22 +155,23 @@ export class TypeAgentYjsProvider {
      */
     private setupUserPresence(): void {
         const awareness = this.provider.awareness;
-        
+
         // Set local user info
-        awareness.setLocalStateField('user', {
+        awareness.setLocalStateField("user", {
             id: this.config.userInfo.id,
             name: this.config.userInfo.name,
             avatar: this.config.userInfo.avatar,
             color: this.config.userInfo.color,
             lastSeen: Date.now(),
-            isAI: false
+            isAI: false,
         });
 
         // Listen for awareness changes
-        awareness.on('change', ({ added, updated, removed }: any) => {
+        awareness.on("change", ({ added, updated, removed }: any) => {
             // Handle users joining
             added.forEach((clientId: number) => {
-                const user = awareness.getStates().get(clientId)?.user as UserPresence;
+                const user = awareness.getStates().get(clientId)
+                    ?.user as UserPresence;
                 if (user) {
                     this.userPresence.set(user.id, user);
                     if (this.context.onUserJoin) {
@@ -194,7 +195,8 @@ export class TypeAgentYjsProvider {
 
             // Handle user updates
             updated.forEach((clientId: number) => {
-                const user = awareness.getStates().get(clientId)?.user as UserPresence;
+                const user = awareness.getStates().get(clientId)
+                    ?.user as UserPresence;
                 if (user) {
                     this.userPresence.set(user.id, user);
                 }
@@ -208,12 +210,12 @@ export class TypeAgentYjsProvider {
     updateCursor(position: number): void {
         const awareness = this.provider.awareness;
         const currentUser = awareness.getLocalState()?.user;
-        
+
         if (currentUser) {
-            awareness.setLocalStateField('user', {
+            awareness.setLocalStateField("user", {
                 ...currentUser,
                 cursor: position,
-                lastSeen: Date.now()
+                lastSeen: Date.now(),
             });
         }
     }
@@ -224,12 +226,12 @@ export class TypeAgentYjsProvider {
     updateSelection(from: number, to: number): void {
         const awareness = this.provider.awareness;
         const currentUser = awareness.getLocalState()?.user;
-        
+
         if (currentUser) {
-            awareness.setLocalStateField('user', {
+            awareness.setLocalStateField("user", {
                 ...currentUser,
                 selection: { from, to },
-                lastSeen: Date.now()
+                lastSeen: Date.now(),
             });
         }
     }
@@ -237,16 +239,21 @@ export class TypeAgentYjsProvider {
     /**
      * Send AI request (for future AI integration)
      */
-    sendAIRequest(requestId: string, command: string, parameters: any, context: any): void {
+    sendAIRequest(
+        requestId: string,
+        command: string,
+        parameters: any,
+        context: any,
+    ): void {
         // For now, this is a placeholder for future AI integration
-        console.log('AI request queued:', { requestId, command, parameters });
-        
+        console.log("AI request queued:", { requestId, command, parameters });
+
         // In future phases, this will integrate with TypeAgent's AI system
         if (this.context.onAIStatus) {
             this.context.onAIStatus({
                 requestId,
-                status: 'started',
-                description: `Processing ${command} request`
+                status: "started",
+                description: `Processing ${command} request`,
             });
         }
     }
@@ -270,7 +277,11 @@ export class TypeAgentYjsProvider {
     /**
      * Apply text operations to the document
      */
-    applyTextOperation(position: number, text: string, deleteLength: number = 0): void {
+    applyTextOperation(
+        position: number,
+        text: string,
+        deleteLength: number = 0,
+    ): void {
         if (deleteLength > 0) {
             this.ytext.delete(position, deleteLength);
         }

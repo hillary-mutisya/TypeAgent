@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
@@ -71,7 +73,9 @@ if (!fs.existsSync(filePath)) {
 
 // Check if it's a markdown file
 if (!filePath.match(/\.(md|markdown)$/i)) {
-    console.warn(`Warning: File does not have a markdown extension: ${filePath}`);
+    console.warn(
+        `Warning: File does not have a markdown extension: ${filePath}`,
+    );
 }
 
 if (hmr) {
@@ -94,15 +98,17 @@ async function startWithHMR() {
         // Build TypeScript first
         console.log("🔨 Building TypeScript...");
         await runCommand("npm", ["run", "tsc"]);
-        
+
         // Start backend service
         const serviceScript = fileURLToPath(
-            new URL("../dist/view/route/service.js", import.meta.url)
+            new URL("../dist/view/route/service.js", import.meta.url),
         );
 
         // Check if the built service exists
         if (!fs.existsSync(serviceScript)) {
-            console.error("Error: Service script not found. Please run 'npm run build' first.");
+            console.error(
+                "Error: Service script not found. Please run 'npm run build' first.",
+            );
             process.exit(1);
         }
 
@@ -134,16 +140,22 @@ async function startWithHMR() {
 
         // Start Vite dev server
         console.log("⚡ Starting Vite dev server with HMR...");
-        const viteProcess = spawn("npx", ["vite", "--port", frontendPort.toString(), "--host"], {
-            stdio: "inherit",
-            shell: true
-        });
+        const viteProcess = spawn(
+            "npx",
+            ["vite", "--port", frontendPort.toString(), "--host"],
+            {
+                stdio: "inherit",
+                shell: true,
+            },
+        );
 
         console.log("\n🎉 Development servers started successfully!");
         console.log(`📝 Backend API: http://localhost:${backendPort}`);
         console.log(`⚡ Frontend (HMR): http://localhost:${frontendPort}`);
         console.log(`📄 Viewing: ${path.basename(filePath)}`);
-        console.log(`🔥 Hot Module Replacement enabled - changes will update instantly!`);
+        console.log(
+            `🔥 Hot Module Replacement enabled - changes will update instantly!`,
+        );
         console.log(`⚡ Press Ctrl+C to stop both servers`);
 
         // Handle process termination
@@ -172,7 +184,6 @@ async function startWithHMR() {
             backendProcess.kill();
             process.exit(code || 0);
         });
-
     } catch (error) {
         console.error("❌ Error starting development servers:", error);
         process.exit(1);
@@ -183,12 +194,14 @@ function startWithoutHMR() {
     // Original functionality for production-like development
     try {
         const serviceScript = fileURLToPath(
-            new URL("../dist/view/route/service.js", import.meta.url)
+            new URL("../dist/view/route/service.js", import.meta.url),
         );
 
         // Check if the built service exists
         if (!fs.existsSync(serviceScript)) {
-            console.error("Error: Service script not found. Please run 'npm run build' first.");
+            console.error(
+                "Error: Service script not found. Please run 'npm run build' first.",
+            );
             process.exit(1);
         }
 
@@ -202,11 +215,15 @@ function startWithoutHMR() {
         childProcess.on("message", function (message) {
             if (message === "Success") {
                 console.log(`✅ Markdown viewer started successfully!`);
-                console.log(`📝 Open http://localhost:${backendPort} in your browser`);
+                console.log(
+                    `📝 Open http://localhost:${backendPort} in your browser`,
+                );
                 console.log(`📄 Viewing: ${path.basename(filePath)}`);
                 console.log(`🔄 File changes will be reflected automatically`);
                 console.log(`⚡ Press Ctrl+C to stop the server`);
-                console.log(`💡 Use --hmr flag for Hot Module Replacement during development`);
+                console.log(
+                    `💡 Use --hmr flag for Hot Module Replacement during development`,
+                );
             } else if (message === "Failure") {
                 console.error("❌ Failed to start markdown viewer");
                 process.exit(1);
@@ -233,7 +250,6 @@ function startWithoutHMR() {
             console.log("\n🛑 Stopping markdown viewer...");
             childProcess.kill();
         });
-
     } catch (error) {
         console.error("❌ Error starting markdown viewer:", error);
         process.exit(1);
@@ -243,21 +259,25 @@ function startWithoutHMR() {
 function runCommand(command, args) {
     return new Promise((resolve, reject) => {
         const process = spawn(command, args, { stdio: "pipe", shell: true });
-        
+
         let output = "";
         process.stdout.on("data", (data) => {
             output += data.toString();
         });
-        
+
         process.stderr.on("data", (data) => {
             output += data.toString();
         });
-        
+
         process.on("close", (code) => {
             if (code === 0) {
                 resolve(output);
             } else {
-                reject(new Error(`Command failed with exit code ${code}: ${output}`));
+                reject(
+                    new Error(
+                        `Command failed with exit code ${code}: ${output}`,
+                    ),
+                );
             }
         });
     });

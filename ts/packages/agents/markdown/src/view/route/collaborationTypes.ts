@@ -5,7 +5,12 @@
  * Collaboration message types for websocket communication
  */
 export interface CollaborationMessage {
-    type: 'yjs-update' | 'awareness' | 'ai-request' | 'ai-status' | 'sync-request';
+    type:
+        | "yjs-update"
+        | "awareness"
+        | "ai-request"
+        | "ai-status"
+        | "sync-request";
     documentId: string;
     userId: string;
     timestamp: number;
@@ -16,10 +21,10 @@ export interface CollaborationMessage {
  * AI request message for async operations
  */
 export interface AIRequestMessage extends CollaborationMessage {
-    type: 'ai-request';
+    type: "ai-request";
     data: {
         requestId: string;
-        command: 'continue' | 'diagram' | 'augment';
+        command: "continue" | "diagram" | "augment";
         parameters: any;
         context: {
             position: number;
@@ -34,10 +39,10 @@ export interface AIRequestMessage extends CollaborationMessage {
  * AI status update message
  */
 export interface AIStatusMessage extends CollaborationMessage {
-    type: 'ai-status';
+    type: "ai-status";
     data: {
         requestId: string;
-        status: 'started' | 'processing' | 'completed' | 'failed';
+        status: "started" | "processing" | "completed" | "failed";
         progress?: number;
         description?: string;
         estimatedCompletion?: number;
@@ -48,7 +53,7 @@ export interface AIStatusMessage extends CollaborationMessage {
  * Yjs update message
  */
 export interface YjsUpdateMessage extends CollaborationMessage {
-    type: 'yjs-update';
+    type: "yjs-update";
     data: {
         update: ArrayBuffer;
         origin?: string;

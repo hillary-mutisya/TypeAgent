@@ -1,14 +1,19 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import * as Y from 'yjs';
-import { WebsocketProvider } from 'y-websocket';
+import * as Y from "yjs";
+import { WebsocketProvider } from "y-websocket";
 
 /**
  * Collaboration message types for websocket communication
  */
 export interface CollaborationMessage {
-    type: 'yjs-update' | 'awareness' | 'ai-request' | 'ai-status' | 'sync-request';
+    type:
+        | "yjs-update"
+        | "awareness"
+        | "ai-request"
+        | "ai-status"
+        | "sync-request";
     documentId: string;
     userId: string;
     timestamp: number;
@@ -38,10 +43,10 @@ export interface UserPresence {
  * AI request message for async operations
  */
 export interface AIRequestMessage extends CollaborationMessage {
-    type: 'ai-request';
+    type: "ai-request";
     data: {
         requestId: string;
-        command: 'continue' | 'diagram' | 'augment';
+        command: "continue" | "diagram" | "augment";
         parameters: any;
         context: {
             position: number;
@@ -56,10 +61,10 @@ export interface AIRequestMessage extends CollaborationMessage {
  * AI status update message
  */
 export interface AIStatusMessage extends CollaborationMessage {
-    type: 'ai-status';
+    type: "ai-status";
     data: {
         requestId: string;
-        status: 'started' | 'processing' | 'completed' | 'failed';
+        status: "started" | "processing" | "completed" | "failed";
         progress?: number;
         description?: string;
         estimatedCompletion?: number;
@@ -70,7 +75,7 @@ export interface AIStatusMessage extends CollaborationMessage {
  * Yjs update message
  */
 export interface YjsUpdateMessage extends CollaborationMessage {
-    type: 'yjs-update';
+    type: "yjs-update";
     data: {
         update: ArrayBuffer;
         origin?: string;
@@ -102,10 +107,12 @@ export interface CollaborationContext {
     config: CollaborationConfig;
     connected: boolean;
     userPresence: Map<string, UserPresence>;
-    onStatusChange?: (status: 'connecting' | 'connected' | 'disconnected') => void;
+    onStatusChange?: (
+        status: "connecting" | "connected" | "disconnected",
+    ) => void;
     onUserJoin?: (user: UserPresence) => void;
     onUserLeave?: (userId: string) => void;
-    onAIStatus?: (status: AIStatusMessage['data']) => void;
+    onAIStatus?: (status: AIStatusMessage["data"]) => void;
 }
 
 /**
@@ -114,7 +121,7 @@ export interface CollaborationContext {
 export interface ResolvedOperation {
     operation: any;
     position: number;
-    resolution: 'original' | 'position-adjusted' | 'content-merged' | 'skipped';
+    resolution: "original" | "position-adjusted" | "content-merged" | "skipped";
     reason?: string;
 }
 
@@ -137,7 +144,7 @@ export interface InsertionContext {
     originalPosition: number;
     surroundingText: string;
     sectionHeading?: string;
-    requestType: 'continue' | 'research' | 'diagram' | 'augment';
+    requestType: "continue" | "research" | "diagram" | "augment";
     timestamp: number;
     documentSnapshot: Uint8Array;
 }

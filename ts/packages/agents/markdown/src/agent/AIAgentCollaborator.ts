@@ -1,9 +1,9 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import * as Y from 'yjs';
-import { TypeAgentYjsProvider } from './TypeAgentYjsProvider.js';
-import { UserPresence, InsertionContext } from './collaborationTypes.js';
+import * as Y from "yjs";
+import { TypeAgentYjsProvider } from "./TypeAgentYjsProvider.js";
+import { UserPresence, InsertionContext } from "./collaborationTypes.js";
 
 /**
  * AI Agent that appears as a collaborative user in the editing session
@@ -14,11 +14,11 @@ export class AIAgentCollaborator {
     private userName: string = "AI Assistant";
     private userColor: string = "#4A90E2";
     private userAvatar: string = "🤖";
-    
+
     private collaborationProvider: TypeAgentYjsProvider;
     private activeRequests: Map<string, AIRequest> = new Map();
     private insertionContexts: Map<string, InsertionContext> = new Map();
-    
+
     constructor(collaborationProvider: TypeAgentYjsProvider) {
         this.collaborationProvider = collaborationProvider;
         this.setupAIPresence();
@@ -29,7 +29,7 @@ export class AIAgentCollaborator {
      */
     private setupAIPresence(): void {
         const context = this.collaborationProvider.getContext();
-        
+
         // Set AI user presence
         if (context.provider && context.provider.awareness) {
             const aiPresence: UserPresence = {
@@ -41,14 +41,14 @@ export class AIAgentCollaborator {
                 isAI: true,
                 status: {
                     working: false,
-                    type: 'idle',
-                    description: 'Ready to assist'
-                }
+                    type: "idle",
+                    description: "Ready to assist",
+                },
             };
-            
+
             // Add AI to user presence
             context.userPresence.set(this.userId, aiPresence);
-            
+
             // Notify of AI joining
             if (context.onUserJoin) {
                 context.onUserJoin(aiPresence);
@@ -61,56 +61,56 @@ export class AIAgentCollaborator {
      */
     async startAsyncRequest(
         requestId: string,
-        command: 'continue' | 'diagram' | 'augment',
+        command: "continue" | "diagram" | "augment",
         parameters: any,
-        position: number
+        position: number,
     ): Promise<void> {
         console.log(`🤖 AI starting async request: ${command} (${requestId})`);
-        
+
         // Capture current document state for context preservation
         const documentSnapshot = this.captureDocumentSnapshot();
         const surroundingContext = this.extractSurroundingContext(position);
-        
+
         // Create insertion context for smart positioning
         const insertionContext: InsertionContext = {
             originalPosition: position,
             surroundingText: surroundingContext.text,
             requestType: command,
             timestamp: Date.now(),
-            documentSnapshot: documentSnapshot
+            documentSnapshot: documentSnapshot,
         };
-        
+
         // Add optional section heading if available
         if (surroundingContext.section) {
             insertionContext.sectionHeading = surroundingContext.section;
         }
-        
+
         this.insertionContexts.set(requestId, insertionContext);
-        
+
         // Create AI request tracking
         const aiRequest: AIRequest = {
             id: requestId,
             command,
             parameters,
-            status: 'started',
+            status: "started",
             startTime: Date.now(),
-            insertionContext
+            insertionContext,
         };
-        
+
         this.activeRequests.set(requestId, aiRequest);
-        
+
         // Update AI presence to show working status
         this.updateAIStatus(true, command, `Processing ${command} request`);
-        
+
         // Send status to collaboration context
         if (this.collaborationProvider.getContext().onAIStatus) {
             this.collaborationProvider.getContext().onAIStatus!({
                 requestId,
-                status: 'started',
-                description: `AI started ${command} operation`
+                status: "started",
+                description: `AI started ${command} operation`,
             });
         }
-        
+
         // Start async processing
         this.processAsyncRequest(aiRequest);
     }
@@ -121,31 +121,44 @@ export class AIAgentCollaborator {
     private async processAsyncRequest(request: AIRequest): Promise<void> {
         try {
             // Update status to processing
-            this.updateRequestStatus(request.id, 'processing', 'Generating content...');
-            
+            this.updateRequestStatus(
+                request.id,
+                "processing",
+                "Generating content...",
+            );
+
             // Simulate AI processing time (replace with actual AI calls)
             const result = await this.executeAICommand(request);
-            
+
             // When AI completes, find the best insertion point
-            const currentInsertionPoint = this.findOptimalInsertionPoint(request.insertionContext);
-            
+            const currentInsertionPoint = this.findOptimalInsertionPoint(
+                request.insertionContext,
+            );
+
             // Apply AI result to document
             this.applyAIResult(result, currentInsertionPoint);
-            
+
             // Update status to completed
-            this.updateRequestStatus(request.id, 'completed', 'Content generated successfully');
-            
+            this.updateRequestStatus(
+                request.id,
+                "completed",
+                "Content generated successfully",
+            );
         } catch (error) {
             console.error(`AI request ${request.id} failed:`, error);
-            this.updateRequestStatus(request.id, 'failed', `Error: ${(error as Error).message}`);
+            this.updateRequestStatus(
+                request.id,
+                "failed",
+                `Error: ${(error as Error).message}`,
+            );
         } finally {
             // Clean up
             this.activeRequests.delete(request.id);
             this.insertionContexts.delete(request.id);
-            
+
             // Reset AI status if no more active requests
             if (this.activeRequests.size === 0) {
-                this.updateAIStatus(false, undefined, 'Ready to assist');
+                this.updateAIStatus(false, undefined, "Ready to assist");
             }
         }
     }
@@ -156,33 +169,36 @@ export class AIAgentCollaborator {
     private async executeAICommand(request: AIRequest): Promise<AIResult> {
         // For Phase 2, we'll use test responses
         // In production, this would call the actual AI agent
-        
-        await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate processing time
-        
+
+        await new Promise((resolve) => setTimeout(resolve, 2000)); // Simulate processing time
+
         switch (request.command) {
-            case 'continue':
+            case "continue":
                 return {
-                    type: 'text',
-                    content: 'This is AI-generated content that continues the document. The AI analyzed the context and generated relevant content that fits naturally with the existing text.',
-                    confidence: 0.85
+                    type: "text",
+                    content:
+                        "This is AI-generated content that continues the document. The AI analyzed the context and generated relevant content that fits naturally with the existing text.",
+                    confidence: 0.85,
                 };
-                
-            case 'diagram':
-                const description = request.parameters.description || 'process flow';
+
+            case "diagram":
+                const description =
+                    request.parameters.description || "process flow";
                 return {
-                    type: 'mermaid',
+                    type: "mermaid",
                     content: `graph TD\n    A[Start: ${description}] --> B{Decision}\n    B -->|Yes| C[Process A]\n    B -->|No| D[Process B]\n    C --> E[End]\n    D --> E`,
-                    confidence: 0.9
+                    confidence: 0.9,
                 };
-                
-            case 'augment':
-                const instruction = request.parameters.instruction || 'improve formatting';
+
+            case "augment":
+                const instruction =
+                    request.parameters.instruction || "improve formatting";
                 return {
-                    type: 'text',
+                    type: "text",
                     content: `\n> ✨ **AI Enhancement Applied**: ${instruction}\n\nThe AI has analyzed the document and applied the requested improvements. This includes better structure, formatting, and content organization.\n`,
-                    confidence: 0.8
+                    confidence: 0.8,
                 };
-                
+
             default:
                 throw new Error(`Unknown AI command: ${request.command}`);
         }
@@ -199,14 +215,17 @@ export class AIAgentCollaborator {
     /**
      * Extract surrounding context for smart insertion
      */
-    private extractSurroundingContext(position: number): { text: string; section?: string } {
+    private extractSurroundingContext(position: number): {
+        text: string;
+        section?: string;
+    } {
         const content = this.collaborationProvider.getMarkdownContent();
-        const lines = content.split('\n');
-        
+        const lines = content.split("\n");
+
         // Find the line containing the position
         let currentPos = 0;
         let lineIndex = 0;
-        
+
         for (let i = 0; i < lines.length; i++) {
             if (currentPos + lines[i].length >= position) {
                 lineIndex = i;
@@ -214,29 +233,29 @@ export class AIAgentCollaborator {
             }
             currentPos += lines[i].length + 1; // +1 for newline
         }
-        
+
         // Extract surrounding lines for context
         const startLine = Math.max(0, lineIndex - 2);
         const endLine = Math.min(lines.length - 1, lineIndex + 2);
-        const surroundingText = lines.slice(startLine, endLine + 1).join('\n');
-        
+        const surroundingText = lines.slice(startLine, endLine + 1).join("\n");
+
         // Find nearest section heading
         let sectionHeading: string | undefined;
         for (let i = lineIndex; i >= 0; i--) {
-            if (lines[i].startsWith('#')) {
+            if (lines[i].startsWith("#")) {
                 sectionHeading = lines[i];
                 break;
             }
         }
-        
+
         const result = {
-            text: surroundingText
+            text: surroundingText,
         } as { text: string; section?: string };
-        
+
         if (sectionHeading) {
             result.section = sectionHeading;
         }
-        
+
         return result;
     }
 
@@ -245,26 +264,32 @@ export class AIAgentCollaborator {
      */
     private findOptimalInsertionPoint(context: InsertionContext): number {
         const currentContent = this.collaborationProvider.getMarkdownContent();
-        
+
         // Strategy 1: Try original position if document hasn't changed much
         if (this.isOriginalPositionValid(context, currentContent)) {
             return context.originalPosition;
         }
-        
+
         // Strategy 2: Find similar context in current document
-        const similarPosition = this.findSimilarContext(context, currentContent);
+        const similarPosition = this.findSimilarContext(
+            context,
+            currentContent,
+        );
         if (similarPosition !== -1) {
             return similarPosition;
         }
-        
+
         // Strategy 3: Use section-based insertion
         if (context.sectionHeading) {
-            const sectionPosition = this.findSectionEnd(context.sectionHeading, currentContent);
+            const sectionPosition = this.findSectionEnd(
+                context.sectionHeading,
+                currentContent,
+            );
             if (sectionPosition !== -1) {
                 return sectionPosition;
             }
         }
-        
+
         // Strategy 4: Fallback to end of document
         return currentContent.length;
     }
@@ -272,34 +297,44 @@ export class AIAgentCollaborator {
     /**
      * Check if original position is still valid
      */
-    private isOriginalPositionValid(context: InsertionContext, currentContent: string): boolean {
-        const originalLines = context.surroundingText.split('\n');
-        
+    private isOriginalPositionValid(
+        context: InsertionContext,
+        currentContent: string,
+    ): boolean {
+        const originalLines = context.surroundingText.split("\n");
+
         // Simple heuristic: check if surrounding text still exists nearby
-        const contextText = originalLines.slice(1, -1).join('\n'); // Remove first/last lines for fuzzy matching
+        const contextText = originalLines.slice(1, -1).join("\n"); // Remove first/last lines for fuzzy matching
         return currentContent.includes(contextText);
     }
 
     /**
      * Find similar context in current document
      */
-    private findSimilarContext(context: InsertionContext, currentContent: string): number {
-        const lines = currentContent.split('\n');
-        const originalLines = context.surroundingText.split('\n');
-        
+    private findSimilarContext(
+        context: InsertionContext,
+        currentContent: string,
+    ): number {
+        const lines = currentContent.split("\n");
+        const originalLines = context.surroundingText.split("\n");
+
         // Look for the most distinctive line from the original context
-        const searchLine = originalLines.find(line => line.trim().length > 10);
+        const searchLine = originalLines.find(
+            (line) => line.trim().length > 10,
+        );
         if (!searchLine) return -1;
-        
-        const foundIndex = lines.findIndex(line => line.includes(searchLine.trim()));
+
+        const foundIndex = lines.findIndex((line) =>
+            line.includes(searchLine.trim()),
+        );
         if (foundIndex === -1) return -1;
-        
+
         // Return position at end of found line
         let position = 0;
         for (let i = 0; i <= foundIndex; i++) {
             position += lines[i].length + 1; // +1 for newline
         }
-        
+
         return position;
     }
 
@@ -307,12 +342,12 @@ export class AIAgentCollaborator {
      * Find end of section for section-based insertion
      */
     private findSectionEnd(sectionHeading: string, content: string): number {
-        const lines = content.split('\n');
+        const lines = content.split("\n");
         const headingLevel = sectionHeading.match(/^#+/)?.[0].length || 1;
-        
+
         let sectionStartIndex = -1;
         let sectionEndIndex = lines.length;
-        
+
         // Find section start
         for (let i = 0; i < lines.length; i++) {
             if (lines[i].trim() === sectionHeading.trim()) {
@@ -320,13 +355,13 @@ export class AIAgentCollaborator {
                 break;
             }
         }
-        
+
         if (sectionStartIndex === -1) return -1;
-        
+
         // Find section end (next heading of same or higher level)
         for (let i = sectionStartIndex + 1; i < lines.length; i++) {
             const line = lines[i];
-            if (line.startsWith('#')) {
+            if (line.startsWith("#")) {
                 const currentLevel = line.match(/^#+/)?.[0].length || 1;
                 if (currentLevel <= headingLevel) {
                     sectionEndIndex = i;
@@ -334,13 +369,13 @@ export class AIAgentCollaborator {
                 }
             }
         }
-        
+
         // Return position at end of section
         let position = 0;
         for (let i = 0; i < sectionEndIndex; i++) {
             position += lines[i].length + 1;
         }
-        
+
         return position;
     }
 
@@ -349,46 +384,52 @@ export class AIAgentCollaborator {
      */
     private applyAIResult(result: AIResult, position: number): void {
         let insertText: string;
-        
+
         switch (result.type) {
-            case 'text':
+            case "text":
                 insertText = `\n${result.content}\n`;
                 break;
-            case 'mermaid':
+            case "mermaid":
                 insertText = `\n\`\`\`mermaid\n${result.content}\n\`\`\`\n`;
                 break;
             default:
                 insertText = `\n${result.content}\n`;
         }
-        
+
         // Apply to Yjs document (this will sync to all users)
         this.collaborationProvider.applyTextOperation(position, insertText);
-        
-        console.log(`🤖 AI applied ${result.type} content at position ${position}`);
+
+        console.log(
+            `🤖 AI applied ${result.type} content at position ${position}`,
+        );
     }
 
     /**
      * Update AI presence status
      */
-    private updateAIStatus(working: boolean, type?: string, description?: string): void {
+    private updateAIStatus(
+        working: boolean,
+        type?: string,
+        description?: string,
+    ): void {
         const context = this.collaborationProvider.getContext();
         const aiPresence = context.userPresence.get(this.userId);
-        
+
         if (aiPresence) {
             const statusUpdate = {
-                working
+                working,
             } as { working: boolean; type?: string; description?: string };
-            
+
             if (type) {
                 statusUpdate.type = type;
             }
             if (description) {
                 statusUpdate.description = description;
             }
-            
+
             aiPresence.status = statusUpdate;
             aiPresence.lastSeen = Date.now();
-            
+
             context.userPresence.set(this.userId, aiPresence);
         }
     }
@@ -396,18 +437,22 @@ export class AIAgentCollaborator {
     /**
      * Update request status and notify collaboration context
      */
-    private updateRequestStatus(requestId: string, status: 'started' | 'processing' | 'completed' | 'failed', description: string): void {
+    private updateRequestStatus(
+        requestId: string,
+        status: "started" | "processing" | "completed" | "failed",
+        description: string,
+    ): void {
         const request = this.activeRequests.get(requestId);
         if (request) {
             request.status = status;
         }
-        
+
         // Notify collaboration context
         if (this.collaborationProvider.getContext().onAIStatus) {
             this.collaborationProvider.getContext().onAIStatus!({
                 requestId,
                 status,
-                description
+                description,
             });
         }
     }
@@ -416,7 +461,9 @@ export class AIAgentCollaborator {
      * Get current AI status for UI display
      */
     getAIStatus(): UserPresence | undefined {
-        return this.collaborationProvider.getContext().userPresence.get(this.userId);
+        return this.collaborationProvider
+            .getContext()
+            .userPresence.get(this.userId);
     }
 
     /**
@@ -432,9 +479,9 @@ export class AIAgentCollaborator {
  */
 interface AIRequest {
     id: string;
-    command: 'continue' | 'diagram' | 'augment';
+    command: "continue" | "diagram" | "augment";
     parameters: any;
-    status: 'started' | 'processing' | 'completed' | 'failed';
+    status: "started" | "processing" | "completed" | "failed";
     startTime: number;
     insertionContext: InsertionContext;
 }
@@ -443,7 +490,7 @@ interface AIRequest {
  * AI Result interface
  */
 interface AIResult {
-    type: 'text' | 'mermaid' | 'code';
+    type: "text" | "mermaid" | "code";
     content: string;
     confidence: number;
 }

@@ -2,9 +2,9 @@
 // Licensed under the MIT License.
 
 // Document operation types for incremental updates to ProseMirror documents
-export type DocumentOperation = 
-    | InsertOperation 
-    | DeleteOperation 
+export type DocumentOperation =
+    | InsertOperation
+    | DeleteOperation
     | ReplaceOperation
     | FormatOperation;
 
@@ -12,7 +12,7 @@ export type DocumentOperation =
 export type InsertOperation = {
     type: "insert";
     // Position in the ProseMirror document where content should be inserted
-    position: number; 
+    position: number;
     // Content to insert in a simplified format that can be converted to ProseMirror nodes
     content: ContentItem[];
     // Human-readable description of what is being inserted
@@ -24,7 +24,7 @@ export type DeleteOperation = {
     type: "delete";
     // Start position of content to delete
     from: number;
-    // End position of content to delete  
+    // End position of content to delete
     to: number;
     // Human-readable description of what is being deleted
     description?: string;

@@ -18,6 +18,7 @@ export class AIAgentManager {
     private editor: Editor | null = null;
     private notificationManager: any = null;
     private aiPresenceIndicator: HTMLElement | null = null;
+    private isTestMode: boolean = false; // Track test mode to prevent duplicate content
 
     public setEditor(editor: Editor): void {
         this.editor = editor;
@@ -50,6 +51,9 @@ export class AIAgentManager {
         params: AgentCommandParams,
     ): Promise<void> {
         const request = this.buildAgentRequest(command, params);
+        
+        // Track test mode to prevent duplicate content insertion
+        this.isTestMode = params.testMode || false;
 
         // Show AI presence cursor
         this.showAIPresence(true);
@@ -130,7 +134,15 @@ export class AIAgentManager {
                 break;
 
             case "content":
-                // Insert content chunk at position
+                // Skip content events for test mode commands to prevent duplicate content
+                // Test mode sends both content chunks AND operations, but we only want operations
+                if (this.isTestMode) {
+                    console.log("🚫 Skipping content chunk in test mode to prevent duplicate:", 
+                        data.chunk?.substring(0, 50) + "...");
+                    break;
+                }
+                
+                // Insert content chunk at position for non-test content
                 if (this.editor && data.chunk) {
                     await insertContentChunk(
                         this.editor,
@@ -149,11 +161,13 @@ export class AIAgentManager {
 
             case "complete":
                 console.log("✅ Stream completed");
+                this.isTestMode = false; // Reset test mode flag
                 break;
 
             case "error":
                 console.error("❌ Stream error:", data.error);
                 this.showNotification(`Stream error: ${data.error}`, "error");
+                this.isTestMode = false; // Reset test mode flag on error
                 break;
         }
     }

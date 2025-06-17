@@ -9,19 +9,9 @@ export class ToolbarManager {
     }
 
     public async initialize(): Promise<void> {
-        this.setupSaveButton();
         this.setupOpenButton();
         this.setupExportButton();
         this.setupShareButton();
-    }
-
-    private setupSaveButton(): void {
-        const saveBtn = getElementById("save-btn");
-        if (saveBtn) {
-            saveBtn.addEventListener("click", () => {
-                this.triggerSave();
-            });
-        }
     }
 
     private setupOpenButton(): void {
@@ -157,14 +147,6 @@ export class ToolbarManager {
             } catch (fallbackError) {
                 this.showNotification("❌ Failed to generate share link", "error");
             }
-        }
-    }
-
-    public async triggerSave(): Promise<void> {
-        try {
-            await this.documentManager.saveDocument();
-        } catch (error) {
-            console.error("Save failed:", error);
         }
     }
 }

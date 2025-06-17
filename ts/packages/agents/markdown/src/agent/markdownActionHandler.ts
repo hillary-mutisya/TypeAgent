@@ -23,44 +23,6 @@ import { AIAgentCollaborator } from "./AIAgentCollaborator.js";
 import { AsyncResearchHandler } from "./AsyncResearchHandler.js";
 import { LLMIntegrationService, DEFAULT_LLM_CONFIG } from "./LLMIntegrationService.js";
 import { UICommandResult } from "./ipcTypes.js";
-import findConfig from "find-config";
-import dotenv from "dotenv";
-
-// Load environment variables from .env file if needed
-if (!process.env["AZURE_OPENAI_ENDPOINT"] && !process.env["OPENAI_ENDPOINT"]) {
-    const dotEnvPath = findConfig(".env");
-    if (dotEnvPath) {
-        console.log(`🔧 [Action Handler] Loading environment variables from: ${dotEnvPath}`);
-        dotenv.config({ path: dotEnvPath });
-    } else {
-        console.log("⚠️ [Action Handler] No .env file found, using system environment variables");
-    }
-}
-
-// Debug: Log Azure OpenAI configuration status in action handler
-console.log("🔍 [Action Handler] Azure OpenAI Configuration Debug:");
-const azureEnvVars = [
-    'AZURE_OPENAI_API_KEY',
-    'AZURE_OPENAI_API_INSTANCE_NAME', 
-    'AZURE_OPENAI_API_DEPLOYMENT_NAME',
-    'AZURE_OPENAI_API_VERSION',
-    'AZURE_OPENAI_ENDPOINT'
-];
-
-azureEnvVars.forEach(varName => {
-    const value = process.env[varName];
-    if (value) {
-        // Show partial value for security
-        const maskedValue = varName.includes('KEY') 
-            ? `${value.substring(0, 8)}...` 
-            : value;
-        console.log(`✅ [Action Handler] ${varName}: ${maskedValue}`);
-    } else {
-        console.log(`❌ [Action Handler] ${varName}: NOT SET`);
-    }
-});
-
-console.log("🔧 [Action Handler] Environment configuration check complete.\n");
 
 export function instantiate(): AppAgent {
     return {

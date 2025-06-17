@@ -21,12 +21,16 @@ export const EDITOR_CONFIG = {
     },
 
     STORAGE_KEYS: {
-        THEME: "theme",
+        THEME: "markdown-editor-theme",
     },
 
     THEMES: {
         LIGHT: "light",
         DARK: "dark",
+        NORD: "nord",
+        DRACULA: "dracula",
+        GITHUB: "github",
+        MATERIAL: "material",
     },
 } as const;
 

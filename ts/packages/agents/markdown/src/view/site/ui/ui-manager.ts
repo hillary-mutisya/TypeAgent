@@ -36,12 +36,7 @@ export class UIManager {
     }
 
     private setupKeyboardShortcuts(): void {
-        document.addEventListener("keydown", (e) => {
-            // Ctrl+S to save
-            if (e.ctrlKey && e.key === "s") {
-                e.preventDefault();
-                this.toolbarManager.triggerSave();
-            }
-        });
+        // Auto-save handles document saving automatically
+        // Future keyboard shortcuts can be added here
     }
 }

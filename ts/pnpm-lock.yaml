@@ -1414,18 +1414,12 @@ importers:
       common-utils:
         specifier: workspace:*
         version: link:../../commonUtils
-      dotenv:
-        specifier: ^16.3.1
-        version: 16.5.0
       express:
         specifier: ^4.21.2
         version: 4.21.2
       express-rate-limit:
         specifier: ^7.5.0
         version: 7.5.0(express@4.21.2)
-      find-config:
-        specifier: ^1.0.0
-        version: 1.0.0
       katex:
         specifier: ^0.16.21
         version: 0.16.22
@@ -1475,9 +1469,6 @@ importers:
       '@types/express':
         specifier: ^4.17.17
         version: 4.17.21
-      '@types/find-config':
-        specifier: 1.0.4
-        version: 1.0.4
       '@types/jest':
         specifier: ^29.5.7
         version: 29.5.14

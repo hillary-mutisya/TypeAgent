@@ -88,6 +88,7 @@ async function switchToDocument(documentName: string): Promise<void> {
         }
 
         const result = await response.json();
+        console.log(result);
         
         // Update the page title to include document name
         document.title = `${documentName} - AI-Enhanced Markdown Editor`;
@@ -119,7 +120,6 @@ function setupManagerDependencies(editor: any): void {
 
     // Connect editor to AI agent manager
     aiAgentManager.setEditor(editor);
-}
 }
 
 function setupGlobalAccess(editor: any): void {

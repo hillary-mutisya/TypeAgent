@@ -3,17 +3,6 @@
 
 import { MarkdownAgent } from "./translator.js";
 import { MarkdownUpdateResult, DocumentOperation } from "./markdownOperationSchema.js";
-import findConfig from "find-config";
-import dotenv from "dotenv";
-
-// Load environment variables from .env file if needed
-if (!process.env["AZURE_OPENAI_ENDPOINT"] && !process.env["OPENAI_ENDPOINT"]) {
-    const dotEnvPath = findConfig(".env");
-    if (dotEnvPath) {
-        console.log(`🔧 [LLMIntegrationService] Loading environment variables from: ${dotEnvPath}`);
-        dotenv.config({ path: dotEnvPath });
-    }
-}
 
 /**
  * Core service that bridges AI commands with real LLM integration

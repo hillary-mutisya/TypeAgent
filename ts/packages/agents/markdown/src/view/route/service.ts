@@ -12,8 +12,6 @@ import { CollaborationManager } from "./collaborationManager.js";
 import { fileURLToPath } from "url";
 import path from "path";
 import fs from "fs";
-import findConfig from "find-config";
-import dotenv from "dotenv";
 
 const app: Express = express();
 const port = parseInt(process.argv[2]);
@@ -210,56 +208,6 @@ function performAutoSave(): void {
 
 // Initialize collaboration manager
 collaborationManager = new CollaborationManager();
-
-if (!process.env["AZURE_OPENAI_ENDPOINT"] && !process.env["OPENAI_ENDPOINT"]) {
-    const dotEnvPath = findConfig(".env");
-    if (dotEnvPath) {
-        console.log(`🔧 Loading environment variables from: ${dotEnvPath}`);
-        dotenv.config({ path: dotEnvPath });
-    } else {
-        console.log("⚠️ No .env file found, using system environment variables");
-    }
-}
-
-// Debug: Log Azure OpenAI configuration status
-console.log("🔍 Azure OpenAI Configuration Debug:");
-const azureEnvVars = [
-    'AZURE_OPENAI_API_KEY',
-    'AZURE_OPENAI_API_INSTANCE_NAME', 
-    'AZURE_OPENAI_API_DEPLOYMENT_NAME',
-    'AZURE_OPENAI_API_VERSION',
-    'AZURE_OPENAI_ENDPOINT'
-];
-
-azureEnvVars.forEach(varName => {
-    const value = process.env[varName];
-    if (value) {
-        // Show partial value for security (first 8 chars + ...)
-        const maskedValue = varName.includes('KEY') 
-            ? `${value.substring(0, 8)}...` 
-            : value;
-        console.log(`✅ ${varName}: ${maskedValue}`);
-    } else {
-        console.log(`❌ ${varName}: NOT SET`);
-    }
-});
-
-// Also check OpenAI configuration as fallback
-console.log("🔍 OpenAI Configuration Debug:");
-const openaiEnvVars = ['OPENAI_API_KEY', 'OPENAI_ENDPOINT'];
-openaiEnvVars.forEach(varName => {
-    const value = process.env[varName];
-    if (value) {
-        const maskedValue = varName.includes('KEY') 
-            ? `${value.substring(0, 8)}...` 
-            : value;
-        console.log(`✅ ${varName}: ${maskedValue}`);
-    } else {
-        console.log(`❌ ${varName}: NOT SET`);
-    }
-});
-
-console.log("🔧 Environment configuration check complete.\n");
 
 app.get("/preview", (req: Request, res: Response) => {
     if (!filePath) {

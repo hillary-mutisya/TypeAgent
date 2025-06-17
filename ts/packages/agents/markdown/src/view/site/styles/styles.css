@@ -3,6 +3,14 @@ Copyright (c) Microsoft Corporation.
 Licensed under the MIT License.
 */
 
+/* Theme System CSS Variables */
+:root {
+  --page-background: #ffffff;
+  --page-text: #1a1a1a;
+  --toolbar-background: #f5f5f5;
+  --border-color: #ddd;
+}
+
 body {
   font-family: Arial, sans-serif;
   margin: 0;
@@ -10,15 +18,238 @@ body {
   height: 100vh;
   display: flex;
   flex-direction: column;
+  background-color: var(--page-background);
+  color: var(--page-text);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 #toolbar {
-  background: #f5f5f5;
-  border-bottom: 1px solid #ddd;
-  padding: 8px;
+  background: var(--toolbar-background);
+  border-bottom: 1px solid var(--border-color);
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.toolbar-section {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.toolbar-left {
+  flex: 1;
+}
+
+.toolbar-right {
+  flex: 0;
+}
+
+.icon-button {
+  background: none;
+  border: none;
+  padding: 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  color: #555;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  position: relative;
+}
+
+.icon-button:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #333;
+  transform: translateY(-1px);
+}
+
+.icon-button:active {
+  transform: scale(0.95);
+}
+
+.dark-theme .icon-button {
+  color: #ccc;
+}
+
+.dark-theme .icon-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+/* Theme Menu Styles */
+.theme-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 8px;
+  min-width: 160px;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-8px);
+  transition: all 0.2s ease;
+}
+
+.theme-menu.show {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.theme-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  font-size: 14px;
+}
+
+.theme-option:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.theme-option.active {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+.theme-preview {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+}
+
+/* Theme Preview Colors */
+.light-preview {
+  background: linear-gradient(135deg, #ffffff 50%, #f8f9fa 50%);
+}
+
+.dark-preview {
+  background: linear-gradient(135deg, #1a1a1a 50%, #2d2d2d 50%);
+}
+
+.nord-preview {
+  background: linear-gradient(135deg, #2e3440 50%, #3b4252 50%);
+}
+
+.dracula-preview {
+  background: linear-gradient(135deg, #282a36 50%, #44475a 50%);
+}
+
+.github-preview {
+  background: linear-gradient(135deg, #ffffff 50%, #f6f8fa 50%);
+}
+
+.material-preview {
+  background: linear-gradient(135deg, #263238 50%, #37474f 50%);
+}
+
+/* Theme Specific Styles */
+.theme-dark {
+  --page-background: #1a1a1a;
+  --page-text: #e0e0e0;
+  --toolbar-background: #2d2d2d;
+  --border-color: #444;
+}
+
+.theme-nord {
+  --page-background: #2e3440;
+  --page-text: #d8dee9;
+  --toolbar-background: #3b4252;
+  --border-color: #4c566a;
+}
+
+.theme-dracula {
+  --page-background: #282a36;
+  --page-text: #f8f8f2;
+  --toolbar-background: #44475a;
+  --border-color: #6272a4;
+}
+
+.theme-github {
+  --page-background: #ffffff;
+  --page-text: #24292f;
+  --toolbar-background: #f6f8fa;
+  --border-color: #d0d7de;
+}
+
+.theme-material {
+  --page-background: #263238;
+  --page-text: #eeffff;
+  --toolbar-background: #37474f;
+  --border-color: #546e7a;
+}
+
+/* Legacy dark-theme class support */
+.dark-theme {
+  --page-background: #1a1a1a;
+  --page-text: #e0e0e0;
+  --toolbar-background: #2d2d2d;
+  --border-color: #444;
+}
+
+/* Dark theme styles for menu and icons */
+.theme-dark .theme-menu,
+.dark-theme .theme-menu {
+  background: #2d2d2d;
+  border-color: #444;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.theme-dark .theme-option,
+.dark-theme .theme-option {
+  color: #ccc;
+}
+
+.theme-dark .theme-option:hover,
+.dark-theme .theme-option:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.theme-dark .theme-option.active,
+.dark-theme .theme-option.active {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+}
+
+.theme-dark .icon-button,
+.dark-theme .icon-button {
+  color: #ccc;
+}
+
+.theme-dark .icon-button:hover,
+.dark-theme .icon-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.dark-theme .theme-option {
+  color: #ccc;
+}
+
+.dark-theme .theme-option:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dark-theme .theme-option.active {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
 }
 
 #editor-container {
@@ -158,10 +389,15 @@ body {
 
   .toolbar-section {
     width: 100%;
-    justify-content: space-between;
+    justify-content: center;
   }
 
-  .toolbar-section:first-child {
+  .toolbar-left {
+    order: 2;
+  }
+
+  .toolbar-right {
+    order: 1;
     justify-content: center;
   }
 
@@ -183,13 +419,9 @@ body {
     padding: 0.75rem;
   }
 
-  .toolbar-section h1 {
-    font-size: 1rem;
-  }
-
-  #toolbar button {
-    font-size: 0.75rem;
-    padding: 0.375rem 0.75rem;
+  .icon-button {
+    padding: 6px;
+    font-size: 14px;
   }
 
   #preview {
@@ -211,7 +443,7 @@ body {
 }
 
 /* Focus styles for keyboard navigation */
-#toolbar button:focus {
+.icon-button:focus {
   outline: 2px solid #4299e1;
   outline-offset: 2px;
 }
@@ -454,25 +686,6 @@ body {
   flex: 1;
   min-width: 0;
   transition: all 0.3s ease;
-}
-
-/* Share button styling */
-#share-btn {
-  background: #059669;
-  color: white;
-  border: none;
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  margin-right: 8px;
-}
-
-#share-btn:hover {
-  background: #047857;
-  transform: translateY(-1px);
 }
 
 /* Collaboration status styling */

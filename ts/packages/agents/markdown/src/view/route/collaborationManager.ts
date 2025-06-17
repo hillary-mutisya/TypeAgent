@@ -70,18 +70,6 @@ export class CollaborationManager {
     }
 
     /**
-     * Get document content as string
-     */
-    getDocumentContent(documentId: string): string {
-        const ydoc = this.documents.get(documentId);
-        if (ydoc) {
-            const ytext = ydoc.getText("content");
-            return ytext.toString();
-        }
-        return "";
-    }
-
-    /**
      * Set document content from string
      */
     setDocumentContent(documentId: string, content: string): void {

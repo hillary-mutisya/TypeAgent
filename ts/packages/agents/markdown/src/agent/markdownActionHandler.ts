@@ -66,10 +66,18 @@ export function instantiate(): AppAgent {
     return {
         initializeAgentContext: initializeMarkdownContext,
         updateAgentContext: updateMarkdownContext,
-        executeAction: executeMarkdownAction,
+        executeAction: executeMarkdownAction, // Wrapper function
         validateWildcardMatch: markdownValidateWildcardMatch,
         streamPartialAction: streamPartialMarkdownAction,
     };
+}
+
+async function executeMarkdownAction(
+    action: AppAction,
+    context: ActionContext<MarkdownActionContext>,
+) {
+    let result = await handleMarkdownAction(action as MarkdownAction, context);
+    return result;
 }
 
 type MarkdownActionContext = {
@@ -98,7 +106,6 @@ async function handleUICommand(
             actionName: "updateDocument",
             parameters: {
                 originalRequest: parameters.originalRequest,
-                aiCommand: command,
             }
         };
         
@@ -107,8 +114,8 @@ async function handleUICommand(
         
         return {
             success: true,
-            operations: result.data?.operations || [],
-            message: result.data?.operationSummary || "Command completed successfully",
+            operations: ((result as any).data)?.operations || [],
+            message: ((result as any).data)?.operationSummary || "Command completed successfully",
             type: "success"
         };
         
@@ -216,6 +223,21 @@ function handleValidationFeedback(
             kind: "info"
         }, "block");
     }
+}
+
+async function handleUICommandViaIPC(message: any, agentContext: MarkdownActionContext): Promise<UICommandResult> {
+    // Create minimal action context for UI commands
+    const actionContext = {
+        sessionContext: {
+            agentContext: agentContext,
+        }
+    } as ActionContext<MarkdownActionContext>;
+    
+    return await handleUICommand(
+        message.command,
+        message.parameters,
+        actionContext
+    );
 }
 
 async function markdownValidateWildcardMatch(
@@ -427,9 +449,9 @@ async function handleMarkdownAction(
             result = createActionResult("Updating document ...");
 
             const filePath = `${actionContext.sessionContext.agentContext.currentFileName}`;
-            let markdownContent;
+            let markdownContent = "";
             if (await storage?.exists(filePath)) {
-                markdownContent = await storage?.read(filePath, "utf8");
+                markdownContent = await storage?.read(filePath, "utf8") || "";
                 console.log("🔍 [PHASE1] Read content from storage:", markdownContent?.length, "chars");
             }
 

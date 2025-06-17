@@ -109,23 +109,11 @@ app.post("/api/switch-document", express.json(), (req: Request, res: Response) =
     }
 });
 
-// NEW: Enhanced operation application in view process
-function applyLLMOperationsToCollaboration(operations: DocumentOperation[]): void {
-    console.log("📝 [VIEW] Applying LLM operations to collaboration document:", operations.length);
-    
-    // Apply operations to local Yjs document (SINGLE SOURCE OF TRUTH)
-    for (const operation of operations) {
-        collaborationManager.applyOperation(operation);
-    }
-    
-    // AUTO-SAVE: Trigger async save to disk (non-blocking)
-    scheduleAutoSave();
-    
-    // Notify frontend clients via SSE (Yjs also syncs via y-websocket)
-    renderFileToClients(filePath);
-    
-    console.log("✅ [VIEW] Operations applied successfully");
-}
+// Initialize Markdown It
+const md = new MarkdownIt();
+md.use(GeoJSONPlugin);
+md.use(MermaidPlugin);
+md.use(LatexPlugin);
 md.use(GeoJSONPlugin);
 md.use(MermaidPlugin);
 md.use(LatexPlugin);
@@ -134,43 +122,9 @@ let clients: any[] = [];
 let filePath: string;
 let collaborationManager: CollaborationManager;
 
-// NEW: Auto-save mechanism
-let autoSaveTimer: NodeJS.Timeout | null = null;
-const AUTO_SAVE_DELAY = 2000; // 2 seconds after last change
-
-function scheduleAutoSave(): void {
-    // Cancel previous timer
-    if (autoSaveTimer) {
-        clearTimeout(autoSaveTimer);
-    }
-    
-    // Schedule new save
-    autoSaveTimer = setTimeout(() => {
-        performAutoSave();
-    }, AUTO_SAVE_DELAY);
-}
-
-function performAutoSave(): void {
-    if (!filePath) return;
-    
-    try {
-        const documentId = path.basename(filePath, ".md");
-        const updatedContent = collaborationManager.getDocumentContent(documentId);
-        
-        fs.writeFileSync(filePath, updatedContent, "utf-8");
-        console.log("💾 [AUTO-SAVE] Document saved to disk");
-        
-        // Notify clients of save status
-        clients.forEach((client) => {
-            client.write(`data: ${JSON.stringify({
-                type: "autoSave",
-                timestamp: Date.now()
-            })}\n\n`);
-        });
-    } catch (error) {
-        console.error("❌ [AUTO-SAVE] Failed to save document:", error);
-    }
-}
+// TODO: Auto-save mechanism will be implemented in Phase 6
+// let autoSaveTimer: NodeJS.Timeout | null = null;
+// const AUTO_SAVE_DELAY = 2000; // 2 seconds after last change
 
 // NEW: UI Command routing state
 let commandCounter = 0;

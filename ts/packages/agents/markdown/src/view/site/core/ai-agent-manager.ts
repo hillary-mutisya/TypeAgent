@@ -148,13 +148,13 @@ export class AIAgentManager {
                 break;
 
             case "complete":
-                this.hideAIPresence();
+                this.showAIPresence(false);
                 console.log("✅ Stream completed");
                 break;
 
             case "error":
                 this.showNotification((data as any).error, "error");
-                this.hideAIPresence();
+                this.showAIPresence(false);
                 break;
 
             // LEGACY: Keep old handlers for backward compatibility during transition

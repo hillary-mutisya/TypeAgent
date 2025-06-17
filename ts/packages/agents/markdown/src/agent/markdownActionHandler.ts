@@ -92,7 +92,6 @@ type MarkdownActionContext = {
     llmService?: LLMIntegrationService | undefined;
 };
 
-// NEW: Handle UI commands sent from view process (Flow 2)
 async function handleUICommand(
     command: string,
     parameters: any,
@@ -101,7 +100,7 @@ async function handleUICommand(
     console.log(`🖥️ [AGENT] Processing UI command: ${command}`);
     
     try {
-        // Build action from UI command (similar to CLI action building)
+        // Build action from UI command
         const action: MarkdownAction = {
             actionName: "updateDocument",
             parameters: {
@@ -109,7 +108,6 @@ async function handleUICommand(
             }
         };
         
-        // Use existing LLM integration (same as Flow 1)
         const result = await handleMarkdownAction(action, context);
         
         return {
@@ -451,45 +449,30 @@ async function handleMarkdownAction(
             const filePath = `${actionContext.sessionContext.agentContext.currentFileName}`;
             let markdownContent = "";
             
-            // NEW (Flow 1): Get content from view process (single source of truth)
             if (actionContext.sessionContext.agentContext.viewProcess) {
                 try {
                     markdownContent = await getDocumentContentFromView(
                         actionContext.sessionContext.agentContext.viewProcess
                     );
-                    console.log("🔍 [FLOW1] Got content from view process:", markdownContent?.length, "chars");
+                    console.log("🔍 Got content from view process:", markdownContent?.length, "chars");
                 } catch (error) {
-                    console.warn("⚠️ [FLOW1] Failed to get content from view, falling back to storage:", error);
+                    console.warn("⚠️ Failed to get content from view, falling back to storage:", error);
                     // Fallback to storage only if view process fails
                     if (await storage?.exists(filePath)) {
                         markdownContent = await storage?.read(filePath, "utf8") || "";
-                        console.log("🔍 [FLOW1] Fallback: Read content from storage:", markdownContent?.length, "chars");
+                        console.log("🔍 Fallback: Read content from storage:", markdownContent?.length, "chars");
                     }
                 }
             } else {
                 // Fallback if no view process
                 if (await storage?.exists(filePath)) {
                     markdownContent = await storage?.read(filePath, "utf8") || "";
-                    console.log("🔍 [FLOW1] No view process, read content from storage:", markdownContent?.length, "chars");
+                    console.log("🔍 No view process, read content from storage:", markdownContent?.length, "chars");
                 }
             }
 
-            // OLD (Flow 1 removal): No longer read from storage by default
-            // if (await storage?.exists(filePath)) {
-            //     markdownContent = await storage?.read(filePath, "utf8") || "";
-            //     console.log("🔍 [PHASE1] Read content from storage:", markdownContent?.length, "chars");
-            // }
-
-            // Use collaboration provider if available (Flow 1: no longer used for content retrieval)
-            // const collaborationProvider = actionContext.sessionContext.agentContext.collaborationProvider;
             const researchHandler =
                 actionContext.sessionContext.agentContext.researchHandler;
-
-            // OLD (Flow 1 removal): No longer get content from collaboration provider in agent
-            // if (collaborationProvider) {
-            //     markdownContent = collaborationProvider.getMarkdownContent();
-            //     console.log("🔍 [PHASE1] Got content from collaboration provider:", markdownContent?.length, "chars");
-            // }
 
             // Check if this is an AI command that should be handled asynchronously
             const request = action.parameters.originalRequest;
@@ -520,9 +503,9 @@ async function handleMarkdownAction(
                         updateResult.operations &&
                         updateResult.operations.length > 0
                     ) {
-                        // NEW (Flow 1): Send operations to view process for application
+                        // Send operations to view process for application
                         if (actionContext.sessionContext.agentContext.viewProcess) {
-                            console.log("🔍 [FLOW1] Agent sending operations to view process for Yjs application");
+                            console.log("🔍 Agent sending operations to view process for Yjs application");
                             
                             const success = await sendOperationsToView(
                                 actionContext.sessionContext.agentContext.viewProcess,
@@ -533,17 +516,10 @@ async function handleMarkdownAction(
                                 throw new Error("Failed to apply operations in view process");
                             }
                             
-                            console.log("✅ [FLOW1] Operations applied successfully via view process");
+                            console.log("✅ Operations applied successfully via view process");
                         } else {
-                            console.warn("⚠️ [FLOW1] No view process available, operations not applied");
+                            console.warn("⚠️ No view process available, operations not applied");
                         }
-                        
-                        // OLD (Flow 1 removal): No longer apply operations directly in agent
-                        // if (collaborationProvider) {
-                        //     applyOperationsToYjsDocument(collaborationProvider, updateResult.operations);
-                        //     const updatedContent = collaborationProvider.getMarkdownContent();
-                        //     await storage?.write(filePath, updatedContent);
-                        // }
                     }
 
                     if (updateResult.operationSummary) {
@@ -1090,7 +1066,7 @@ function contentItemToText(item: any): string {
     }
 }
 
-// NEW: Global process message handler for UI commands (Flow 2)
+// Global process message handler for UI commands
 // This is a simplified version - in a full implementation, this would be properly 
 // integrated with the TypeAgent framework's message handling
 let currentAgentContext: MarkdownActionContext | null = null;

@@ -87,9 +87,6 @@ const mermaidNode = $node("mermaid", () => ({
             const code = node.textContent || node.attrs.code || "";
             // Don't serialize empty mermaid nodes to prevent round-trip issues
             if (!code.trim()) {
-                console.log(
-                    "⏭️ Skipping empty mermaid node in markdown serialization",
-                );
                 return;
             }
             state.addNode("code", undefined, code, { lang: "mermaid" });
@@ -138,19 +135,12 @@ const mermaidLiveParser = $prose(() => {
 
                             tr.replaceWith(pos, pos + node.nodeSize, newNode);
                             foundChanges = true;
-                            console.log(
-                                "🎉 Converting mermaid block:",
-                                mermaidCode.substring(0, 50) + "...",
-                            );
                             return false;
                         }
                     }
                 }
                 // IMPORTANT: Don't process existing mermaid nodes to avoid destroying them
                 else if (node.type.name === "mermaid") {
-                    console.log(
-                        "⏭️ Live parser skipping existing mermaid node to prevent destruction",
-                    );
                     return false;
                 }
             });
@@ -165,7 +155,6 @@ const mermaidBlockInputRule = $inputRule(() => {
     return new InputRule(
         /```mermaid\s*\n([\s\S]*?)\n\s*```\s*$/,
         (state: any, match: any, start: any, end: any) => {
-            console.log("📝 Mermaid block input rule triggered");
             const mermaidCode = match[1]?.trim() || "";
             const $start = state.doc.resolve(start);
             const nodeType = state.schema.nodes.mermaid;
@@ -206,7 +195,6 @@ const mermaidEmptyInputRule = $inputRule(() => {
             const nodeType = state.schema.nodes.mermaid;
 
             if (!nodeType) {
-                console.log("❌ No mermaid node type found");
                 return null;
             }
 
@@ -219,9 +207,6 @@ const mermaidEmptyInputRule = $inputRule(() => {
                         nodeType,
                     )
             ) {
-                console.log(
-                    "❌ Cannot replace with mermaid node at this position",
-                );
                 return null;
             }
 
@@ -231,9 +216,7 @@ const mermaidEmptyInputRule = $inputRule(() => {
                 state.schema.text(placeholderCode),
             ]);
 
-            console.log("✅ Creating stable mermaid node with placeholder");
             const transaction = state.tr.replaceRangeWith(start, end, node);
-            console.log("📝 Transaction will be dispatched...");
 
             return transaction;
         },
@@ -273,21 +256,13 @@ const mermaidRenderer = $prose(() => {
                     let lastCode = "";
 
                     const renderDiagram = async (code: string) => {
-                        console.log(
-                            "🎨 renderDiagram called with code:",
-                            JSON.stringify(code),
-                        );
                         if (!code.trim()) {
                             diagramContainer.innerHTML =
                                 '<div class="mermaid-empty">Click to add Mermaid diagram</div>';
-                            console.log(
-                                "📝 Rendered empty mermaid placeholder",
-                            );
                             return;
                         }
 
                         if (code === lastCode) {
-                            console.log("⏭️ Code unchanged, skipping render");
                             return;
                         }
                         lastCode = code;
@@ -310,9 +285,6 @@ const mermaidRenderer = $prose(() => {
                             svgContainer.innerHTML = svg;
                             diagramContainer.appendChild(svgContainer);
                             errorContainer.style.display = "none";
-                            console.log(
-                                "✅ Mermaid diagram rendered successfully",
-                            );
                         } catch (error) {
                             console.error("Mermaid rendering error:", error);
                             const errorMessage =
@@ -330,7 +302,6 @@ const mermaidRenderer = $prose(() => {
                         isEditing = true;
 
                         const code = node.textContent || node.attrs.code || "";
-                        console.log("📝 Starting edit with code:", code);
 
                         sourceContainer.innerHTML = `
               <textarea class="mermaid-textarea" placeholder="Enter Mermaid diagram code..."></textarea>
@@ -451,19 +422,12 @@ const mermaidRenderer = $prose(() => {
 
                     const initialCode =
                         node.textContent || node.attrs.code || "";
-                    console.log(
-                        "🎬 Mermaid node view created with initial code:",
-                        JSON.stringify(initialCode),
-                    );
                     renderDiagram(initialCode);
 
                     return {
                         dom: wrapper,
                         update: (updatedNode: any) => {
                             if (updatedNode.type.name !== "mermaid") {
-                                console.log(
-                                    "❌ Node type mismatch, rejecting update",
-                                );
                                 return false;
                             }
 
@@ -472,10 +436,6 @@ const mermaidRenderer = $prose(() => {
                                 updatedNode.textContent ||
                                 updatedNode.attrs.code ||
                                 "";
-                            console.log(
-                                "🔄 Mermaid node updated with new code:",
-                                JSON.stringify(newCode),
-                            );
 
                             if (!isEditing) {
                                 renderDiagram(newCode);
@@ -483,14 +443,7 @@ const mermaidRenderer = $prose(() => {
                             return true;
                         },
                         destroy: () => {
-                            console.log(
-                                "🗑️ Mermaid node view destroyed - node info:",
-                                {
-                                    type: node.type.name,
-                                    code: node.textContent || node.attrs.code,
-                                    isEditing,
-                                },
-                            );
+                            // Cleanup handled by browser
                         },
                     };
                 },

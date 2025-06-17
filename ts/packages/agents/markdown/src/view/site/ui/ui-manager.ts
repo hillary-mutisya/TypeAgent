@@ -17,8 +17,6 @@ export class UIManager {
     }
 
     public async initialize(): Promise<void> {
-        console.log("🎨 Initializing UI Manager...");
-
         // Initialize all UI components
         await this.toolbarManager.initialize();
         await this.themeManager.initialize();
@@ -27,8 +25,6 @@ export class UIManager {
 
         // Setup keyboard shortcuts
         this.setupKeyboardShortcuts();
-
-        console.log("✅ UI Manager initialized successfully");
     }
 
     public getNotificationManager(): NotificationManager {

@@ -3,8 +3,6 @@ import { getElementById, toggleClass } from "../utils";
 
 export class ThemeManager {
     public async initialize(): Promise<void> {
-        console.log("🎨 Initializing Theme Manager...");
-
         this.setupThemeToggle();
         this.loadSavedTheme();
     }
@@ -27,8 +25,6 @@ export class ThemeManager {
             : EDITOR_CONFIG.THEMES.LIGHT;
 
         localStorage.setItem(EDITOR_CONFIG.STORAGE_KEYS.THEME, theme);
-
-        console.log(`🎨 Theme switched to: ${theme}`);
     }
 
     private loadSavedTheme(): void {

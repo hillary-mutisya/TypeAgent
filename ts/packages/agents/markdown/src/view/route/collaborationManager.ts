@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 import * as Y from "yjs";
-// Note: WebSocket import removed - not used in current implementation
 
 /**
  * Server-side collaboration manager for handling Yjs synchronization
@@ -10,7 +9,6 @@ import * as Y from "yjs";
  */
 export class CollaborationManager {
     private documents: Map<string, Y.Doc> = new Map();
-    // Note: clients Map removed - not used in current server-side implementation
     private documentPaths: Map<string, string> = new Map();
 
     /**
@@ -21,7 +19,6 @@ export class CollaborationManager {
             const ydoc = new Y.Doc();
             this.documents.set(documentId, ydoc);
             this.documentPaths.set(documentId, filePath);
-            // Note: clients initialization removed - handled by y-websocket-server
 
             console.log(`📄 Initialized collaboration document: ${documentId}`);
         }
@@ -33,14 +30,13 @@ export class CollaborationManager {
     getStats(): any {
         return {
             documents: this.documents.size,
-            // Note: Client stats handled by y-websocket-server
             totalClients: 0, // Placeholder - would be provided by websocket server
             documentsWithClients: this.documents.size,
         };
     }
 
     /**
-     * Apply operation to Yjs document (ENHANCED for Flow 1 simplification)
+     * Apply operation to Yjs document
      */
     applyOperation(documentId: string, operation: any): void {
         const ydoc = this.documents.get(documentId);

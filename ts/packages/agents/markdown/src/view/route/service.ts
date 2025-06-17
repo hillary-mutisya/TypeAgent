@@ -122,11 +122,11 @@ let clients: any[] = [];
 let filePath: string;
 let collaborationManager: CollaborationManager;
 
-// AUTO-SAVE MECHANISM (Flow 1 implementation)
+// Auto-save mechanism
 let autoSaveTimer: NodeJS.Timeout | null = null;
 const AUTO_SAVE_DELAY = 2000; // 2 seconds after last change
 
-// NEW: UI Command routing state
+// UI Command routing state
 let commandCounter = 0;
 const pendingCommands = new Map<string, any>();
 
@@ -160,7 +160,7 @@ async function sendUICommandToAgent(
     });
 }
 
-// AUTO-SAVE FUNCTIONS (Flow 1 implementation)
+// Auto-save functions
 function scheduleAutoSave(): void {
     // Cancel previous timer
     if (autoSaveTimer) {
@@ -1141,7 +1141,7 @@ function contentItemToText(item: any): string {
     }
 }
 
-// NEW: Enhanced operation application in view process (Flow 1)
+// Enhanced operation application in view process
 function applyLLMOperationsToCollaboration(operations: any[]): void {
     console.log("📝 [VIEW] Applying LLM operations to collaboration document:", operations.length);
     
@@ -1208,7 +1208,7 @@ process.on("message", (message: any) => {
             );
         });
     } else if (message.type === "applyLLMOperations") {
-        // NEW: Enhanced operation application in view process (Flow 1)
+        // Enhanced operation application in view process
         try {
             applyLLMOperationsToCollaboration(message.operations);
             
@@ -1250,7 +1250,7 @@ process.on("message", (message: any) => {
             });
         }
     } else if (message.type === "uiCommandResult") {
-        // NEW: Handle UI command results from agent (Flow 2)
+        // Handle UI command results from agent
         const pending = pendingCommands.get(message.requestId);
         if (pending) {
             clearTimeout(pending.timeout);

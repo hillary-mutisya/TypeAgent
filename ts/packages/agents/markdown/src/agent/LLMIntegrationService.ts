@@ -175,8 +175,6 @@ export class LLMIntegrationService {
             
             streamingCallback.onProgress("Analyzing context and generating continuation...");
             
-            // For Phase 1, we'll use the existing updateDocument method
-            // In Phase 2, we'll add actual streaming support to MarkdownAgent
             console.log(`📝 Calling markdownAgent.updateDocument with content length: ${context.currentContent.length}`);
             
             const response = await this.markdownAgent!.updateDocument(
@@ -429,21 +427,20 @@ Use clear, descriptive labels and logical structure.`;
         };
     }
 
-    // Placeholder methods for Phase 2 implementation
     private async streamResearchRequest(parameters: any, context: AIRequestContext, streamingCallback: StreamingCallback): Promise<AIResult> {
-        throw new Error("Research streaming not implemented in Phase 1");
+        throw new Error("Research streaming not yet implemented");
     }
 
     private async streamAugmentRequest(parameters: any, context: AIRequestContext, streamingCallback: StreamingCallback): Promise<AIResult> {
-        throw new Error("Augment streaming not implemented in Phase 1");
+        throw new Error("Augment streaming not yet implemented");
     }
 
     private async processAugmentRequest(parameters: any, context: AIRequestContext): Promise<AIResult> {
-        throw new Error("Augment processing not implemented in Phase 1");
+        throw new Error("Augment processing not yet implemented");
     }
 
     private async processResearchRequest(parameters: any, context: AIRequestContext): Promise<AIResult> {
-        throw new Error("Research processing not implemented in Phase 1");
+        throw new Error("Research processing not yet implemented");
     }
 }
 

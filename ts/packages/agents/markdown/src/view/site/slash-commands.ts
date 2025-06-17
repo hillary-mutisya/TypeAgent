@@ -33,9 +33,6 @@ export const slashCommandHandler = $prose((_ctx) => {
                     {
                         pattern: /^\/test:continue\s*$/,
                         handler: () => {
-                            console.log(
-                                "🧪 Test continue command triggered on Enter",
-                            );
                             executeSlashCommand(
                                 "continue",
                                 {},
@@ -49,9 +46,6 @@ export const slashCommandHandler = $prose((_ctx) => {
                     {
                         pattern: /^\/continue\s*$/,
                         handler: () => {
-                            console.log(
-                                "🤖 Continue command triggered on Enter",
-                            );
                             executeSlashCommand(
                                 "continue",
                                 {},
@@ -67,10 +61,6 @@ export const slashCommandHandler = $prose((_ctx) => {
                         handler: (match: RegExpMatchArray) => {
                             const description =
                                 match[1]?.trim() || "test diagram";
-                            console.log(
-                                "🧪 Test diagram command triggered on Enter with description:",
-                                description,
-                            );
                             executeSlashCommand(
                                 "diagram",
                                 { description },
@@ -85,10 +75,6 @@ export const slashCommandHandler = $prose((_ctx) => {
                         pattern: /^\/diagram\s+(.+)\s*$/,
                         handler: (match: RegExpMatchArray) => {
                             const description = match[1]?.trim();
-                            console.log(
-                                "📊 Diagram command triggered on Enter with description:",
-                                description,
-                            );
                             executeSlashCommand(
                                 "diagram",
                                 { description },
@@ -104,10 +90,6 @@ export const slashCommandHandler = $prose((_ctx) => {
                         handler: (match: RegExpMatchArray) => {
                             const instruction =
                                 match[1]?.trim() || "improve formatting";
-                            console.log(
-                                "🧪 Test augment command triggered on Enter with instruction:",
-                                instruction,
-                            );
                             executeSlashCommand(
                                 "augment",
                                 { instruction },
@@ -122,10 +104,6 @@ export const slashCommandHandler = $prose((_ctx) => {
                         pattern: /^\/augment\s+(.+)\s*$/,
                         handler: (match: RegExpMatchArray) => {
                             const instruction = match[1]?.trim();
-                            console.log(
-                                "✨ Augment command triggered on Enter with instruction:",
-                                instruction,
-                            );
                             executeSlashCommand(
                                 "augment",
                                 { instruction },
@@ -182,9 +160,6 @@ async function executeSlashCommand(
 
     // For test mode commands, only trigger the backend - don't create any frontend content
     // This prevents duplicate content creation between frontend and backend
-    if (testMode) {
-        console.log(`🧪 Test mode: Delegating ${command} to backend only`);
-    }
 
     // Use the existing executeAgentCommand function
     setTimeout(() => {

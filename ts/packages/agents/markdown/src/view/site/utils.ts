@@ -214,28 +214,13 @@ export async function insertMarkdownContentAtEnd(
     content: string,
     view: any,
 ): Promise<void> {
-    console.log(
-        "🔍 Starting markdown parsing with content:",
-        content.substring(0, 100) + "...",
-    );
-    console.log(
-        "🔍 Available schema nodes:",
-        Object.keys(view.state.schema.nodes),
-    );
-    console.log(
-        "🔍 Available schema marks:",
-        Object.keys(view.state.schema.marks),
-    );
-
     const lines = parseMarkdownLines(content);
 
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
-        console.log(`🔍 Processing line ${i}: "${line}"`);
 
         // Skip empty lines completely to avoid extra spacing
         if (!line.trim()) {
-            console.log("⏭️ Skipping empty line to prevent extra spacing");
             continue;
         }
 
@@ -243,25 +228,18 @@ export async function insertMarkdownContentAtEnd(
         await processMarkdownLine(line, view);
         await delay(EDITOR_CONFIG.TIMING.CONTENT_INSERT_DELAY);
     }
-
-    console.log("✅ Finished processing all markdown lines");
 }
 
 async function processMarkdownLine(line: string, view: any): Promise<void> {
     if (isHeading(line, 2)) {
-        console.log("📝 Found H2 heading:", line);
         await insertHeadingAtEnd(view, extractHeadingText(line, 2), 2);
     } else if (isHeading(line, 3)) {
-        console.log("📝 Found H3 heading:", line);
         await insertHeadingAtEnd(view, extractHeadingText(line, 3), 3);
     } else if (isImage(line)) {
-        console.log("📝 Found image:", line);
         await insertImageAtEnd(view, line);
     } else if (isMathBlock(line)) {
-        console.log("📝 Found math block:", line);
         await insertMathBlockAtEnd(view, extractMathContent(line));
     } else {
-        console.log("📝 Found paragraph:", line);
         await insertParagraphAtEnd(view, line);
     }
 }
@@ -282,9 +260,7 @@ export async function insertHeadingAtEnd(
         const headingNode = headingType.create({ level }, schema.text(text));
         tr.insert(endPos, headingNode);
         view.dispatch(tr);
-        console.log(`✅ Inserted heading level ${level}: ${text}`);
     } else {
-        console.log("❌ No heading node type found, falling back to paragraph");
         await insertParagraphAtEnd(view, "#".repeat(level) + " " + text);
     }
 }
@@ -349,8 +325,6 @@ export async function insertParagraphAtEnd(
 
         tr.insert(endPos, paragraphNode);
         view.dispatch(tr);
-    } else {
-        console.log("❌ No paragraph node type found");
     }
 }
 

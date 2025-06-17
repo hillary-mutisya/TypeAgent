@@ -35,14 +35,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
 async function initializeApplication(): Promise<void> {
-    console.log("🚀 Starting AI-Enhanced Markdown Editor...");
-
     // Check if we have a document name in the URL
     const urlPath = window.location.pathname;
     const documentNameMatch = urlPath.match(/\/document\/([^\/]+)/);
     const documentName = documentNameMatch ? documentNameMatch[1] : null;
-
-    console.log("🔍 URL Analysis:", { urlPath, documentName });
 
     // Initialize managers
     editorManager = new EditorManager();
@@ -54,7 +50,6 @@ async function initializeApplication(): Promise<void> {
 
     // If we have a document name in URL, switch to that document
     if (documentName) {
-        console.log(`🔗 Loading document from URL: ${documentName}`);
         await switchToDocument(documentName);
     }
 
@@ -78,13 +73,10 @@ async function initializeApplication(): Promise<void> {
     setupGlobalAccess(editor);
 
     console.log("✅ Application initialized successfully");
-    logAvailableFeatures();
 }
 
 async function switchToDocument(documentName: string): Promise<void> {
     try {
-        console.log(`🔄 Switching to document: ${documentName}`);
-        
         const response = await fetch("/api/switch-document", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -96,7 +88,6 @@ async function switchToDocument(documentName: string): Promise<void> {
         }
 
         const result = await response.json();
-        console.log("✅ Document switched successfully:", result);
         
         // Update the page title to include document name
         document.title = `${documentName} - AI-Enhanced Markdown Editor`;
@@ -110,14 +101,11 @@ async function switchToDocument(documentName: string): Promise<void> {
 function setupBrowserHistoryHandling(): void {
     // Handle browser back/forward navigation
     window.addEventListener('popstate', async (event) => {
-        console.log("🔄 Browser navigation detected:", event.state);
-        
         const urlPath = window.location.pathname;
         const documentNameMatch = urlPath.match(/\/document\/([^\/]+)/);
         const documentName = documentNameMatch ? documentNameMatch[1] : null;
         
         if (documentName && event.state?.documentName !== documentName) {
-            console.log(`🔗 Loading document from navigation: ${documentName}`);
             await switchToDocument(documentName);
         }
     });
@@ -131,16 +119,7 @@ function setupManagerDependencies(editor: any): void {
 
     // Connect editor to AI agent manager
     aiAgentManager.setEditor(editor);
-
-    // Connect editor to panel manager
-    const panelManager = uiManager!.getPanelManager();
-    panelManager.setEditor(editor);
-
-    // Connect panel manager to toolbar
-    const toolbarManager = (uiManager as any).toolbarManager;
-    if (toolbarManager) {
-        toolbarManager.setPanelManager(panelManager);
-    }
+}
 }
 
 function setupGlobalAccess(editor: any): void {
@@ -148,31 +127,6 @@ function setupGlobalAccess(editor: any): void {
     (window as any).editor = editor;
     (window as any).executeAgentCommand =
         aiAgentManager.executeAgentCommand.bind(aiAgentManager);
-}
-
-function logAvailableFeatures(): void {
-    console.log("🎉 AI-Enhanced Markdown Editor is ready!");
-    console.log("📋 Available features:");
-    console.log("   • WYSIWYG editing with Milkdown Crepe");
-    console.log("   • Real-time collaboration with Yjs");
-    console.log("   • AI-powered commands and assistance");
-    console.log("   • Mermaid diagram support");
-    console.log("   • Shareable document URLs");
-    console.log("   • File open/export functionality");
-    console.log("   • Theme switching (light/dark)");
-    console.log("   • Keyboard shortcuts (Ctrl+S to save)");
-    console.log("");
-    console.log("🤖 AI Commands:");
-    console.log('   • Type "/" to open block edit menu');
-    console.log("   • /continue - Continue writing");
-    console.log("   • /diagram [description] - Generate diagram");
-    console.log("   • /augment [instruction] - Improve document");
-    console.log('   • Add "test:" prefix for test mode (e.g., /test:continue)');
-    console.log("");
-    console.log("🔗 Sharing:");
-    console.log("   • Click Share button to copy shareable URL");
-    console.log("   • URLs format: /document/{documentName}");
-    console.log("   • Shared links open same document in collaboration");
 }
 
 function showError(message: string): void {

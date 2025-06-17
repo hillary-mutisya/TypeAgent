@@ -10,7 +10,6 @@ import {
 
 export class NotificationManager {
     public async initialize(): Promise<void> {
-        console.log("🔔 Initializing Notification Manager...");
         // No specific initialization needed
     }
 
@@ -18,7 +17,6 @@ export class NotificationManager {
         message: string,
         type: NotificationType = "info",
     ): void {
-        console.log(`[${type.toUpperCase()}] ${message}`);
 
         const notification = createNotificationElement(message, type);
         addToBody(notification);

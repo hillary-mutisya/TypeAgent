@@ -1,5 +1,4 @@
 import { DocumentManager } from "../core/document-manager";
-import { PanelManager } from "./panel-manager";
 import { getElementById } from "../utils";
 
 export class ToolbarManager {
@@ -10,17 +9,10 @@ export class ToolbarManager {
     }
 
     public async initialize(): Promise<void> {
-        console.log("🔧 Initializing Toolbar Manager...");
-
         this.setupSaveButton();
         this.setupOpenButton();
         this.setupExportButton();
         this.setupShareButton();
-    }
-
-    public setPanelManager(_panelManager: PanelManager): void {
-        // Panel manager reference no longer needed since raw markdown panel was removed
-        // Method kept for compatibility with existing code
     }
 
     private setupSaveButton(): void {
@@ -61,8 +53,6 @@ export class ToolbarManager {
 
     private async handleFileOpen(file: File): Promise<void> {
         try {
-            console.log("📁 Opening file:", file.name);
-            
             // Use the document manager's improved file loading
             await this.documentManager.loadFileFromDisk(file);
             
@@ -89,7 +79,6 @@ export class ToolbarManager {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
             
-            console.log("📥 Exported file:", filename);
             this.showNotification(`📥 Exported: ${filename}`, "success");
         } catch (error) {
             console.error("Failed to export file:", error);
@@ -151,7 +140,6 @@ export class ToolbarManager {
             // Copy to clipboard
             await navigator.clipboard.writeText(shareUrl);
 
-            console.log("🔗 Shareable URL copied:", shareUrl);
             this.showNotification(`🔗 Link copied: /document/${documentName}`, "success");
         } catch (error) {
             console.error("Failed to share document:", error);

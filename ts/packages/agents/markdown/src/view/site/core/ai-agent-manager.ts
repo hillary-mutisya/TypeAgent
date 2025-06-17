@@ -134,13 +134,13 @@ export class AIAgentManager {
                 break;
 
             case "notification":
-                // NEW: Handle success/error notifications from agent
+                // Handle success/error notifications from agent
                 console.log(`[${(data as any).notificationType?.toUpperCase()}] ${(data as any).message}`);
                 this.showNotification((data as any).message, (data as any).notificationType);
                 break;
                 
             case "operationsApplied":
-                // NEW: Operations already applied by agent, just show completion
+                // Operations already applied by agent, just show completion
                 console.log(`✅ Agent applied ${(data as any).operationCount} operations`);
                 // Don't show duplicate notification here - the "notification" event handles UI feedback
                 break;
@@ -158,7 +158,7 @@ export class AIAgentManager {
                 this.isTestMode = false; // Reset test mode flag on error
                 break;
 
-            // LEGACY: Keep old handlers for backward compatibility during transition
+            // Legacy content handlers for backward compatibility
             case "content":
                 // Skip content events for test mode commands to prevent duplicate content
                 // Test mode sends both content chunks AND operations, but we only want operations

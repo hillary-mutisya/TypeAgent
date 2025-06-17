@@ -1,6 +1,6 @@
-// IPC Message Types for Flow Simplification
+// IPC Message Types for TypeAgent Communication
 
-// Agent ← View: UI command requests (Flow 2)
+// Agent ← View: UI command requests
 export interface UICommandMessage {
     type: "uiCommand";
     requestId: string;
@@ -15,7 +15,7 @@ export interface UICommandMessage {
     timestamp: number;
 }
 
-// Agent → View: UI command results (Flow 2)
+// Agent → View: UI command results
 export interface UICommandResultMessage {
     type: "uiCommandResult";
     requestId: string;
@@ -30,7 +30,7 @@ export interface UICommandResult {
     error?: string;
 }
 
-// Agent → View: Content requests (Flow 1)
+// Agent → View: Content requests
 export interface GetDocumentContentMessage {
     type: "getDocumentContent";
 }
@@ -41,7 +41,7 @@ export interface DocumentContentMessage {
     timestamp: number;
 }
 
-// Agent → View: LLM operations (Flow 1 simplification)
+// Agent → View: LLM operations
 export interface LLMOperationsMessage {
     type: "applyLLMOperations";
     operations: any[]; // DocumentOperation[]
@@ -61,7 +61,7 @@ export interface AutoSaveMessage {
     timestamp: number;
 }
 
-// View → Frontend: Notifications and status (Flow 2)
+// View → Frontend: Notifications and status
 export interface NotificationEvent {
     type: "notification";
     message: string;

@@ -5,42 +5,18 @@ import { defineConfig } from "vite";
 import path from "path";
 
 export default defineConfig({
-    logLevel: 'warn', // Suppress verbose asset listings, show only warnings and errors
+    logLevel: 'warn', 
     root: "src/view/site",
     build: {
         outDir: "../../../dist/view/site",
         emptyOutDir: true,
-        reportCompressedSize: false, // Skip gzip calculation for faster, quieter builds
+        reportCompressedSize: false,
+        chunkSizeWarningLimit: 2500,
         rollupOptions: {
             input: {
                 main: path.resolve(__dirname, "src/view/site/index.html"),
             },
-            output: {
-                manualChunks: {
-                    // Core editor libraries
-                    'milkdown-core': ['@milkdown/core', '@milkdown/crepe'],
-                    'milkdown-presets': ['@milkdown/preset-commonmark', '@milkdown/preset-gfm'],
-                    'milkdown-plugins': [
-                        '@milkdown/plugin-history',
-                        '@milkdown/plugin-math',
-                        '@milkdown/theme-nord',
-                        '@milkdown/utils'
-                    ],
-                    // Mermaid is already being split well automatically
-                    'prosemirror': [
-                        'prosemirror-inputrules',
-                        'prosemirror-model',
-                        'prosemirror-state',
-                        'prosemirror-view'
-                    ],
-                    // Math rendering
-                    'katex': ['katex'],
-                    // Markdown processing
-                    'markdown': ['markdown-it', 'markdown-it-texmath', 'unist-util-visit']
-                }
-            }
         },
-        chunkSizeWarningLimit: 1500, // Accommodate large diagram libraries (ELK ~1449kB)
     },
     server: {
         port: 5173,
@@ -73,6 +49,7 @@ export default defineConfig({
             "@": path.resolve(__dirname, "src/view/site"),
         },
     },
+    
     optimizeDeps: {
         include: [
             "@milkdown/core",
@@ -85,4 +62,5 @@ export default defineConfig({
             "@milkdown/utils",
         ],
     },
+    
 });

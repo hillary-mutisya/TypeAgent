@@ -14,13 +14,13 @@ export class CollaborationManager {
     /**
      * Initialize collaboration for a document
      */
-    initializeDocument(documentId: string, filePath: string): void {
+    initializeDocument(documentId: string, filePath: string | null): void {
         if (!this.documents.has(documentId)) {
             const ydoc = new Y.Doc();
             this.documents.set(documentId, ydoc);
-            this.documentPaths.set(documentId, filePath);
+            this.documentPaths.set(documentId, filePath || ""); // Handle null paths
 
-            console.log(`📄 Initialized collaboration document: ${documentId}`);
+            console.log(`📄 Initialized collaboration document: ${documentId} ${filePath ? `(${filePath})` : '(memory-only)'}`);
         }
     }
 

@@ -1,7 +1,7 @@
 import type { Editor } from "@milkdown/core";
 import { editorViewCtx } from "@milkdown/core";
 import type { SaveStatus } from "../types";
-import { AI_CONFIG } from "../config";
+import { AI_CONFIG, DEFAULT_MARKDOWN_CONTENT } from "../config";
 
 export class DocumentManager {
     private notificationManager: any = null;
@@ -82,8 +82,7 @@ export class DocumentManager {
     }
 
     private getDefaultContent(): string {
-        // Import from config
-        const { DEFAULT_MARKDOWN_CONTENT } = require("../config");
+        // Import from config - use the exported constant
         return DEFAULT_MARKDOWN_CONTENT;
     }
 

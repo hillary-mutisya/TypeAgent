@@ -85,11 +85,11 @@ app.post("/api/switch-document", express.json(), (req: Request, res: Response) =
         collaborationManager.setDocumentContent(documentId, content);
 
         // Render to clients
-        renderFileToClients(filePath);
+        renderFileToClients(filePath!);
 
         // Watch new file for changes
-        fs.watchFile(filePath, () => {
-            renderFileToClients(filePath);
+        fs.watchFile(filePath!, () => {
+            renderFileToClients(filePath!);
         });
 
         res.json({ 
@@ -116,7 +116,7 @@ md.use(MermaidPlugin);
 md.use(LatexPlugin);
 
 let clients: any[] = [];
-let filePath: string;
+let filePath: string | null;
 let collaborationManager: CollaborationManager;
 
 // Auto-save mechanism
@@ -188,7 +188,7 @@ function performAutoSave(): void {
             client.write(`data: ${JSON.stringify({
                 type: "autoSave",
                 timestamp: Date.now(),
-                filePath: path.basename(filePath)
+                filePath: path.basename(filePath!)
             })}\n\n`);
         });
     } catch (error) {
@@ -210,7 +210,47 @@ collaborationManager = new CollaborationManager();
 
 app.get("/preview", (req: Request, res: Response) => {
     if (!filePath) {
-        res.send("");
+        // Return rendered default content when no file is loaded
+        const defaultContent = `# Welcome to AI-Enhanced Markdown Editor
+
+Start editing your markdown document with AI assistance!
+
+## Features
+
+- **WYSIWYG Editing** with Milkdown Crepe
+- **AI-Powered Tools** integrated with TypeAgent
+- **Real-time Preview** with full markdown support
+- **Mermaid Diagrams** with visual editing
+- **Math Equations** with LaTeX support
+- **GeoJSON Maps** for location data
+
+## AI Commands
+
+Try these AI-powered commands:
+
+- Type \`/\` to open the block edit menu with AI tools
+- Use **Continue Writing** to let AI continue writing
+- Use **Generate Diagram** to create Mermaid diagrams
+- Use **Augment Document** to improve the document
+- Test versions available for testing without API calls
+
+## Example Diagram
+
+\`\`\`mermaid
+graph TD
+    A[Start Editing] --> B{Need AI Help?}
+    B -->|Yes| C[Use / Commands]
+    B -->|No| D[Continue Writing]
+    C --> E[AI Generates Content]
+    E --> F[Review & Edit]
+    F --> G[Save Document]
+    D --> G
+\`\`\`
+
+Start typing to see the editor in action!
+`;
+        const htmlContent = md.render(defaultContent);
+        res.send(htmlContent);
     } else {
         const fileContent = fs.readFileSync(filePath, "utf-8");
         const htmlContent = md.render(fileContent);
@@ -221,7 +261,46 @@ app.get("/preview", (req: Request, res: Response) => {
 // Get document as markdown text
 app.get("/document", (req: Request, res: Response) => {
     if (!filePath) {
-        res.status(404).json({ error: "No document loaded" });
+        // Return default content instead of error when no file is loaded
+        const defaultContent = `# Welcome to AI-Enhanced Markdown Editor
+
+Start editing your markdown document with AI assistance!
+
+## Features
+
+- **WYSIWYG Editing** with Milkdown Crepe
+- **AI-Powered Tools** integrated with TypeAgent
+- **Real-time Preview** with full markdown support
+- **Mermaid Diagrams** with visual editing
+- **Math Equations** with LaTeX support
+- **GeoJSON Maps** for location data
+
+## AI Commands
+
+Try these AI-powered commands:
+
+- Type \`/\` to open the block edit menu with AI tools
+- Use **Continue Writing** to let AI continue writing
+- Use **Generate Diagram** to create Mermaid diagrams
+- Use **Augment Document** to improve the document
+- Test versions available for testing without API calls
+
+## Example Diagram
+
+\`\`\`mermaid
+graph TD
+    A[Start Editing] --> B{Need AI Help?}
+    B -->|Yes| C[Use / Commands]
+    B -->|No| D[Continue Writing]
+    C --> E[AI Generates Content]
+    E --> F[Review & Edit]
+    F --> G[Save Document]
+    D --> G
+\`\`\`
+
+Start typing to see the editor in action!
+`;
+        res.send(defaultContent);
         return;
     }
 
@@ -239,7 +318,10 @@ app.get("/document", (req: Request, res: Response) => {
 // Save document from markdown text
 app.post("/document", express.json(), (req: Request, res: Response) => {
     if (!filePath) {
-        res.status(404).json({ error: "No document loaded" });
+        // If no file is loaded, we can't save to disk, but we can still accept the content
+        // This allows the editor to work in memory-only mode
+        console.log("⚠️ No file path set, cannot save to disk. Content received but not persisted.");
+        res.json({ success: true, warning: "No file loaded - content not saved to disk" });
         return;
     }
 
@@ -295,11 +377,11 @@ app.post("/file/load", express.json(), (req: Request, res: Response) => {
         collaborationManager.setDocumentContent(documentId, content);
 
         // Render to clients
-        renderFileToClients(filePath);
+        renderFileToClients(filePath!);
 
         // Watch new file for changes
-        fs.watchFile(filePath, () => {
-            renderFileToClients(filePath);
+        fs.watchFile(filePath!, () => {
+            renderFileToClients(filePath!);
         });
 
         res.json({ 
@@ -339,11 +421,7 @@ app.get("/file/info", (req: Request, res: Response) => {
 
 // Add agent execution endpoint
 app.post("/agent/execute", express.json(), (req: Request, res: Response) => {
-    if (!filePath) {
-        res.status(404).json({ error: "No document loaded" });
-        return;
-    }
-
+    // Allow agent execution even without a file loaded - it can work with in-memory content
     try {
         const { action, parameters } = req.body;
 
@@ -368,11 +446,8 @@ app.post("/agent/execute", express.json(), (req: Request, res: Response) => {
 
 // Add streaming agent execution endpoint
 app.post("/agent/stream", express.json(), (req: Request, res: Response) => {
-    if (!filePath) {
-        res.status(404).json({ error: "No document loaded" });
-        return;
-    }
-
+    // Allow streaming even without a file loaded - useful for testing and new documents
+    
     // Set up SSE headers
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
@@ -830,7 +905,52 @@ app.get("/events", (req: Request, res: Response) => {
 app.use(express.static(staticPath));
 
 function renderFileToClients(filePath: string) {
-    const fileContent = fs.readFileSync(filePath, "utf-8");
+    let fileContent: string;
+    
+    if (!filePath || !fs.existsSync(filePath)) {
+        // Use default content if no file or file doesn't exist
+        fileContent = `# Welcome to AI-Enhanced Markdown Editor
+
+Start editing your markdown document with AI assistance!
+
+## Features
+
+- **WYSIWYG Editing** with Milkdown Crepe
+- **AI-Powered Tools** integrated with TypeAgent
+- **Real-time Preview** with full markdown support
+- **Mermaid Diagrams** with visual editing
+- **Math Equations** with LaTeX support
+- **GeoJSON Maps** for location data
+
+## AI Commands
+
+Try these AI-powered commands:
+
+- Type \`/\` to open the block edit menu with AI tools
+- Use **Continue Writing** to let AI continue writing
+- Use **Generate Diagram** to create Mermaid diagrams
+- Use **Augment Document** to improve the document
+- Test versions available for testing without API calls
+
+## Example Diagram
+
+\`\`\`mermaid
+graph TD
+    A[Start Editing] --> B{Need AI Help?}
+    B -->|Yes| C[Use / Commands]
+    B -->|No| D[Continue Writing]
+    C --> E[AI Generates Content]
+    E --> F[Review & Edit]
+    F --> G[Save Document]
+    D --> G
+\`\`\`
+
+Start typing to see the editor in action!
+`;
+    } else {
+        fileContent = fs.readFileSync(filePath, "utf-8");
+    }
+    
     const htmlContent = md.render(fileContent);
 
     clients.forEach((client) => {
@@ -842,22 +962,23 @@ function renderFileToClients(filePath: string) {
 function applyLLMOperationsToCollaboration(operations: any[]): void {
     console.log("📝 [VIEW] Applying LLM operations to collaboration document:", operations.length);
     
-    if (!filePath) {
-        throw new Error("No file path set, cannot apply operations");
-    }
-    
-    const documentId = path.basename(filePath, ".md");
+    // Use default document ID for memory-only mode
+    const documentId = filePath ? path.basename(filePath, ".md") : "default";
     
     // Apply operations to local Yjs document (SINGLE SOURCE OF TRUTH)
     for (const operation of operations) {
         collaborationManager.applyOperation(documentId, operation);
     }
     
-    // AUTO-SAVE: Trigger async save to disk (non-blocking)
-    scheduleAutoSave();
+    // AUTO-SAVE: Trigger async save to disk (non-blocking) only if we have a file
+    if (filePath) {
+        scheduleAutoSave();
+    } else {
+        console.log("💡 [VIEW] Memory-only mode - operations applied but not saved to disk");
+    }
     
     // Notify frontend clients via SSE (Yjs also syncs via y-websocket)
-    renderFileToClients(filePath);
+    renderFileToClients(filePath || "");
     
     console.log("✅ [VIEW] Operations applied successfully");
 }
@@ -892,6 +1013,58 @@ process.on("message", (message: any) => {
             fs.watchFile(filePath!, () => {
                 renderFileToClients(filePath!);
             });
+        } else {
+            // No file mode - initialize with default content
+            filePath = null;
+            console.log("🔄 Running in memory-only mode (no file)");
+            
+            // Initialize collaboration with default document
+            const documentId = "default";
+            collaborationManager.initializeDocument(documentId, null);
+            
+            // Set default content in collaboration manager
+            const defaultContent = `# Welcome to AI-Enhanced Markdown Editor
+
+Start editing your markdown document with AI assistance!
+
+## Features
+
+- **WYSIWYG Editing** with Milkdown Crepe
+- **AI-Powered Tools** integrated with TypeAgent
+- **Real-time Preview** with full markdown support
+- **Mermaid Diagrams** with visual editing
+- **Math Equations** with LaTeX support
+- **GeoJSON Maps** for location data
+
+## AI Commands
+
+Try these AI-powered commands:
+
+- Type \`/\` to open the block edit menu with AI tools
+- Use **Continue Writing** to let AI continue writing
+- Use **Generate Diagram** to create Mermaid diagrams
+- Use **Augment Document** to improve the document
+- Test versions available for testing without API calls
+
+## Example Diagram
+
+\`\`\`mermaid
+graph TD
+    A[Start Editing] --> B{Need AI Help?}
+    B -->|Yes| C[Use / Commands]
+    B -->|No| D[Continue Writing]
+    C --> E[AI Generates Content]
+    E --> F[Review & Edit]
+    F --> G[Save Document]
+    D --> G
+\`\`\`
+
+Start typing to see the editor in action!
+`;
+            collaborationManager.setDocumentContent(documentId, defaultContent);
+            
+            // Initial render for clients with default content
+            renderFileToClients("");
         }
     } else if (message.type == "applyOperations") {
         // Send operations to frontend
@@ -928,14 +1101,34 @@ process.on("message", (message: any) => {
     } else if (message.type === "getDocumentContent") {
         // NEW: Handle content requests from agent (Flow 1 simplification)
         try {
-            const documentId = path.basename(filePath, ".md");
-            const content = collaborationManager.getDocumentContent(documentId);
-            
-            process.send?.({
-                type: "documentContent",
-                content: content,
-                timestamp: Date.now()
-            });
+            if (!filePath) {
+                // Use default document ID for memory-only mode
+                const documentId = "default";
+                const content = collaborationManager.getDocumentContent(documentId);
+                
+                // If no content in collaboration manager, return default content
+                const finalContent = content || `# Welcome to AI-Enhanced Markdown Editor
+
+Start editing your markdown document with AI assistance!
+
+Start typing to see the editor in action!
+`;
+                
+                process.send?.({
+                    type: "documentContent",
+                    content: finalContent,
+                    timestamp: Date.now()
+                });
+            } else {
+                const documentId = path.basename(filePath, ".md");
+                const content = collaborationManager.getDocumentContent(documentId);
+                
+                process.send?.({
+                    type: "documentContent",
+                    content: content,
+                    timestamp: Date.now()
+                });
+            }
             
             console.log("📤 [VIEW] Sent document content to agent process");
         } catch (error) {

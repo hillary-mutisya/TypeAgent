@@ -27,6 +27,10 @@ export class UIManager {
         this.setupKeyboardShortcuts();
     }
 
+    public setDocumentManager(documentManager: any): void {
+        this.toolbarManager.setDocumentManager(documentManager);
+    }
+
     public getNotificationManager(): NotificationManager {
         return this.notificationManager;
     }

@@ -54,6 +54,10 @@ export class AIAgentManager {
         
         // Track test mode to prevent duplicate content insertion
         this.isTestMode = params.testMode || false;
+        
+        // Track if we actually received any successful operations
+        let operationsReceived = false;
+        let errorOccurred = false;
 
         // Show AI presence cursor
         this.showAIPresence(true);
@@ -75,13 +79,24 @@ export class AIAgentManager {
                 throw new Error("No response stream available");
             }
 
-            await this.processStreamResponse(reader, params.position || 0);
+            const result = await this.processStreamResponse(reader, params.position || 0);
+            operationsReceived = result.operationsReceived;
+            errorOccurred = result.errorOccurred;
 
-            console.log("✅ Streaming command completed successfully");
-            this.showNotification(
-                `✅ ${command} completed successfully!`,
-                "success",
-            );
+            // Only show success message if we actually received operations and no errors occurred
+            if (operationsReceived && !errorOccurred) {
+                console.log("✅ Streaming command completed successfully");
+                this.showNotification(
+                    `✅ ${command} completed successfully!`,
+                    "success",
+                );
+            } else if (errorOccurred) {
+                // Error message already shown in stream handler, just log
+                console.log("❌ Streaming command failed");
+            } else {
+                // No operations but no explicit error - agent might be unavailable
+                console.log("⚠️ Streaming command completed but no content generated");
+            }
         } finally {
             // Hide AI presence cursor
             this.showAIPresence(false);
@@ -91,9 +106,11 @@ export class AIAgentManager {
     private async processStreamResponse(
         reader: ReadableStreamDefaultReader<Uint8Array>,
         position: number,
-    ): Promise<void> {
+    ): Promise<{ operationsReceived: boolean; errorOccurred: boolean }> {
         const decoder = new TextDecoder();
         let buffer = "";
+        let operationsReceived = false;
+        let errorOccurred = false;
 
         while (true) {
             const { done, value } = await reader.read();
@@ -109,19 +126,26 @@ export class AIAgentManager {
                 if (line.startsWith("data: ")) {
                     try {
                         const data = JSON.parse(line.slice(6));
-                        await this.handleStreamEvent(data, position);
+                        const result = await this.handleStreamEvent(data, position);
+                        if (result.operationsReceived) operationsReceived = true;
+                        if (result.errorOccurred) errorOccurred = true;
                     } catch (e) {
                         console.warn("Failed to parse stream data:", line);
                     }
                 }
             }
         }
+
+        return { operationsReceived, errorOccurred };
     }
 
     private async handleStreamEvent(
         data: StreamEvent,
         position: number,
-    ): Promise<void> {
+    ): Promise<{ operationsReceived: boolean; errorOccurred: boolean }> {
+        let operationsReceived = false;
+        let errorOccurred = false;
+
         switch (data.type) {
             case "start":
                 console.log("🎬 Stream started:", data.message);
@@ -135,20 +159,33 @@ export class AIAgentManager {
 
             case "notification":
                 // Handle success/error notifications from agent
-                console.log(`[${(data as any).notificationType?.toUpperCase()}] ${(data as any).message}`);
-                this.showNotification((data as any).message, (data as any).notificationType);
+                const notificationType = (data as any).notificationType;
+                const message = (data as any).message;
+                
+                console.log(`[${notificationType?.toUpperCase()}] ${message}`);
+                this.showNotification(message, notificationType);
+                
+                // Track errors
+                if (notificationType === "error") {
+                    errorOccurred = true;
+                }
                 break;
                 
             case "operationsApplied":
-                // Operations already applied by agent, just show completion
-                console.log(`✅ Agent applied ${(data as any).operationCount} operations`);
-                // Don't show duplicate notification here - the "notification" event handles UI feedback
+                // Operations already applied by agent, just track completion
+                const operationCount = (data as any).operationCount || 0;
+                console.log(`✅ Agent applied ${operationCount} operations`);
+                
+                // Only count as operations received if we actually got some operations
+                if (operationCount > 0) {
+                    operationsReceived = true;
+                }
                 break;
 
             case "complete":
                 this.showAIPresence(false);
                 this.isTestMode = false; // Reset test mode flag
-                console.log("✅ Streaming command completed successfully");
+                console.log("✅ Streaming command completed");
                 break;
 
             case "error":
@@ -156,6 +193,7 @@ export class AIAgentManager {
                 this.showNotification((data as any).error, "error");
                 this.showAIPresence(false);
                 this.isTestMode = false; // Reset test mode flag on error
+                errorOccurred = true;
                 break;
 
             // Legacy content handlers for backward compatibility
@@ -175,6 +213,7 @@ export class AIAgentManager {
                         data.chunk,
                         data.position || position,
                     );
+                    operationsReceived = true; // Content insertion counts as operation
                 }
                 break;
 
@@ -182,9 +221,12 @@ export class AIAgentManager {
                 // Apply operation to document
                 if (data.operation) {
                     this.applyAgentOperations([data.operation]);
+                    operationsReceived = true;
                 }
                 break;
         }
+
+        return { operationsReceived, errorOccurred };
     }
 
     private buildAgentRequest(

@@ -127,6 +127,32 @@ const AUTO_SAVE_DELAY = 2000; // 2 seconds after last change
 let commandCounter = 0;
 const pendingCommands = new Map<string, any>();
 
+// Utility function to safely write to response stream
+function safeWriteToResponse(res: Response, data: string): boolean {
+    try {
+        if (res.writable && !res.writableEnded) {
+            res.write(data);
+            return true;
+        }
+        console.warn("⚠️ Attempted to write to closed/ended response stream");
+        return false;
+    } catch (error) {
+        console.error("❌ Error writing to response stream:", error);
+        return false;
+    }
+}
+
+// Utility function to safely end response stream
+function safeEndResponse(res: Response): void {
+    try {
+        if (res.writable && !res.writableEnded) {
+            res.end();
+        }
+    } catch (error) {
+        console.error("❌ Error ending response stream:", error);
+    }
+}
+
 async function sendUICommandToAgent(
     command: string, 
     parameters: any
@@ -454,21 +480,49 @@ app.post("/agent/stream", express.json(), (req: Request, res: Response) => {
     res.setHeader("Connection", "keep-alive");
     res.setHeader("Access-Control-Allow-Origin", "*");
 
+    // Add error handler for response stream
+    res.on('error', (error) => {
+        console.error('❌ [STREAM] Response stream error:', error);
+    });
+
+    res.on('close', () => {
+        console.log('🔌 [STREAM] Client disconnected');
+    });
+
     try {
         const { action, parameters } = req.body;
 
-        // Start streaming response
+        // Start streaming response with proper error handling
         streamAgentResponse(action, parameters, res).catch((error) => {
-            res.write(
-                `data: ${JSON.stringify({ type: "error", error: error.message })}\n\n`,
-            );
-            res.end();
+            console.error('❌ [STREAM] Stream error caught:', error);
+            
+            // Only try to write if stream is still open
+            if (safeWriteToResponse(res,
+                `data: ${JSON.stringify({ 
+                    type: "notification", 
+                    message: "AI service temporarily unavailable", 
+                    notificationType: "error" 
+                })}\n\n`
+            )) {
+                safeWriteToResponse(res,
+                    `data: ${JSON.stringify({ type: "error", error: error.message })}\n\n`
+                );
+            }
+            
+            safeEndResponse(res);
         });
     } catch (error) {
-        res.write(
-            `data: ${JSON.stringify({ type: "error", error: "Streaming failed" })}\n\n`,
+        console.error('❌ [STREAM] Immediate error in /agent/stream:', error);
+        
+        safeWriteToResponse(res,
+            `data: ${JSON.stringify({ 
+                type: "notification", 
+                message: "Failed to start AI processing", 
+                notificationType: "error" 
+            })}\n\n`
         );
-        res.end();
+        
+        safeEndResponse(res);
     }
 });
 
@@ -479,9 +533,11 @@ async function streamAgentResponse(
 ): Promise<void> {
     try {
         // Send start event
-        res.write(
-            `data: ${JSON.stringify({ type: "start", message: "AI is thinking..." })}\n\n`,
-        );
+        if (!safeWriteToResponse(res,
+            `data: ${JSON.stringify({ type: "start", message: "AI is thinking..." })}\n\n`
+        )) {
+            return; // Response stream is already closed
+        }
 
         // Check if this is a test command
         if (parameters.originalRequest?.includes("/test:")) {
@@ -494,16 +550,26 @@ async function streamAgentResponse(
             await streamRealAgentResponse(action, parameters, res);
         }
 
-        // Send completion event
-        res.write(`data: ${JSON.stringify({ type: "complete" })}\n\n`);
-        res.end();
+        // Send completion event only if stream is still open
+        safeWriteToResponse(res, `data: ${JSON.stringify({ type: "complete" })}\n\n`);
+        safeEndResponse(res);
     } catch (error) {
-        const errorMessage =
-            error instanceof Error ? error.message : "Unknown error";
-        res.write(
-            `data: ${JSON.stringify({ type: "error", error: errorMessage })}\n\n`,
-        );
-        res.end();
+        console.error("❌ [STREAM] Error in streamAgentResponse:", error);
+        
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        
+        // Try to send error message to user
+        const errorData = JSON.stringify({ 
+            type: "notification", 
+            message: "AI service temporarily unavailable. Please try again later.",
+            notificationType: "error"
+        });
+        
+        if (safeWriteToResponse(res, `data: ${errorData}\n\n`)) {
+            safeWriteToResponse(res, `data: ${JSON.stringify({ type: "error", error: errorMessage })}\n\n`);
+        }
+        
+        safeEndResponse(res);
     }
 }
 
@@ -584,9 +650,11 @@ async function streamTestResponse(
     }
 
     // Send typing indicator
-    res.write(
-        `data: ${JSON.stringify({ type: "typing", message: description })}\n\n`,
-    );
+    if (!safeWriteToResponse(res,
+        `data: ${JSON.stringify({ type: "typing", message: description })}\n\n`
+    )) {
+        return; // Response stream closed
+    }
     await new Promise((resolve) => setTimeout(resolve, 500));
 
     // For enhanced content with equations, don't stream - just send final content
@@ -594,18 +662,18 @@ async function streamTestResponse(
 
     if (hasEquations) {
         // Send a message that we're generating complex content
-        res.write(
+        safeWriteToResponse(res,
             `data: ${JSON.stringify({
                 type: "content",
                 chunk: "Generating mathematical content...",
                 position: context?.position || 0,
-            })}\n\n`,
+            })}\n\n`
         );
 
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
         // Send the markdown content as a special operation
-        res.write(
+        safeWriteToResponse(res,
             `data: ${JSON.stringify({
                 type: "operation",
                 operation: {
@@ -614,7 +682,7 @@ async function streamTestResponse(
                     markdown: content,
                     description: description,
                 },
-            })}\n\n`,
+            })}\n\n`
         );
     } else {
         // Regular streaming for simple content
@@ -626,13 +694,15 @@ async function streamTestResponse(
 
             // Send chunk every 3-5 words for typing effect
             if (i % 4 === 0 || i === words.length - 1) {
-                res.write(
+                if (!safeWriteToResponse(res,
                     `data: ${JSON.stringify({
                         type: "content",
                         chunk: currentChunk,
                         position: context?.position || 0,
-                    })}\n\n`,
-                );
+                    })}\n\n`
+                )) {
+                    return; // Response stream closed
+                }
 
                 currentChunk = "";
                 // Simulate typing delay
@@ -655,13 +725,13 @@ async function streamTestResponse(
             description: description,
         };
 
-        res.write(
-            `data: ${JSON.stringify({ type: "operation", operation })}\n\n`,
+        safeWriteToResponse(res,
+            `data: ${JSON.stringify({ type: "operation", operation })}\n\n`
         );
     }
 
     // Send completion signal
-    res.write(`data: ${JSON.stringify({ type: "complete" })}\n\n`);
+    safeWriteToResponse(res, `data: ${JSON.stringify({ type: "complete" })}\n\n`);
 }
 
 async function streamRealAgentResponse(
@@ -673,69 +743,74 @@ async function streamRealAgentResponse(
 
     try {
         // Send typing indicator
-        res.write(
-            `data: ${JSON.stringify({ type: "typing", message: "AI is processing..." })}\n\n`,
-        );
+        if (!safeWriteToResponse(res,
+            `data: ${JSON.stringify({ type: "typing", message: "AI is processing..." })}\n\n`
+        )) {
+            return; // Response stream closed
+        }
 
-        // Route to agent process via IPC
+        // Route to agent process via IPC with timeout handling
         const result = await sendUICommandToAgent(action, parameters);
         
         if (result.success) {
             // Send success notification
-            res.write(
+            safeWriteToResponse(res,
                 `data: ${JSON.stringify({ 
                     type: "notification", 
                     message: result.message,
                     notificationType: "success"
-                })}\n\n`,
+                })}\n\n`
             );
             
             // Operations are already applied to Yjs by agent
             // Just notify frontend that changes are available
-            res.write(
+            safeWriteToResponse(res,
                 `data: ${JSON.stringify({ 
                     type: "operationsApplied",
                     operationCount: result.operations?.length || 0
-                })}\n\n`,
+                })}\n\n`
             );
-            
-            // Send completion only on success
-            res.write(`data: ${JSON.stringify({ type: "complete" })}\n\n`);
         } else {
-            // Send error notification
-            res.write(
+            // Send error notification for failed commands
+            safeWriteToResponse(res,
                 `data: ${JSON.stringify({ 
                     type: "notification", 
                     message: result.message || "AI command failed",
                     notificationType: "error"
-                })}\n\n`,
+                })}\n\n`
             );
-            
-            // Send error completion
-            res.write(`data: ${JSON.stringify({ 
-                type: "error", 
-                error: result.error || result.message || "AI command failed"
-            })}\n\n`);
         }
-        
-        res.end();
         
     } catch (error) {
         console.error("❌ [VIEW] Failed to route to agent:", error);
-        res.write(
+        
+        // Determine if this is a timeout error or other error
+        const isTimeout = error instanceof Error && error.message.includes("timeout");
+        const errorMessage = isTimeout 
+            ? "AI service is temporarily unavailable. Please try again in a moment."
+            : "Failed to process AI command. Please try again.";
+        
+        // Send user-friendly error notification
+        safeWriteToResponse(res,
             `data: ${JSON.stringify({ 
                 type: "notification", 
-                message: "Failed to process AI command",
+                message: errorMessage,
                 notificationType: "error"
-            })}\n\n`,
+            })}\n\n`
         );
-        res.write(
-            `data: ${JSON.stringify({ 
-                type: "error",
-                error: "Failed to process AI command"
-            })}\n\n`,
-        );
-        res.end();
+        
+        // If it's a timeout, provide a clear offline notification but don't generate content
+        if (isTimeout && parameters.originalRequest) {
+            console.log("🔄 [VIEW] Agent timeout, providing offline notification only");
+            
+            safeWriteToResponse(res,
+                `data: ${JSON.stringify({ 
+                    type: "notification", 
+                    message: "AI agent is offline. Please try again when the service is available.",
+                    notificationType: "warning"
+                })}\n\n`
+            );
+        }
     }
 }
 
@@ -1159,6 +1234,19 @@ Start typing to see the editor in action!
 
 process.on("disconnect", () => {
     process.exit(1);
+});
+
+// Add global error handlers to prevent crashes
+process.on('uncaughtException', (error) => {
+    console.error('❌ [CRITICAL] Uncaught exception:', error);
+    // Don't exit immediately, log and continue
+    console.error('Service continuing despite error...');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ [CRITICAL] Unhandled promise rejection at:', promise, 'reason:', reason);
+    // Don't exit immediately, log and continue  
+    console.error('Service continuing despite rejection...');
 });
 
 // Start the server

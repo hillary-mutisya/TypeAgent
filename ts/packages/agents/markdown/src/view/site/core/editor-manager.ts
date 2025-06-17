@@ -1,6 +1,7 @@
 // Editor initialization and management
 
 import { Editor } from "@milkdown/core";
+import { editorViewCtx, parserCtx } from "@milkdown/core";
 import { Crepe } from "@milkdown/crepe";
 import { commonmark } from "@milkdown/preset-commonmark";
 import { gfm } from "@milkdown/preset-gfm";
@@ -154,6 +155,28 @@ export class EditorManager {
 
     public getCollaborationManager(): CollaborationManager {
         return this.collaborationManager;
+    }
+
+    public async setContent(content: string): Promise<void> {
+        if (!this.state.editor) {
+            throw new Error("Editor not initialized");
+        }
+
+        // Parse markdown to ProseMirror document and update editor content
+        await this.state.editor.action((ctx) => {
+            const view = ctx.get(editorViewCtx);
+            const parser = ctx.get(parserCtx);
+            
+            // Parse the markdown content to a ProseMirror document
+            const doc = parser(content);
+            if (!doc) {
+                throw new Error("Failed to parse markdown content");
+            }
+            
+            // Create transaction to replace all content with new content
+            const transaction = view.state.tr.replaceWith(0, view.state.doc.content.size, doc.content);
+            view.dispatch(transaction);
+        });
     }
 
     public destroy(): void {

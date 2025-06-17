@@ -47,6 +47,9 @@ async function initializeApplication(): Promise<void> {
 
     // Initialize UI first
     await uiManager.initialize();
+    
+    // Connect DocumentManager to UI components
+    uiManager.setDocumentManager(documentManager);
 
     // If we have a document name in URL, switch to that document
     if (documentName) {
@@ -116,6 +119,7 @@ function setupManagerDependencies(editor: any): void {
     // Connect notification manager to other components
     const notificationManager = uiManager!.getNotificationManager();
     documentManager!.setNotificationManager(notificationManager);
+    documentManager!.setEditorManager(editorManager);
     aiAgentManager.setNotificationManager(notificationManager);
 
     // Connect editor to AI agent manager

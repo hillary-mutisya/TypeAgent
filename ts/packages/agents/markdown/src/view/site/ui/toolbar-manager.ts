@@ -2,10 +2,14 @@ import { DocumentManager } from "../core/document-manager";
 import { getElementById } from "../utils";
 
 export class ToolbarManager {
-    private documentManager: DocumentManager;
+    private documentManager: DocumentManager | null = null;
 
     constructor() {
-        this.documentManager = new DocumentManager();
+        // DocumentManager will be injected
+    }
+
+    public setDocumentManager(documentManager: DocumentManager): void {
+        this.documentManager = documentManager;
     }
 
     public async initialize(): Promise<void> {
@@ -43,6 +47,10 @@ export class ToolbarManager {
 
     private async handleFileOpen(file: File): Promise<void> {
         try {
+            if (!this.documentManager) {
+                throw new Error("DocumentManager not initialized");
+            }
+            
             // Use the document manager's improved file loading
             await this.documentManager.loadFileFromDisk(file);
             
@@ -54,6 +62,10 @@ export class ToolbarManager {
 
     private async handleFileExport(): Promise<void> {
         try {
+            if (!this.documentManager) {
+                throw new Error("DocumentManager not initialized");
+            }
+            
             const content = await this.documentManager.getDocumentContent();
             const blob = new Blob([content], { type: "text/markdown" });
             const url = URL.createObjectURL(blob);

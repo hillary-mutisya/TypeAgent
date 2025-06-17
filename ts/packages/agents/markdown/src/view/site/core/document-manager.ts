@@ -5,9 +5,14 @@ import { AI_CONFIG, DEFAULT_MARKDOWN_CONTENT } from "../config";
 
 export class DocumentManager {
     private notificationManager: any = null;
+    private editorManager: any = null;
 
     public setNotificationManager(notificationManager: any): void {
         this.notificationManager = notificationManager;
+    }
+
+    public setEditorManager(editorManager: any): void {
+        this.editorManager = editorManager;
     }
 
     public async saveDocument(editor?: Editor): Promise<void> {
@@ -127,9 +132,29 @@ export class DocumentManager {
 
     public async loadFileFromDisk(file: File): Promise<void> {
         try {
-            // For now, we can't directly load files from disk to the server
-            // Instead, we'll set the content and let the user know to save it
+            // Check if there's unsaved content
+            const hasUnsavedChanges = await this.hasUnsavedChanges();
+            
+            if (hasUnsavedChanges) {
+                const shouldSave = confirm(
+                    "You have unsaved changes. Do you want to save the current document before opening a new file?"
+                );
+                
+                if (shouldSave) {
+                    // Save current document first
+                    await this.saveDocument(this.editorManager?.getEditor());
+                }
+            }
+            
+            // Read the file content
             const content = await file.text();
+            
+            // Update the editor content directly
+            if (this.editorManager) {
+                await this.editorManager.setContent(content);
+            }
+            
+            // Also update the server-side content
             await this.setDocumentContent(content);
             
             // Extract document name from filename (without extension)
@@ -142,7 +167,7 @@ export class DocumentManager {
             
             if (this.notificationManager) {
                 this.notificationManager.showNotification(
-                    `📁 Loaded: ${file.name}. Content updated in editor.`,
+                    `📁 Loaded: ${file.name}`,
                     "success"
                 );
             }
@@ -155,6 +180,26 @@ export class DocumentManager {
                 );
             }
             throw error;
+        }
+    }
+
+    private async hasUnsavedChanges(): Promise<boolean> {
+        try {
+            if (!this.editorManager) return false;
+            
+            // Get current editor content
+            const currentContent = await this.getMarkdownContent(this.editorManager.getEditor());
+            
+            // Get server content
+            const serverContent = await this.getDocumentContent();
+            
+            // Compare content (normalize line endings)
+            const normalizeContent = (str: string) => str.replace(/\r\n/g, '\n').trim();
+            
+            return normalizeContent(currentContent) !== normalizeContent(serverContent);
+        } catch (error) {
+            console.warn("Could not check for unsaved changes:", error);
+            return false; // Assume no changes if we can't check
         }
     }
 }

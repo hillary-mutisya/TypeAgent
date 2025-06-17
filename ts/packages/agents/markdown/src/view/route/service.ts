@@ -109,8 +109,23 @@ app.post("/api/switch-document", express.json(), (req: Request, res: Response) =
     }
 });
 
-// Markdown rendering code
-const md = new MarkdownIt();
+// NEW: Enhanced operation application in view process
+function applyLLMOperationsToCollaboration(operations: DocumentOperation[]): void {
+    console.log("📝 [VIEW] Applying LLM operations to collaboration document:", operations.length);
+    
+    // Apply operations to local Yjs document (SINGLE SOURCE OF TRUTH)
+    for (const operation of operations) {
+        collaborationManager.applyOperation(operation);
+    }
+    
+    // AUTO-SAVE: Trigger async save to disk (non-blocking)
+    scheduleAutoSave();
+    
+    // Notify frontend clients via SSE (Yjs also syncs via y-websocket)
+    renderFileToClients(filePath);
+    
+    console.log("✅ [VIEW] Operations applied successfully");
+}
 md.use(GeoJSONPlugin);
 md.use(MermaidPlugin);
 md.use(LatexPlugin);
@@ -118,6 +133,78 @@ md.use(LatexPlugin);
 let clients: any[] = [];
 let filePath: string;
 let collaborationManager: CollaborationManager;
+
+// NEW: Auto-save mechanism
+let autoSaveTimer: NodeJS.Timeout | null = null;
+const AUTO_SAVE_DELAY = 2000; // 2 seconds after last change
+
+function scheduleAutoSave(): void {
+    // Cancel previous timer
+    if (autoSaveTimer) {
+        clearTimeout(autoSaveTimer);
+    }
+    
+    // Schedule new save
+    autoSaveTimer = setTimeout(() => {
+        performAutoSave();
+    }, AUTO_SAVE_DELAY);
+}
+
+function performAutoSave(): void {
+    if (!filePath) return;
+    
+    try {
+        const documentId = path.basename(filePath, ".md");
+        const updatedContent = collaborationManager.getDocumentContent(documentId);
+        
+        fs.writeFileSync(filePath, updatedContent, "utf-8");
+        console.log("💾 [AUTO-SAVE] Document saved to disk");
+        
+        // Notify clients of save status
+        clients.forEach((client) => {
+            client.write(`data: ${JSON.stringify({
+                type: "autoSave",
+                timestamp: Date.now()
+            })}\n\n`);
+        });
+    } catch (error) {
+        console.error("❌ [AUTO-SAVE] Failed to save document:", error);
+    }
+}
+
+// NEW: UI Command routing state
+let commandCounter = 0;
+const pendingCommands = new Map<string, any>();
+
+async function sendUICommandToAgent(
+    command: string, 
+    parameters: any
+): Promise<any> {
+    return new Promise((resolve, reject) => {
+        const requestId = `ui_cmd_${++commandCounter}`;
+        const timeout = setTimeout(() => {
+            pendingCommands.delete(requestId);
+            reject(new Error("Agent command timeout"));
+        }, 30000); // 30 second timeout for LLM operations
+        
+        // Store resolver for this request
+        pendingCommands.set(requestId, { resolve, reject, timeout });
+        
+        // Send command to agent process (parent)
+        process.send?.({
+            type: "uiCommand",
+            requestId: requestId,
+            command: command,
+            parameters: {
+                originalRequest: parameters.originalRequest,
+                context: parameters.context
+            },
+            timestamp: Date.now()
+        });
+        
+        console.log(`📤 [VIEW] Sent UI command to agent: ${command} (${requestId})`);
+    });
+}
 
 // Initialize collaboration manager
 collaborationManager = new CollaborationManager();
@@ -558,194 +645,60 @@ async function streamRealAgentResponse(
     parameters: any,
     res: Response,
 ): Promise<void> {
-    console.log("🤖 Streaming real LLM response via TypeAgent integration");
+    console.log("🔄 [VIEW] Routing LLM request to agent process:", action);
 
     try {
-        // Import our LLM integration components
-        const { LLMIntegrationService, DEFAULT_LLM_CONFIG } = await import(
-            "../../agent/LLMIntegrationService.js"
-        );
-
-        // Initialize LLM service if not already done
-        const llmService = new LLMIntegrationService(
-            "GPT_4o",
-            DEFAULT_LLM_CONFIG,
-        );
-
-        // Extract AI command from the original request
-        const originalRequest = parameters.originalRequest || "";
-        const aiCommand = detectAICommand(originalRequest);
-
-        // Load current document content
-        const markdownContent = fs.readFileSync(filePath, "utf-8");
-
-        // Build context for AI request
-        const context = {
-            currentContent: markdownContent,
-            cursorPosition:
-                parameters.context?.position || markdownContent.length,
-            surroundingText: markdownContent,
-        };
-
-        // Extract parameters for specific commands
-        let commandParams = {};
-        if (aiCommand === "continue") {
-            commandParams = { hint: extractHintFromRequest(originalRequest) };
-        } else if (aiCommand === "diagram") {
-            commandParams = {
-                description:
-                    originalRequest.replace(/\/diagram|diagram/, "").trim() ||
-                    "process flow",
-                diagramType: "mermaid",
-            };
-        } else if (aiCommand === "augment") {
-            commandParams = {
-                instruction:
-                    originalRequest.replace(/\/augment|augment/, "").trim() ||
-                    "improve formatting",
-                scope: "section",
-            };
-        }
-
-        // Set up streaming callback to send updates to client
-        const streamingCallback = {
-            onContent: (delta: string) => {
-                // Send content chunk to client
-                res.write(
-                    `data: ${JSON.stringify({
-                        type: "content",
-                        chunk: delta,
-                        position: parameters.context?.position || 0,
-                    })}\n\n`,
-                );
-            },
-            onProgress: (status: string) => {
-                // Send progress update to client
-                res.write(
-                    `data: ${JSON.stringify({
-                        type: "typing",
-                        message: status,
-                    })}\n\n`,
-                );
-            },
-            onComplete: () => {
-                console.log("✅ LLM streaming completed");
-            },
-            onError: (error: Error) => {
-                console.error("❌ LLM streaming error:", error);
-                res.write(
-                    `data: ${JSON.stringify({
-                        type: "error",
-                        error: error.message,
-                    })}\n\n`,
-                );
-            },
-        };
-
-        // Send initial status
+        // Send typing indicator
         res.write(
-            `data: ${JSON.stringify({
-                type: "typing",
-                message: `AI processing ${aiCommand} command...`,
-            })}\n\n`,
+            `data: ${JSON.stringify({ type: "typing", message: "AI is processing..." })}\n\n`,
         );
 
-        // Process AI request with streaming
-        const aiResult = await llmService.processAIRequest(
-            aiCommand,
-            commandParams,
-            context,
-            streamingCallback,
-        );
-
-        // Apply operations to the document if successful
-        if (aiResult.operations && aiResult.operations.length > 0) {
-            // Apply operations to file
-            const updatedContent = applyOperationsToMarkdown(
-                markdownContent,
-                aiResult.operations,
-            );
-            fs.writeFileSync(filePath, updatedContent, "utf-8");
-
-            // Send operations to client for immediate UI update
-            for (const operation of aiResult.operations) {
-                res.write(
-                    `data: ${JSON.stringify({
-                        type: "operation",
-                        operation: operation,
-                    })}\n\n`,
-                );
-            }
-
-            // Trigger preview update for other clients
-            renderFileToClients(filePath);
-        } else {
-            // Fallback: send content as a simple operation
-            const operation = {
-                type: "insert",
-                position: parameters.context?.position || 0,
-                content: [
-                    {
-                        type: "paragraph",
-                        content: [{ type: "text", text: aiResult.content }],
-                    },
-                ],
-                description: `Generated ${aiCommand} content`,
-            };
-
+        // Route to agent process via IPC
+        const result = await sendUICommandToAgent(action, parameters);
+        
+        if (result.success) {
+            // Send success notification
             res.write(
-                `data: ${JSON.stringify({ type: "operation", operation })}\n\n`,
+                `data: ${JSON.stringify({ 
+                    type: "notification", 
+                    message: result.message,
+                    notificationType: "success"
+                })}\n\n`,
             );
-
-            // Update file with the generated content
-            const lines = markdownContent.split("\n");
-            const insertPosition = Math.min(
-                parameters.context?.position || lines.length,
-                lines.length,
+            
+            // Operations are already applied to Yjs by agent
+            // Just notify frontend that changes are available
+            res.write(
+                `data: ${JSON.stringify({ 
+                    type: "operationsApplied",
+                    operationCount: result.operations?.length || 0
+                })}\n\n`,
             );
-            lines.splice(insertPosition, 0, aiResult.content);
-            const updatedContent = lines.join("\n");
-            fs.writeFileSync(filePath, updatedContent, "utf-8");
-            renderFileToClients(filePath);
+        } else {
+            // Send error notification
+            res.write(
+                `data: ${JSON.stringify({ 
+                    type: "notification", 
+                    message: result.message,
+                    notificationType: "error"
+                })}\n\n`,
+            );
         }
-
-        console.log(`✅ Real LLM ${aiCommand} command completed successfully`);
+        
+        // Send completion
+        res.write(`data: ${JSON.stringify({ type: "complete" })}\n\n`);
+        res.end();
+        
     } catch (error) {
-        console.error("❌ Real LLM streaming failed:", error);
-
-        // Enhanced error logging for debugging
-        const err = error as Error;
-        console.error("Error details:", {
-            name: err.name,
-            message: err.message,
-            stack: err.stack
-        });
-        
-        // Check if it's a specific type of error we can handle
-        if (err.message.includes("Azure") || err.message.includes("API")) {
-            console.log("💡 Azure OpenAI API issue detected - check environment variables");
-        } else if (err.message.includes("schema") || err.message.includes("validation")) {
-            console.log("💡 Schema validation issue detected - check TypeChat setup");
-        }
-        
-        // Provide enhanced fallback with error info
-        console.log("🔄 Falling back to enhanced test response with error context");
-        
-        // Send error info to client
+        console.error("❌ [VIEW] Failed to route to agent:", error);
         res.write(
-            `data: ${JSON.stringify({
-                type: "typing",
-                message: "LLM service unavailable, using fallback mode..."
+            `data: ${JSON.stringify({ 
+                type: "notification", 
+                message: "Failed to process AI command",
+                notificationType: "error"
             })}\n\n`,
         );
-
-        // Fallback to test response if LLM integration fails
-        await streamTestResponse(
-            "/test:" +
-                detectAICommand(parameters.originalRequest || "continue"),
-            parameters.context,
-            res,
-        );
+        res.end();
     }
 }
 
@@ -1206,14 +1159,45 @@ process.on("message", (message: any) => {
         }
     } else if (message.type == "applyOperations") {
         // Send operations to frontend
+        console.log("🔍 [PHASE1] View received IPC operations from agent:", message.operations?.length);
         clients.forEach((client) => {
             client.write(
                 `data: ${JSON.stringify({
-                    type: "operations",
+                    type: "operations", 
                     operations: message.operations,
                 })}\n\n`,
             );
         });
+    } else if (message.type === "getDocumentContent") {
+        // NEW: Handle content requests from agent (Flow 1 simplification)
+        try {
+            const documentId = path.basename(filePath, ".md");
+            const content = collaborationManager.getDocumentContent(documentId);
+            
+            process.send?.({
+                type: "documentContent",
+                content: content,
+                timestamp: Date.now()
+            });
+            
+            console.log("📤 [VIEW] Sent document content to agent process");
+        } catch (error) {
+            console.error("❌ [VIEW] Failed to get document content:", error);
+            process.send?.({
+                type: "documentContent",
+                content: "",
+                timestamp: Date.now()
+            });
+        }
+    } else if (message.type === "uiCommandResult") {
+        // NEW: Handle UI command results from agent (Flow 2)
+        const pending = pendingCommands.get(message.requestId);
+        if (pending) {
+            clearTimeout(pending.timeout);
+            pendingCommands.delete(message.requestId);
+            pending.resolve(message.result);
+            console.log(`📨 [VIEW] Received result for ${message.requestId}`);
+        }
     } else if (message.type == "initCollaboration") {
         // Handle collaboration initialization from action handler
         console.log(

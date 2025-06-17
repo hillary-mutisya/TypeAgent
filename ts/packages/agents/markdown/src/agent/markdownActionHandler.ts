@@ -22,6 +22,7 @@ import { CollaborationContext } from "./collaborationTypes.js";
 import { AIAgentCollaborator } from "./AIAgentCollaborator.js";
 import { AsyncResearchHandler } from "./AsyncResearchHandler.js";
 import { LLMIntegrationService, DEFAULT_LLM_CONFIG } from "./LLMIntegrationService.js";
+import { UICommandResult } from "./ipcTypes.js";
 import findConfig from "find-config";
 import dotenv from "dotenv";
 
@@ -83,12 +84,43 @@ type MarkdownActionContext = {
     llmService?: LLMIntegrationService | undefined;
 };
 
-async function executeMarkdownAction(
-    action: AppAction,
+// NEW: Handle UI commands sent from view process (Flow 2)
+async function handleUICommand(
+    command: string,
+    parameters: any,
     context: ActionContext<MarkdownActionContext>,
-) {
-    let result = await handleMarkdownAction(action as MarkdownAction, context);
-    return result;
+): Promise<UICommandResult> {
+    console.log(`🖥️ [AGENT] Processing UI command: ${command}`);
+    
+    try {
+        // Build action from UI command (similar to CLI action building)
+        const action: MarkdownAction = {
+            actionName: "updateDocument",
+            parameters: {
+                originalRequest: parameters.originalRequest,
+                aiCommand: command,
+            }
+        };
+        
+        // Use existing LLM integration (same as Flow 1)
+        const result = await handleMarkdownAction(action, context);
+        
+        return {
+            success: true,
+            operations: result.data?.operations || [],
+            message: result.data?.operationSummary || "Command completed successfully",
+            type: "success"
+        };
+        
+    } catch (error) {
+        console.error(`❌ [AGENT] UI command failed:`, error);
+        return {
+            success: false,
+            error: (error as Error).message,
+            message: `Failed to execute ${command} command`,
+            type: "error"
+        };
+    }
 }
 
 async function streamPartialMarkdownAction(
@@ -210,6 +242,9 @@ async function updateMarkdownContext(
     context: SessionContext<MarkdownActionContext>,
 ): Promise<void> {
     if (enable) {
+        // Store agent context for UI command processing
+        setCurrentAgentContext(context.agentContext);
+        
         if (!context.agentContext.currentFileName) {
             context.agentContext.currentFileName = "live.md";
         }
@@ -388,12 +423,14 @@ async function handleMarkdownAction(
             break;
         }
         case "updateDocument": {
+            console.log("🔍 [PHASE1] Starting updateDocument action in agent process");
             result = createActionResult("Updating document ...");
 
             const filePath = `${actionContext.sessionContext.agentContext.currentFileName}`;
             let markdownContent;
             if (await storage?.exists(filePath)) {
                 markdownContent = await storage?.read(filePath, "utf8");
+                console.log("🔍 [PHASE1] Read content from storage:", markdownContent?.length, "chars");
             }
 
             // Use collaboration provider if available
@@ -405,6 +442,7 @@ async function handleMarkdownAction(
             if (collaborationProvider) {
                 // Update collaboration document content
                 markdownContent = collaborationProvider.getMarkdownContent();
+                console.log("🔍 [PHASE1] Got content from collaboration provider:", markdownContent?.length, "chars");
             }
 
             // Check if this is an AI command that should be handled asynchronously
@@ -438,6 +476,7 @@ async function handleMarkdownAction(
                     ) {
                         // Apply to collaboration provider first
                         if (collaborationProvider) {
+                            console.log("🔍 [PHASE1] Agent applying operations to Yjs:", updateResult.operations.length);
                             applyOperationsToYjsDocument(
                                 collaborationProvider,
                                 updateResult.operations,
@@ -447,6 +486,7 @@ async function handleMarkdownAction(
                             const updatedContent =
                                 collaborationProvider.getMarkdownContent();
                             await storage?.write(filePath, updatedContent);
+                            console.log("🔍 [PHASE1] Agent wrote updated content to storage:", updatedContent.length, "chars");
                         } else {
                             // Fallback to direct file operations
                             if (markdownContent) {
@@ -464,6 +504,7 @@ async function handleMarkdownAction(
                             actionContext.sessionContext.agentContext
                                 .viewProcess
                         ) {
+                            console.log("🔍 [PHASE1] Agent sending operations to view process via IPC");
                             actionContext.sessionContext.agentContext.viewProcess.send(
                                 {
                                     type: "applyOperations",
@@ -950,4 +991,46 @@ function contentItemToText(item: any): string {
                 ? item.content.map(contentItemToText).join("")
                 : "";
     }
+}
+
+// NEW: Global process message handler for UI commands (Flow 2)
+// This is a simplified version - in a full implementation, this would be properly 
+// integrated with the TypeAgent framework's message handling
+let currentAgentContext: MarkdownActionContext | null = null;
+
+// Store agent context for UI command processing
+export function setCurrentAgentContext(context: MarkdownActionContext) {
+    currentAgentContext = context;
+}
+
+// Handle UI commands from view process
+if (typeof process !== 'undefined' && process.on) {
+    process.on("message", (message: any) => {
+        if (message.type === "uiCommand" && currentAgentContext) {
+            console.log(`📨 [AGENT] Received UI command: ${message.command}`);
+            
+            handleUICommandViaIPC(message, currentAgentContext)
+                .then(result => {
+                    process.send?.({
+                        type: "uiCommandResult",
+                        requestId: message.requestId,
+                        result: result
+                    });
+                    console.log(`📤 [AGENT] Sent UI command result: ${result.success}`);
+                })
+                .catch(error => {
+                    process.send?.({
+                        type: "uiCommandResult", 
+                        requestId: message.requestId,
+                        result: {
+                            success: false,
+                            error: error.message,
+                            message: "Internal error processing UI command",
+                            type: "error"
+                        }
+                    });
+                    console.error(`❌ [AGENT] UI command error:`, error);
+                });
+        }
+    });
 }

@@ -133,6 +133,31 @@ export class AIAgentManager {
                 );
                 break;
 
+            case "notification":
+                // NEW: Handle success/error notifications from agent
+                this.showNotification((data as any).message, (data as any).notificationType);
+                break;
+                
+            case "operationsApplied":
+                // NEW: Operations already applied by agent, just show completion
+                console.log(`✅ Agent applied ${(data as any).operationCount} operations`);
+                this.showNotification(
+                    `AI command completed (${(data as any).operationCount} changes)`, 
+                    "success"
+                );
+                break;
+
+            case "complete":
+                this.hideAIPresence();
+                console.log("✅ Stream completed");
+                break;
+
+            case "error":
+                this.showNotification((data as any).error, "error");
+                this.hideAIPresence();
+                break;
+
+            // LEGACY: Keep old handlers for backward compatibility during transition
             case "content":
                 // Skip content events for test mode commands to prevent duplicate content
                 // Test mode sends both content chunks AND operations, but we only want operations

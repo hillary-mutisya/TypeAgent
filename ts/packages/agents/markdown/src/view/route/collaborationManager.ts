@@ -44,6 +44,32 @@ export class CollaborationManager {
     }
 
     /**
+     * Apply operation to Yjs document (NEW for Flow 1 simplification)
+     */
+    applyOperation(operation: any): void {
+        // For now, we'll implement this as a basic operation applier
+        // This will be enhanced based on the DocumentOperation type
+        console.log("📝 [COLLAB] Applying operation:", operation.type);
+        
+        // TODO: Implement actual operation application to Yjs
+        // This is a placeholder for the enhanced implementation
+    }
+
+    /**
+     * Get document content as string (SINGLE SOURCE OF TRUTH)
+     */
+    getDocumentContent(documentId: string): string {
+        const ydoc = this.documents.get(documentId);
+        if (!ydoc) {
+            console.warn(`No document found for ID: ${documentId}, returning empty content`);
+            return "";
+        }
+        
+        const ytext = ydoc.getText("content");
+        return ytext.toString(); // Yjs is the authoritative source
+    }
+
+    /**
      * Get document content as string
      */
     getDocumentContent(documentId: string): string {

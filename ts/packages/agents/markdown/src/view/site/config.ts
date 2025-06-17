@@ -1,4 +1,6 @@
 import { CrepeFeature } from "@milkdown/crepe";
+import { editorViewCtx } from "@milkdown/core";
+import { executeAgentCommand } from "./core/ai-agent-manager";
 import type { EditorConfig } from "./types";
 
 export const EDITOR_CONFIG = {
@@ -127,12 +129,7 @@ export function createCrepeFeatureConfigs(): Partial<
                         label: "Continue Writing",
                         icon: "✨",
                         onRun: async (ctx: any) => {
-                            const { executeAgentCommand } = await import(
-                                "./core/ai-agent-manager"
-                            );
-                            const view = ctx.get(
-                                (await import("@milkdown/core")).editorViewCtx,
-                            );
+                            const view = ctx.get(editorViewCtx);
                             const { from } = view.state.selection;
                             await executeAgentCommand("continue", {
                                 position: from,
@@ -143,12 +140,7 @@ export function createCrepeFeatureConfigs(): Partial<
                         label: "Generate Diagram",
                         icon: "📊",
                         onRun: async (ctx: any) => {
-                            const { executeAgentCommand } = await import(
-                                "./core/ai-agent-manager"
-                            );
-                            const view = ctx.get(
-                                (await import("@milkdown/core")).editorViewCtx,
-                            );
+                            const view = ctx.get(editorViewCtx);
                             const { from } = view.state.selection;
                             const description = prompt(
                                 "Describe the diagram you want to generate:",
@@ -165,12 +157,7 @@ export function createCrepeFeatureConfigs(): Partial<
                         label: "Augment Document",
                         icon: "🔧",
                         onRun: async (ctx: any) => {
-                            const { executeAgentCommand } = await import(
-                                "./core/ai-agent-manager"
-                            );
-                            const view = ctx.get(
-                                (await import("@milkdown/core")).editorViewCtx,
-                            );
+                            const view = ctx.get(editorViewCtx);
                             const { from } = view.state.selection;
                             const instruction = prompt(
                                 "How would you like to improve the document?",
@@ -187,12 +174,7 @@ export function createCrepeFeatureConfigs(): Partial<
                         label: "Test: Continue",
                         icon: "🧪",
                         onRun: async (ctx: any) => {
-                            const { executeAgentCommand } = await import(
-                                "./core/ai-agent-manager"
-                            );
-                            const view = ctx.get(
-                                (await import("@milkdown/core")).editorViewCtx,
-                            );
+                            const view = ctx.get(editorViewCtx);
                             const { from } = view.state.selection;
                             await executeAgentCommand("continue", {
                                 position: from,
@@ -204,12 +186,7 @@ export function createCrepeFeatureConfigs(): Partial<
                         label: "Test: Diagram",
                         icon: "🧪",
                         onRun: async (ctx: any) => {
-                            const { executeAgentCommand } = await import(
-                                "./core/ai-agent-manager"
-                            );
-                            const view = ctx.get(
-                                (await import("@milkdown/core")).editorViewCtx,
-                            );
+                            const view = ctx.get(editorViewCtx);
                             const { from } = view.state.selection;
                             const description =
                                 prompt("Test diagram description:") ||
@@ -225,12 +202,7 @@ export function createCrepeFeatureConfigs(): Partial<
                         label: "Test: Augment",
                         icon: "🧪",
                         onRun: async (ctx: any) => {
-                            const { executeAgentCommand } = await import(
-                                "./core/ai-agent-manager"
-                            );
-                            const view = ctx.get(
-                                (await import("@milkdown/core")).editorViewCtx,
-                            );
+                            const view = ctx.get(editorViewCtx);
                             const { from } = view.state.selection;
                             const instruction =
                                 prompt("Test augmentation instruction:") ||

@@ -35,7 +35,9 @@
         <span id="save-status" class="save-status"></span>
       </div>
       <div class="toolbar-section">
-        <button id="raw-markdown-toggle">📄 Raw Markdown</button>
+        <button id="open-btn">📁 Open</button>
+        <button id="export-btn">📥 Export</button>
+        <button id="share-btn">🔗 Share</button>
         <button id="theme-toggle">🎨 Theme</button>
         <button id="save-btn">💾 Save</button>
       </div>
@@ -43,19 +45,14 @@
 
     <div id="editor-container">
       <div id="editor"></div>
-      <div id="raw-markdown-panel" class="raw-markdown-panel">
-        <div class="raw-markdown-header">
-          <h3>📄 Raw Markdown</h3>
-          <button id="close-raw-panel" class="close-button">✕</button>
-        </div>
-        <div class="raw-markdown-content">
-          <pre><code id="raw-markdown-text"></code></pre>
-        </div>
-      </div>
     </div>
+
+    <!-- Hidden file input for opening files -->
+    <input type="file" id="file-input" accept=".md,.markdown" style="display: none;" />
 
     <!-- Status and notifications -->
     <div id="connection-status" class="status"></div>
+    <div id="collaboration-status" class="collaboration-status"></div>
 
     <!-- External libraries -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>

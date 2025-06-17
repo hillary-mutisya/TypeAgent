@@ -92,4 +92,70 @@ export class DocumentManager {
             this.notificationManager.showSaveStatus(status);
         }
     }
+
+    public async getDocumentContent(): Promise<string> {
+        try {
+            const response = await fetch(AI_CONFIG.ENDPOINTS.DOCUMENT);
+            if (response.ok) {
+                return await response.text();
+            }
+            throw new Error("Failed to fetch document content");
+        } catch (error) {
+            console.error("Failed to get document content:", error);
+            throw error;
+        }
+    }
+
+    public async setDocumentContent(content: string): Promise<void> {
+        try {
+            const response = await fetch(AI_CONFIG.ENDPOINTS.DOCUMENT, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ content }),
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to set document content: ${response.status}`);
+            }
+            
+            // Don't reload the whole page, just notify the editor will update via collaboration
+            console.log("Document content updated successfully");
+        } catch (error) {
+            console.error("Failed to set document content:", error);
+            throw error;
+        }
+    }
+
+    public async loadFileFromDisk(file: File): Promise<void> {
+        try {
+            // For now, we can't directly load files from disk to the server
+            // Instead, we'll set the content and let the user know to save it
+            const content = await file.text();
+            await this.setDocumentContent(content);
+            
+            // Extract document name from filename (without extension)
+            const documentName = file.name.replace(/\.(md|markdown)$/i, "");
+            
+            // Update browser URL to reflect the new document
+            const newUrl = `/document/${encodeURIComponent(documentName)}`;
+            window.history.pushState({ documentName }, `${documentName} - AI-Enhanced Markdown Editor`, newUrl);
+            document.title = `${documentName} - AI-Enhanced Markdown Editor`;
+            
+            if (this.notificationManager) {
+                this.notificationManager.showNotification(
+                    `📁 Loaded: ${file.name}. Content updated in editor.`,
+                    "success"
+                );
+            }
+        } catch (error) {
+            console.error("Failed to load file:", error);
+            if (this.notificationManager) {
+                this.notificationManager.showNotification(
+                    "❌ Failed to load file",
+                    "error"
+                );
+            }
+            throw error;
+        }
+    }
 }

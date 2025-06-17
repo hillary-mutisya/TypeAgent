@@ -37,6 +37,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 async function initializeApplication(): Promise<void> {
     console.log("🚀 Starting AI-Enhanced Markdown Editor...");
 
+    // Check if we have a document name in the URL
+    const urlPath = window.location.pathname;
+    const documentNameMatch = urlPath.match(/\/document\/([^\/]+)/);
+    const documentName = documentNameMatch ? documentNameMatch[1] : null;
+
+    console.log("🔍 URL Analysis:", { urlPath, documentName });
+
     // Initialize managers
     editorManager = new EditorManager();
     documentManager = new DocumentManager();
@@ -44,6 +51,12 @@ async function initializeApplication(): Promise<void> {
 
     // Initialize UI first
     await uiManager.initialize();
+
+    // If we have a document name in URL, switch to that document
+    if (documentName) {
+        console.log(`🔗 Loading document from URL: ${documentName}`);
+        await switchToDocument(documentName);
+    }
 
     // Get required DOM elements
     const editorElement = getRequiredElement("editor");
@@ -58,11 +71,56 @@ async function initializeApplication(): Promise<void> {
     eventHandlers.setEditor(editor);
     eventHandlers.setupKeyboardShortcuts();
 
+    // Setup browser history handling
+    setupBrowserHistoryHandling();
+
     // Export for global access (for debugging and compatibility)
     setupGlobalAccess(editor);
 
     console.log("✅ Application initialized successfully");
     logAvailableFeatures();
+}
+
+async function switchToDocument(documentName: string): Promise<void> {
+    try {
+        console.log(`🔄 Switching to document: ${documentName}`);
+        
+        const response = await fetch("/api/switch-document", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ documentName }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to switch document: ${response.status}`);
+        }
+
+        const result = await response.json();
+        console.log("✅ Document switched successfully:", result);
+        
+        // Update the page title to include document name
+        document.title = `${documentName} - AI-Enhanced Markdown Editor`;
+        
+    } catch (error) {
+        console.error("❌ Failed to switch document:", error);
+        showError(`Failed to load document: ${documentName}`);
+    }
+}
+
+function setupBrowserHistoryHandling(): void {
+    // Handle browser back/forward navigation
+    window.addEventListener('popstate', async (event) => {
+        console.log("🔄 Browser navigation detected:", event.state);
+        
+        const urlPath = window.location.pathname;
+        const documentNameMatch = urlPath.match(/\/document\/([^\/]+)/);
+        const documentName = documentNameMatch ? documentNameMatch[1] : null;
+        
+        if (documentName && event.state?.documentName !== documentName) {
+            console.log(`🔗 Loading document from navigation: ${documentName}`);
+            await switchToDocument(documentName);
+        }
+    });
 }
 
 function setupManagerDependencies(editor: any): void {
@@ -99,7 +157,8 @@ function logAvailableFeatures(): void {
     console.log("   • Real-time collaboration with Yjs");
     console.log("   • AI-powered commands and assistance");
     console.log("   • Mermaid diagram support");
-    console.log("   • Raw markdown panel");
+    console.log("   • Shareable document URLs");
+    console.log("   • File open/export functionality");
     console.log("   • Theme switching (light/dark)");
     console.log("   • Keyboard shortcuts (Ctrl+S to save)");
     console.log("");
@@ -109,6 +168,11 @@ function logAvailableFeatures(): void {
     console.log("   • /diagram [description] - Generate diagram");
     console.log("   • /augment [instruction] - Improve document");
     console.log('   • Add "test:" prefix for test mode (e.g., /test:continue)');
+    console.log("");
+    console.log("🔗 Sharing:");
+    console.log("   • Click Share button to copy shareable URL");
+    console.log("   • URLs format: /document/{documentName}");
+    console.log("   • Shared links open same document in collaboration");
 }
 
 function showError(message: string): void {

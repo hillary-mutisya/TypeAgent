@@ -74,6 +74,7 @@ export function instantiate(): AppAgent {
 type MarkdownActionContext = {
     currentFileName?: string | undefined;
     viewProcess?: ChildProcess | undefined;
+    collaborationProcess?: ChildProcess | undefined;
     localHostPort: number;
     collaborationProvider?: TypeAgentYjsProvider | undefined;
     collaborationContext?: CollaborationContext | undefined;
@@ -223,6 +224,11 @@ async function updateMarkdownContext(
         // Initialize collaboration provider
         if (!context.agentContext.collaborationProvider) {
             try {
+                // Start y-websocket server if not already running
+                if (!context.agentContext.collaborationProcess) {
+                    context.agentContext.collaborationProcess = await startCollaborationServer();
+                }
+
                 const collaborationConfig = {
                     documentId: fileName.replace(".md", ""), // Use filename as document ID
                     websocketUrl: "ws://localhost:1234", // Standard y-websocket-server port
@@ -313,8 +319,14 @@ async function updateMarkdownContext(
             context.agentContext.researchHandler = undefined;
         }
 
+        if (context.agentContext.collaborationProcess) {
+            context.agentContext.collaborationProcess.kill();
+            context.agentContext.collaborationProcess = undefined;
+        }
+
         if (context.agentContext.viewProcess) {
             context.agentContext.viewProcess.kill();
+            context.agentContext.viewProcess = undefined;
         }
     }
 }
@@ -584,6 +596,44 @@ function detectAICommand(request: string): "continue" | "diagram" | "augment" | 
 function extractHintFromRequest(request: string): string | undefined {
     const match = request.match(/\/continue\s+(.+)/i) || request.match(/continue writing\s+(.+)/i);
     return match ? match[1].trim() : undefined;
+}
+
+/**
+ * Start y-websocket collaboration server
+ */
+async function startCollaborationServer(): Promise<ChildProcess | undefined> {
+    return new Promise((resolve, reject) => {
+        try {
+            console.log("🔄 Starting y-websocket collaboration server...");
+            
+            // Use spawn to run npx y-websocket-server
+            const { spawn } = require("child_process");
+            const collaborationProcess = spawn("npx", ["-y", "y-websocket-server", "--port", "1234"], {
+                stdio: ["pipe", "pipe", "pipe"],
+                env: process.env,
+            });
+
+            // Handle process events
+            collaborationProcess.on("error", (error: Error) => {
+                console.error("❌ Failed to start collaboration server:", error);
+                reject(error);
+            });
+
+            collaborationProcess.on("exit", (code: number | null) => {
+                console.log(`📡 Collaboration server exited with code: ${code}`);
+            });
+
+            // Wait a moment for the server to start, then resolve
+            setTimeout(() => {
+                console.log("✅ Collaboration server started on port 1234");
+                resolve(collaborationProcess);
+            }, 2000);
+
+        } catch (error) {
+            console.error("❌ Error starting collaboration server:", error);
+            resolve(undefined);
+        }
+    });
 }
 
 export async function createViewServiceHost(filePath: string, port: number) {

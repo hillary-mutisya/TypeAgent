@@ -22,7 +22,6 @@ export const EDITOR_CONFIG = {
 
     STORAGE_KEYS: {
         THEME: "theme",
-        RAW_MARKDOWN_PANEL_VISIBLE: "rawMarkdownPanelVisible",
     },
 
     THEMES: {

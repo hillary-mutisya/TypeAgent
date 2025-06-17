@@ -94,6 +94,12 @@ export class CollaborationManager {
         provider.on("sync", (isSynced: boolean) => {
             if (isSynced) {
                 console.log("📄 Document synchronized");
+                statusElement.textContent = "📄 Document synchronized";
+                statusElement.className = "collaboration-status connected";
+                statusElement.style.display = "block";
+                setTimeout(() => {
+                    statusElement.style.display = "none";
+                }, 3000);
             }
         });
     }

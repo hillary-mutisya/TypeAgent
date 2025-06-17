@@ -32,9 +32,81 @@ const staticPath = fileURLToPath(
 
 app.use(limiter);
 
-// Root route
+// Root route - default document
 app.get("/", (req: Request, res: Response) => {
     res.sendFile(path.join(staticPath, "index.html"));
+});
+
+// Document-specific route
+app.get("/document/:documentName", (req: Request, res: Response) => {
+    res.sendFile(path.join(staticPath, "index.html"));
+});
+
+// API endpoint to get current document name from URL
+app.get("/api/current-document", (req: Request, res: Response) => {
+    res.json({
+        currentDocument: filePath ? path.basename(filePath, ".md") : null,
+        fullPath: filePath || null,
+    });
+});
+
+// API endpoint to switch to a specific document
+app.post("/api/switch-document", express.json(), (req: Request, res: Response) => {
+    try {
+        const { documentName } = req.body;
+        
+        if (!documentName) {
+            res.status(400).json({ error: "Document name is required" });
+            return;
+        }
+
+        // Construct file path - in a real implementation, you'd have a documents directory
+        // For now, we'll assume documents are in the same directory as the current file
+        const documentPath = filePath 
+            ? path.join(path.dirname(filePath), `${documentName}.md`)
+            : `${documentName}.md`;
+
+        if (!fs.existsSync(documentPath)) {
+            // Create new document if it doesn't exist
+            fs.writeFileSync(documentPath, `# ${documentName}\n\nThis is a new document.\n`);
+        }
+
+        // Stop watching old file
+        if (filePath) {
+            fs.unwatchFile(filePath);
+        }
+
+        // Set new file path
+        filePath = documentPath;
+
+        // Initialize collaboration for new document
+        const documentId = documentName;
+        collaborationManager.initializeDocument(documentId, documentPath);
+
+        // Load content into collaboration manager
+        const content = fs.readFileSync(documentPath, "utf-8");
+        collaborationManager.setDocumentContent(documentId, content);
+
+        // Render to clients
+        renderFileToClients(filePath);
+
+        // Watch new file for changes
+        fs.watchFile(filePath, () => {
+            renderFileToClients(filePath);
+        });
+
+        res.json({ 
+            success: true, 
+            documentName: documentName,
+            content: content,
+            documentPath: documentPath
+        });
+    } catch (error) {
+        res.status(500).json({
+            error: "Failed to switch document",
+            details: error,
+        });
+    }
 });
 
 // Markdown rendering code
@@ -158,6 +230,75 @@ app.get("/collaboration/info", (req: Request, res: Response) => {
         websocketServerUrl: "ws://localhost:1234",
         currentDocument: filePath ? path.basename(filePath) : null,
     });
+});
+
+// Add file operations endpoints
+app.post("/file/load", express.json(), (req: Request, res: Response) => {
+    try {
+        const { filePath: newFilePath } = req.body;
+        
+        if (!newFilePath || !fs.existsSync(newFilePath)) {
+            res.status(404).json({ error: "File not found" });
+            return;
+        }
+
+        // Stop watching old file
+        if (filePath) {
+            fs.unwatchFile(filePath);
+        }
+
+        // Set new file path
+        filePath = newFilePath;
+
+        // Initialize collaboration for new document
+        const documentId = path.basename(newFilePath, ".md");
+        collaborationManager.initializeDocument(documentId, newFilePath);
+
+        // Load content into collaboration manager
+        const content = fs.readFileSync(newFilePath, "utf-8");
+        collaborationManager.setDocumentContent(documentId, content);
+
+        // Render to clients
+        renderFileToClients(filePath);
+
+        // Watch new file for changes
+        fs.watchFile(filePath, () => {
+            renderFileToClients(filePath);
+        });
+
+        res.json({ 
+            success: true, 
+            fileName: path.basename(newFilePath),
+            content: content
+        });
+    } catch (error) {
+        res.status(500).json({
+            error: "Failed to load file",
+            details: error,
+        });
+    }
+});
+
+app.get("/file/info", (req: Request, res: Response) => {
+    if (!filePath) {
+        res.status(404).json({ error: "No file loaded" });
+        return;
+    }
+
+    try {
+        const stats = fs.statSync(filePath);
+        res.json({
+            fileName: path.basename(filePath),
+            fullPath: filePath,
+            size: stats.size,
+            modified: stats.mtime,
+        });
+    } catch (error) {
+        res.status(500).json({
+            error: "Failed to get file info",
+            details: error,
+        });
+    }
 });
 
 // Add agent execution endpoint

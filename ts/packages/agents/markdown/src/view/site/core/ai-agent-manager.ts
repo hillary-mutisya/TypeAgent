@@ -135,26 +135,27 @@ export class AIAgentManager {
 
             case "notification":
                 // NEW: Handle success/error notifications from agent
+                console.log(`[${(data as any).notificationType?.toUpperCase()}] ${(data as any).message}`);
                 this.showNotification((data as any).message, (data as any).notificationType);
                 break;
                 
             case "operationsApplied":
                 // NEW: Operations already applied by agent, just show completion
                 console.log(`✅ Agent applied ${(data as any).operationCount} operations`);
-                this.showNotification(
-                    `AI command completed (${(data as any).operationCount} changes)`, 
-                    "success"
-                );
+                // Don't show duplicate notification here - the "notification" event handles UI feedback
                 break;
 
             case "complete":
                 this.showAIPresence(false);
-                console.log("✅ Stream completed");
+                this.isTestMode = false; // Reset test mode flag
+                console.log("✅ Streaming command completed successfully");
                 break;
 
             case "error":
+                console.log(`[ERROR] ${(data as any).error}`);
                 this.showNotification((data as any).error, "error");
                 this.showAIPresence(false);
+                this.isTestMode = false; // Reset test mode flag on error
                 break;
 
             // LEGACY: Keep old handlers for backward compatibility during transition
@@ -182,17 +183,6 @@ export class AIAgentManager {
                 if (data.operation) {
                     this.applyAgentOperations([data.operation]);
                 }
-                break;
-
-            case "complete":
-                console.log("✅ Stream completed");
-                this.isTestMode = false; // Reset test mode flag
-                break;
-
-            case "error":
-                console.error("❌ Stream error:", data.error);
-                this.showNotification(`Stream error: ${data.error}`, "error");
-                this.isTestMode = false; // Reset test mode flag on error
                 break;
         }
     }

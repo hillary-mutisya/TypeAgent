@@ -450,22 +450,46 @@ async function handleMarkdownAction(
 
             const filePath = `${actionContext.sessionContext.agentContext.currentFileName}`;
             let markdownContent = "";
-            if (await storage?.exists(filePath)) {
-                markdownContent = await storage?.read(filePath, "utf8") || "";
-                console.log("🔍 [PHASE1] Read content from storage:", markdownContent?.length, "chars");
+            
+            // NEW (Flow 1): Get content from view process (single source of truth)
+            if (actionContext.sessionContext.agentContext.viewProcess) {
+                try {
+                    markdownContent = await getDocumentContentFromView(
+                        actionContext.sessionContext.agentContext.viewProcess
+                    );
+                    console.log("🔍 [FLOW1] Got content from view process:", markdownContent?.length, "chars");
+                } catch (error) {
+                    console.warn("⚠️ [FLOW1] Failed to get content from view, falling back to storage:", error);
+                    // Fallback to storage only if view process fails
+                    if (await storage?.exists(filePath)) {
+                        markdownContent = await storage?.read(filePath, "utf8") || "";
+                        console.log("🔍 [FLOW1] Fallback: Read content from storage:", markdownContent?.length, "chars");
+                    }
+                }
+            } else {
+                // Fallback if no view process
+                if (await storage?.exists(filePath)) {
+                    markdownContent = await storage?.read(filePath, "utf8") || "";
+                    console.log("🔍 [FLOW1] No view process, read content from storage:", markdownContent?.length, "chars");
+                }
             }
 
-            // Use collaboration provider if available
-            const collaborationProvider =
-                actionContext.sessionContext.agentContext.collaborationProvider;
+            // OLD (Flow 1 removal): No longer read from storage by default
+            // if (await storage?.exists(filePath)) {
+            //     markdownContent = await storage?.read(filePath, "utf8") || "";
+            //     console.log("🔍 [PHASE1] Read content from storage:", markdownContent?.length, "chars");
+            // }
+
+            // Use collaboration provider if available (Flow 1: no longer used for content retrieval)
+            // const collaborationProvider = actionContext.sessionContext.agentContext.collaborationProvider;
             const researchHandler =
                 actionContext.sessionContext.agentContext.researchHandler;
 
-            if (collaborationProvider) {
-                // Update collaboration document content
-                markdownContent = collaborationProvider.getMarkdownContent();
-                console.log("🔍 [PHASE1] Got content from collaboration provider:", markdownContent?.length, "chars");
-            }
+            // OLD (Flow 1 removal): No longer get content from collaboration provider in agent
+            // if (collaborationProvider) {
+            //     markdownContent = collaborationProvider.getMarkdownContent();
+            //     console.log("🔍 [PHASE1] Got content from collaboration provider:", markdownContent?.length, "chars");
+            // }
 
             // Check if this is an AI command that should be handled asynchronously
             const request = action.parameters.originalRequest;
@@ -496,44 +520,30 @@ async function handleMarkdownAction(
                         updateResult.operations &&
                         updateResult.operations.length > 0
                     ) {
-                        // Apply to collaboration provider first
-                        if (collaborationProvider) {
-                            console.log("🔍 [PHASE1] Agent applying operations to Yjs:", updateResult.operations.length);
-                            applyOperationsToYjsDocument(
-                                collaborationProvider,
-                                updateResult.operations,
+                        // NEW (Flow 1): Send operations to view process for application
+                        if (actionContext.sessionContext.agentContext.viewProcess) {
+                            console.log("🔍 [FLOW1] Agent sending operations to view process for Yjs application");
+                            
+                            const success = await sendOperationsToView(
+                                actionContext.sessionContext.agentContext.viewProcess,
+                                updateResult.operations
                             );
-
-                            // Sync back to storage
-                            const updatedContent =
-                                collaborationProvider.getMarkdownContent();
-                            await storage?.write(filePath, updatedContent);
-                            console.log("🔍 [PHASE1] Agent wrote updated content to storage:", updatedContent.length, "chars");
-                        } else {
-                            // Fallback to direct file operations
-                            if (markdownContent) {
-                                const updatedContent =
-                                    applyOperationsToMarkdown(
-                                        markdownContent,
-                                        updateResult.operations,
-                                    );
-                                await storage?.write(filePath, updatedContent);
+                            
+                            if (!success) {
+                                throw new Error("Failed to apply operations in view process");
                             }
+                            
+                            console.log("✅ [FLOW1] Operations applied successfully via view process");
+                        } else {
+                            console.warn("⚠️ [FLOW1] No view process available, operations not applied");
                         }
-
-                        // Send operations to the view process
-                        if (
-                            actionContext.sessionContext.agentContext
-                                .viewProcess
-                        ) {
-                            console.log("🔍 [PHASE1] Agent sending operations to view process via IPC");
-                            actionContext.sessionContext.agentContext.viewProcess.send(
-                                {
-                                    type: "applyOperations",
-                                    operations: updateResult.operations,
-                                },
-                            );
-                        }
+                        
+                        // OLD (Flow 1 removal): No longer apply operations directly in agent
+                        // if (collaborationProvider) {
+                        //     applyOperationsToYjsDocument(collaborationProvider, updateResult.operations);
+                        //     const updatedContent = collaborationProvider.getMarkdownContent();
+                        //     await storage?.write(filePath, updatedContent);
+                        // }
                     }
 
                     if (updateResult.operationSummary) {
@@ -662,8 +672,73 @@ function extractHintFromRequest(request: string): string | undefined {
 }
 
 /**
- * Start y-websocket collaboration server
+ * Send operations to view process for application (Flow 1 implementation)
  */
+async function sendOperationsToView(
+    viewProcess: ChildProcess | undefined,
+    operations: DocumentOperation[]
+): Promise<boolean> {
+    if (!viewProcess) {
+        console.error("❌ [AGENT] No view process available");
+        return false;
+    }
+    
+    return new Promise((resolve) => {
+        const timeout = setTimeout(() => {
+            console.error("❌ [AGENT] View process operation timeout");
+            resolve(false);
+        }, 5000);
+        
+        // Listen for response
+        const responseHandler = (message: any) => {
+            if (message.type === "operationsApplied") {
+                clearTimeout(timeout);
+                viewProcess.off("message", responseHandler);
+                
+                if (message.success) {
+                    console.log(`✅ [AGENT] View applied ${message.operationCount} operations`);
+                    resolve(true);
+                } else {
+                    console.error("❌ [AGENT] View failed to apply operations:", message.error);
+                    resolve(false);
+                }
+            }
+        };
+        
+        viewProcess.on("message", responseHandler);
+        
+        // Send operations
+        viewProcess.send({
+            type: "applyLLMOperations",
+            operations: operations,
+            timestamp: Date.now()
+        });
+        
+        console.log(`📤 [AGENT] Sent ${operations.length} operations to view process`);
+    });
+}
+
+/**
+ * Get document content from view process (Flow 1 implementation)
+ */
+async function getDocumentContentFromView(viewProcess: ChildProcess): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            reject(new Error("Timeout getting document content from view"));
+        }, 3000);
+        
+        const responseHandler = (message: any) => {
+            if (message.type === "documentContent") {
+                clearTimeout(timeout);
+                viewProcess.off("message", responseHandler);
+                resolve(message.content);
+            }
+        };
+        
+        viewProcess.on("message", responseHandler);
+        viewProcess.send({ type: "getDocumentContent" });
+    });
+}
 async function startCollaborationServer(): Promise<ChildProcess | undefined> {
     return new Promise((resolve, reject) => {
         try {

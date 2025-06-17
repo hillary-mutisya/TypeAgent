@@ -122,9 +122,9 @@ let clients: any[] = [];
 let filePath: string;
 let collaborationManager: CollaborationManager;
 
-// TODO: Auto-save mechanism will be implemented in Phase 6
-// let autoSaveTimer: NodeJS.Timeout | null = null;
-// const AUTO_SAVE_DELAY = 2000; // 2 seconds after last change
+// AUTO-SAVE MECHANISM (Flow 1 implementation)
+let autoSaveTimer: NodeJS.Timeout | null = null;
+const AUTO_SAVE_DELAY = 2000; // 2 seconds after last change
 
 // NEW: UI Command routing state
 let commandCounter = 0;
@@ -158,6 +158,54 @@ async function sendUICommandToAgent(
         
         console.log(`📤 [VIEW] Sent UI command to agent: ${command} (${requestId})`);
     });
+}
+
+// AUTO-SAVE FUNCTIONS (Flow 1 implementation)
+function scheduleAutoSave(): void {
+    // Cancel previous timer
+    if (autoSaveTimer) {
+        clearTimeout(autoSaveTimer);
+    }
+    
+    // Schedule new save
+    autoSaveTimer = setTimeout(() => {
+        performAutoSave();
+    }, AUTO_SAVE_DELAY);
+}
+
+function performAutoSave(): void {
+    if (!filePath) {
+        console.log("⚠️ [AUTO-SAVE] No file path set, skipping auto-save");
+        return;
+    }
+    
+    try {
+        const documentId = path.basename(filePath, ".md");
+        const updatedContent = collaborationManager.getDocumentContent(documentId);
+        
+        fs.writeFileSync(filePath, updatedContent, "utf-8");
+        console.log("💾 [AUTO-SAVE] Document saved to disk:", filePath);
+        
+        // Notify clients of save status
+        clients.forEach((client) => {
+            client.write(`data: ${JSON.stringify({
+                type: "autoSave",
+                timestamp: Date.now(),
+                filePath: path.basename(filePath)
+            })}\n\n`);
+        });
+    } catch (error) {
+        console.error("❌ [AUTO-SAVE] Failed to save document:", error);
+        
+        // Notify clients of save error
+        clients.forEach((client) => {
+            client.write(`data: ${JSON.stringify({
+                type: "autoSaveError",
+                timestamp: Date.now(),
+                error: (error as Error).message
+            })}\n\n`);
+        });
+    }
 }
 
 // Initialize collaboration manager
@@ -628,19 +676,26 @@ async function streamRealAgentResponse(
                     operationCount: result.operations?.length || 0
                 })}\n\n`,
             );
+            
+            // Send completion only on success
+            res.write(`data: ${JSON.stringify({ type: "complete" })}\n\n`);
         } else {
             // Send error notification
             res.write(
                 `data: ${JSON.stringify({ 
                     type: "notification", 
-                    message: result.message,
+                    message: result.message || "AI command failed",
                     notificationType: "error"
                 })}\n\n`,
             );
+            
+            // Send error completion
+            res.write(`data: ${JSON.stringify({ 
+                type: "error", 
+                error: result.error || result.message || "AI command failed"
+            })}\n\n`);
         }
         
-        // Send completion
-        res.write(`data: ${JSON.stringify({ type: "complete" })}\n\n`);
         res.end();
         
     } catch (error) {
@@ -650,6 +705,12 @@ async function streamRealAgentResponse(
                 type: "notification", 
                 message: "Failed to process AI command",
                 notificationType: "error"
+            })}\n\n`,
+        );
+        res.write(
+            `data: ${JSON.stringify({ 
+                type: "error",
+                error: "Failed to process AI command"
             })}\n\n`,
         );
         res.end();
@@ -1080,6 +1141,30 @@ function contentItemToText(item: any): string {
     }
 }
 
+// NEW: Enhanced operation application in view process (Flow 1)
+function applyLLMOperationsToCollaboration(operations: any[]): void {
+    console.log("📝 [VIEW] Applying LLM operations to collaboration document:", operations.length);
+    
+    if (!filePath) {
+        throw new Error("No file path set, cannot apply operations");
+    }
+    
+    const documentId = path.basename(filePath, ".md");
+    
+    // Apply operations to local Yjs document (SINGLE SOURCE OF TRUTH)
+    for (const operation of operations) {
+        collaborationManager.applyOperation(documentId, operation);
+    }
+    
+    // AUTO-SAVE: Trigger async save to disk (non-blocking)
+    scheduleAutoSave();
+    
+    // Notify frontend clients via SSE (Yjs also syncs via y-websocket)
+    renderFileToClients(filePath);
+    
+    console.log("✅ [VIEW] Operations applied successfully");
+}
+
 process.send?.("Success");
 
 process.on("message", (message: any) => {
@@ -1122,6 +1207,27 @@ process.on("message", (message: any) => {
                 })}\n\n`,
             );
         });
+    } else if (message.type === "applyLLMOperations") {
+        // NEW: Enhanced operation application in view process (Flow 1)
+        try {
+            applyLLMOperationsToCollaboration(message.operations);
+            
+            // Send success confirmation back to agent
+            process.send?.({
+                type: "operationsApplied",
+                success: true,
+                operationCount: message.operations.length
+            });
+            
+            console.log("✅ [VIEW] Applied LLM operations successfully");
+        } catch (error) {
+            console.error("❌ [VIEW] Failed to apply LLM operations:", error);
+            process.send?.({
+                type: "operationsApplied", 
+                success: false,
+                error: (error as Error).message
+            });
+        }
     } else if (message.type === "getDocumentContent") {
         // NEW: Handle content requests from agent (Flow 1 simplification)
         try {

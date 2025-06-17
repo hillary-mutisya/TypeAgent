@@ -1,27 +1,56 @@
 import { getElementById } from "../utils";
 
-// Available themes - matching actual Milkdown themes
-const availableThemes = ['crepe', 'crepe-dark', 'nord', 'nord-dark', 'frame', 'frame-dark'] as const;
+// Available themes
+const availableThemes = ['light', 'dark', 'nord', 'dracula', 'github', 'material'] as const;
 type ThemeName = typeof availableThemes[number];
 
-// Map display names to theme names
-const themeDisplayNames: Record<ThemeName, string> = {
-    'crepe': 'Light',
-    'crepe-dark': 'Dark', 
-    'nord': 'Nord',
-    'nord-dark': 'Nord Dark',
-    'frame': 'Frame',
-    'frame-dark': 'Frame Dark'
+interface ThemeConfig {
+    name: string;
+    displayName: string;
+    cssFile?: string;
+    bodyClass: string;
+}
+
+const themeConfigs: Record<ThemeName, ThemeConfig> = {
+    light: {
+        name: 'light',
+        displayName: 'Light',
+        bodyClass: 'theme-light'
+    },
+    dark: {
+        name: 'dark', 
+        displayName: 'Dark',
+        bodyClass: 'theme-dark'
+    },
+    nord: {
+        name: 'nord',
+        displayName: 'Nord',
+        bodyClass: 'theme-nord'
+    },
+    dracula: {
+        name: 'dracula',
+        displayName: 'Dracula', 
+        bodyClass: 'theme-dracula'
+    },
+    github: {
+        name: 'github',
+        displayName: 'GitHub',
+        bodyClass: 'theme-github'
+    },
+    material: {
+        name: 'material',
+        displayName: 'Material',
+        bodyClass: 'theme-material'
+    }
 };
 
 export class ThemeManager {
-    private currentTheme: ThemeName = 'crepe';
+    private currentTheme: ThemeName = 'light';
     private menuVisible = false;
-    private loadedThemes = new Set<ThemeName>();
 
     public async initialize(): Promise<void> {
         this.setupThemeMenu();
-        await this.loadSavedTheme();
+        this.loadSavedTheme();
         this.updateMenuVisuals();
     }
 
@@ -63,6 +92,7 @@ export class ThemeManager {
             }
         });
     }
+
     private toggleMenu(): void {
         if (this.menuVisible) {
             this.hideMenu();
@@ -121,124 +151,117 @@ export class ThemeManager {
             this.currentTheme = oldTheme;
         }
     }
+
     private async loadTheme(themeName: ThemeName): Promise<void> {
-        try {
-            // Remove existing theme stylesheets
-            const existingThemeLinks = document.querySelectorAll('link[data-theme]');
-            existingThemeLinks.forEach(link => link.remove());
-            
-            // Import the theme CSS dynamically
-            await this.importThemeCSS(themeName);
-            
-            // Apply theme to body
-            this.applyThemeToBody(themeName);
-            
-            // Wait for CSS to apply, then propagate colors
-            setTimeout(() => {
-                this.propagateThemeColors(themeName);
-            }, 100);
-            
-        } catch (error) {
-            console.error(`Failed to load theme: ${themeName}`, error);
-            throw error;
+        const config = themeConfigs[themeName];
+        
+        // Remove existing theme classes
+        Object.values(themeConfigs).forEach(themeConfig => {
+            document.body.classList.remove(themeConfig.bodyClass);
+        });
+
+        // Add new theme class
+        document.body.classList.add(config.bodyClass);
+
+        // Load theme-specific CSS if needed
+        await this.loadThemeCSS(themeName);
+
+        // Apply theme-specific styling
+        this.applyThemeStyles(themeName);
+    }
+
+    private async loadThemeCSS(themeName: ThemeName): Promise<void> {
+        // Remove existing theme stylesheets
+        const existingThemeLinks = document.querySelectorAll('link[data-theme]');
+        existingThemeLinks.forEach(link => link.remove());
+
+        // Load Milkdown theme CSS if available
+        if (themeName === 'nord') {
+            await this.loadMilkdownTheme('nord');
+        } else if (themeName === 'dark') {
+            await this.loadMilkdownTheme('crepe-dark');
+        } else {
+            await this.loadMilkdownTheme('crepe'); // Default light theme
         }
     }
 
-    private async importThemeCSS(themeName: ThemeName): Promise<void> {
-        // Create a link element to load the theme CSS
-        return new Promise((resolve, reject) => {
+    private async loadMilkdownTheme(milkdownTheme: string): Promise<void> {
+        return new Promise((resolve) => {
             const link = document.createElement('link');
             link.rel = 'stylesheet';
-            link.setAttribute('data-theme', themeName);
+            link.setAttribute('data-theme', milkdownTheme);
             
-            // Use dynamic import path that Vite can resolve
-            // This works because Vite serves node_modules during development
-            // and bundles dependencies for production
-            link.href = `/@milkdown/crepe/lib/theme/${themeName}/style.css`;
+            // Load from node_modules (now served by backend)
+            link.href = `/node_modules/@milkdown/crepe/lib/theme/${milkdownTheme}/style.css`;
             
             link.onload = () => {
-                this.loadedThemes.add(themeName);
-                setTimeout(resolve, 50); // Small delay for CSS variables
+                // Wait for CSS variables to be available, then apply to page UI
+                setTimeout(() => {
+                    this.applyMilkdownThemeToPageUI(milkdownTheme);
+                    resolve();
+                }, 100);
             };
-            
             link.onerror = () => {
-                // Fallback: try alternative path
-                link.href = `/node_modules/@milkdown/crepe/lib/theme/${themeName}/style.css`;
-                
-                link.onload = () => {
-                    this.loadedThemes.add(themeName);
-                    setTimeout(resolve, 50);
-                };
-                
-                link.onerror = () => {
-                    console.warn(`Could not load theme CSS: ${themeName}`);
-                    resolve(); // Don't fail completely, use fallback colors
-                };
+                console.warn(`Could not load Milkdown theme: ${milkdownTheme}`);
+                resolve(); // Don't fail completely
             };
             
-            document.head.appendChild(link);
+            // document.head.appendChild(link);
         });
-    }
-    private applyThemeToBody(themeName: ThemeName): void {
-        // Remove all existing theme classes
-        const body = document.body;
-        availableThemes.forEach(theme => {
-            body.classList.remove(`theme-${theme}`);
-        });
-        
-        // Add new theme class
-        body.classList.add(`theme-${themeName}`);
     }
 
-    private propagateThemeColors(themeName: ThemeName): void {
+    private applyMilkdownThemeToPageUI(milkdownTheme: string): void {
         // Wait for next frame to ensure CSS variables are computed
         requestAnimationFrame(() => {
-            // Find elements that might have the Milkdown CSS variables
-            const possibleElements = [
-                document.querySelector('.milkdown'),
-                document.querySelector('#editor'),
-                document.querySelector('[data-theme]'),
-                document.documentElement
-            ].filter(Boolean);
+            // Get the milkdown element or fall back to document element
+            const milkdownElement = document.querySelector('.milkdown') || document.querySelector('#editor') || document.documentElement;
+            const computedStyle = window.getComputedStyle(milkdownElement);
             
-            let themeColors = null;
+            // Read Milkdown theme variables
+            const backgroundColor = computedStyle.getPropertyValue('--crepe-color-background').trim();
+            const onBackground = computedStyle.getPropertyValue('--crepe-color-on-background').trim();
+            const surface = computedStyle.getPropertyValue('--crepe-color-surface').trim();
+            const onSurface = computedStyle.getPropertyValue('--crepe-color-on-surface').trim();
+            //const onSurfaceVariant = computedStyle.getPropertyValue('--crepe-color-on-surface-variant').trim();
+            const outline = computedStyle.getPropertyValue('--crepe-color-outline').trim();
+            const primary = computedStyle.getPropertyValue('--crepe-color-primary').trim();
+            const hover = computedStyle.getPropertyValue('--crepe-color-hover').trim();
             
-            // Try to read CSS variables from Milkdown elements
-            for (const element of possibleElements) {
-                const computedStyle = window.getComputedStyle(element as Element);
+            // Only apply if we have valid values
+            if (backgroundColor && onBackground) {
+                // Apply variables to document root for page UI
+                document.documentElement.style.setProperty('--page-background', backgroundColor);
+                document.documentElement.style.setProperty('--page-text', onBackground);
+                document.documentElement.style.setProperty('--toolbar-background', surface || backgroundColor);
+                document.documentElement.style.setProperty('--border-color', outline || '#ddd');
+                document.documentElement.style.setProperty('--page-surface', surface || backgroundColor);
+                document.documentElement.style.setProperty('--page-on-surface', onSurface || onBackground);
+                document.documentElement.style.setProperty('--page-primary', primary || '#805610');
+                document.documentElement.style.setProperty('--page-hover', hover || surface || backgroundColor);
                 
-                // Try different possible variable names
-                const backgroundColor = 
-                    computedStyle.getPropertyValue('--crepe-color-background')?.trim() ||
-                    computedStyle.getPropertyValue('--color-background')?.trim() ||
-                    computedStyle.getPropertyValue('--milkdown-color-background')?.trim();
-                
-                const textColor = 
-                    computedStyle.getPropertyValue('--crepe-color-on-background')?.trim() ||
-                    computedStyle.getPropertyValue('--color-on-background')?.trim() ||
-                    computedStyle.getPropertyValue('--milkdown-color-on-background')?.trim();
-                
-                if (backgroundColor && textColor) {
-                    themeColors = {
-                        background: backgroundColor,
-                        text: textColor,
-                        surface: computedStyle.getPropertyValue('--crepe-color-surface')?.trim() || backgroundColor,
-                        border: computedStyle.getPropertyValue('--crepe-color-outline')?.trim() || '#ddd'
-                    };
-                    break;
-                }
+                console.log(`🎨 Applied ${milkdownTheme} theme colors to page UI`);
+            } else {
+                console.warn('⚠️ Milkdown theme variables not yet available, retrying...');
+                // Retry after a longer delay
+                setTimeout(() => this.applyMilkdownThemeToPageUI(milkdownTheme), 200);
             }
-            
-            // Apply colors to page UI
-            this.applyColorsToPageUI(themeName, themeColors);
         });
     }
-    private async loadSavedTheme(): Promise<void> {
+
+    private applyThemeStyles(themeName: ThemeName): void {
+        // Apply theme body class for additional styling if needed
+        document.body.className = `theme-${themeName}`;
+        
+        // Note: The actual theme colors are now applied by applyMilkdownThemeToPageUI()
+        // which reads the CSS variables from the loaded Milkdown theme
+    }
+
+    private loadSavedTheme(): void {
         const savedTheme = localStorage.getItem('markdown-editor-theme') as ThemeName;
         if (savedTheme && availableThemes.includes(savedTheme)) {
-            await this.setTheme(savedTheme);
+            this.setTheme(savedTheme);
         } else {
-            await this.setTheme('crepe'); // Default theme
+            this.setTheme('light'); // Default theme
         }
     }
 

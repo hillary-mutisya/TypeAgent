@@ -17,7 +17,6 @@ import { createMarkdownAgent } from "./translator.js";
 import { ChildProcess, fork } from "child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { TypeAgentYjsProvider } from "./TypeAgentYjsProvider.js";
 import { CollaborationContext } from "./collaborationTypes.js";
 import { AIAgentCollaborator } from "./AIAgentCollaborator.js";
 import { AsyncResearchHandler } from "./AsyncResearchHandler.js";
@@ -47,7 +46,7 @@ type MarkdownActionContext = {
     viewProcess?: ChildProcess | undefined;
     collaborationProcess?: ChildProcess | undefined;
     localHostPort: number;
-    collaborationProvider?: TypeAgentYjsProvider | undefined;
+    // collaborationProvider?: TypeAgentYjsProvider | undefined; // Commented out per Flow 1 consolidation
     collaborationContext?: CollaborationContext | undefined;
     aiCollaborator?: AIAgentCollaborator | undefined;
     researchHandler?: AsyncResearchHandler | undefined;
@@ -103,12 +102,13 @@ async function streamPartialMarkdownAction(
 
     console.log(`🌊 Streaming ${name}: delta="${delta}"`);
 
-    const collaborationProvider = context.sessionContext.agentContext.collaborationProvider;
+    // NOTE: Collaboration provider removed per Flow 1 consolidation
+    // const collaborationProvider = context.sessionContext.agentContext.collaborationProvider;
     
     switch (name) {
         case "parameters.generatedContent":
             // Stream text content in real-time
-            handleStreamingContent(delta, context, collaborationProvider);
+            handleStreamingContent(delta, context);
             break;
             
         case "parameters.progressStatus":
@@ -126,7 +126,7 @@ async function streamPartialMarkdownAction(
 function handleStreamingContent(
     delta: string | undefined,
     context: ActionContext<MarkdownActionContext>,
-    collaborationProvider?: TypeAgentYjsProvider
+    // collaborationProvider?: TypeAgentYjsProvider // Commented out per Flow 1 consolidation
 ): void {
     if (delta === undefined) {
         // Streaming completed - finalize
@@ -149,13 +149,17 @@ function handleStreamingContent(
             speak: false, // Don't speak markdown content
         }, "inline");
 
-        // Apply to collaborative document in real-time
+        // Apply to collaborative document in real-time via view process
+        // NOTE: Direct collaboration provider access removed per Flow 1 consolidation
+        // All document operations now go through view process for single source of truth
+        /*
         if (collaborationProvider) {
             const currentContent = collaborationProvider.getMarkdownContent();
             const insertPosition = currentContent.length; // Append at end
             collaborationProvider.applyTextOperation(insertPosition, delta);
             console.log(`📝 Applied delta to collaboration doc at position ${insertPosition}`);
         }
+        */
     }
 }
 
@@ -238,76 +242,43 @@ async function updateMarkdownContext(
             await storage?.write(fileName, "");
         }
 
-        // Initialize collaboration provider
-        if (!context.agentContext.collaborationProvider) {
-            try {
-                // Start y-websocket server if not already running
-                if (!context.agentContext.collaborationProcess) {
-                    context.agentContext.collaborationProcess = await startCollaborationServer();
-                }
-
-                const collaborationConfig = {
-                    documentId: fileName.replace(".md", ""), // Use filename as document ID
-                    websocketUrl: "ws://localhost:1234", // Standard y-websocket-server port
-                    userInfo: {
-                        id: `user-${Date.now()}`, // Generate unique user ID
-                        name: "User",
-                        avatar: "👤",
-                        color: "#4A90E2",
-                    },
-                    enableAI: true,
-                };
-
-                context.agentContext.collaborationProvider =
-                    new TypeAgentYjsProvider(collaborationConfig);
-                context.agentContext.collaborationContext =
-                    context.agentContext.collaborationProvider.getContext();
-
-                // Initialize AI collaborator and research handler
-                context.agentContext.aiCollaborator = new AIAgentCollaborator(
-                    context.agentContext.collaborationProvider,
-                );
-                context.agentContext.researchHandler = new AsyncResearchHandler(
-                    context.agentContext.aiCollaborator,
-                );
-
-                // Initialize LLM Integration Service
-                if (!context.agentContext.llmService) {
-                    context.agentContext.llmService = new LLMIntegrationService(
-                        "GPT_4o", // Default model
-                        DEFAULT_LLM_CONFIG
-                    );
-                    
-                    // Connect LLM service to AI collaborator
-                    context.agentContext.aiCollaborator.setLLMService(
-                        context.agentContext.llmService
-                    );
-                    
-                    console.log("🧠 LLM Integration Service initialized and connected");
-                }
-
-                // Load existing content into Yjs document
-                const existingContent =
-                    (await storage?.read(fileName, "utf8")) || "";
-                if (existingContent) {
-                    context.agentContext.collaborationProvider.setMarkdownContent(
-                        existingContent,
-                    );
-                }
-
-                console.log(
-                    "✅ Collaboration provider initialized for:",
-                    fileName,
-                );
-                console.log("🤖 AI collaborator initialized and ready");
-            } catch (error) {
-                console.error(
-                    "❌ Failed to initialize collaboration provider:",
-                    error,
-                );
-                // Continue without collaboration if it fails
-            }
+        // Start y-websocket server if not already running
+        if (!context.agentContext.collaborationProcess) {
+            context.agentContext.collaborationProcess = await startCollaborationServer();
         }
+
+        // NOTE: Collaboration provider initialization removed per Flow 1 consolidation
+        // All collaboration now handled in view process
+        
+        // Initialize AI collaborator without collaboration provider
+        // AIAgentCollaborator will be updated to work without direct Yjs access
+        context.agentContext.aiCollaborator = new AIAgentCollaborator(
+            null, // No collaboration provider - operations sent to view process
+        );
+        context.agentContext.researchHandler = new AsyncResearchHandler(
+            context.agentContext.aiCollaborator,
+        );
+
+        // Initialize LLM Integration Service
+        if (!context.agentContext.llmService) {
+            context.agentContext.llmService = new LLMIntegrationService(
+                "GPT_4o", // Default model
+                DEFAULT_LLM_CONFIG
+            );
+            
+            // Connect LLM service to AI collaborator
+            context.agentContext.aiCollaborator.setLLMService(
+                context.agentContext.llmService
+            );
+            
+            console.log("🧠 LLM Integration Service initialized and connected");
+        }
+
+        console.log(
+            "✅ Agent context initialized for:",
+            fileName,
+        );
+        console.log("🤖 AI collaborator initialized and ready");
 
         if (!context.agentContext.viewProcess) {
             const fullPath = await getFullMarkdownFilePath(fileName, storage!);
@@ -321,11 +292,9 @@ async function updateMarkdownContext(
         }
     } else {
         // Shut down services
-        if (context.agentContext.collaborationProvider) {
-            context.agentContext.collaborationProvider.disconnect();
-            context.agentContext.collaborationProvider = undefined;
-            context.agentContext.collaborationContext = undefined;
-        }
+        // NOTE: Collaboration provider shutdown removed per Flow 1 consolidation
+        // NOTE: Collaboration provider cleanup removed per Flow 1 consolidation
+        // All collaboration now handled in view process
 
         if (context.agentContext.aiCollaborator) {
             context.agentContext.aiCollaborator = undefined;
@@ -510,11 +479,25 @@ async function handleMarkdownAction(
                 markdownContent = (await storage?.read(filePath, "utf8")) || "";
             }
 
-            const collaborationProvider = actionContext.sessionContext.agentContext.collaborationProvider;
+            // NOTE: collaborationProvider removed per Flow 1 consolidation
+            // const collaborationProvider = actionContext.sessionContext.agentContext.collaborationProvider;
             const llmService = actionContext.sessionContext.agentContext.llmService;
 
-            if (collaborationProvider) {
-                markdownContent = collaborationProvider.getMarkdownContent();
+            // Get current content from view process (single source of truth)
+            try {
+                const viewProcess = actionContext.sessionContext.agentContext.viewProcess;
+                if (viewProcess) {
+                    markdownContent = await getDocumentContentFromView(viewProcess);
+                } else {
+                    throw new Error("View process not available");
+                }
+            } catch (error) {
+                console.warn("⚠️ Failed to get content from view process, falling back to storage:", error);
+                if (storage && await storage.exists(filePath)) {
+                    markdownContent = await storage.read(filePath, "utf8");
+                } else {
+                    markdownContent = "";
+                }
             }
 
             if (llmService) {
@@ -548,13 +531,18 @@ async function handleMarkdownAction(
 
                     // Apply the complete result to the document
                     if (aiResult.operations) {
-                        if (collaborationProvider) {
-                            applyOperationsToYjsDocument(collaborationProvider, aiResult.operations);
-                            const updatedContent = collaborationProvider.getMarkdownContent();
-                            await storage?.write(filePath, updatedContent);
-                        } else if (markdownContent) {
-                            const updatedContent = applyOperationsToMarkdown(markdownContent, aiResult.operations);
-                            await storage?.write(filePath, updatedContent);
+                        // Apply operations via view process (Flow 1 approach)
+                        if (aiResult.operations && aiResult.operations.length > 0) {
+                            const success = await sendOperationsToView(
+                                actionContext.sessionContext.agentContext.viewProcess,
+                                aiResult.operations
+                            );
+                            
+                            if (!success) {
+                                throw new Error("Failed to apply operations in view process");
+                            }
+                            
+                            console.log("✅ [AGENT] Operations sent to view process successfully");
                         }
                     }
 
@@ -677,6 +665,9 @@ async function getDocumentContentFromView(viewProcess: ChildProcess): Promise<st
         viewProcess.send({ type: "getDocumentContent" });
     });
 }
+// NOTE: Function commented out per Flow 1 consolidation
+// Collaboration server now managed by view process
+
 async function startCollaborationServer(): Promise<ChildProcess | undefined> {
     return new Promise((resolve, reject) => {
         try {
@@ -766,6 +757,9 @@ export async function createViewServiceHost(filePath: string, port: number) {
     });
 }
 
+// NOTE: Function commented out per Flow 1 consolidation
+// All Yjs operations now handled in view process via sendOperationsToView()
+/*
 function applyOperationsToYjsDocument(
     provider: TypeAgentYjsProvider,
     operations: DocumentOperation[],
@@ -840,7 +834,11 @@ function applyOperationsToYjsDocument(
         }
     }
 }
+*/
 
+// NOTE: Function commented out per Flow 1 consolidation
+// All markdown operations now handled via sendOperationsToView()
+/*
 function applyOperationsToMarkdown(
     content: string,
     operations: DocumentOperation[],
@@ -918,6 +916,7 @@ function applyOperationsToMarkdown(
 
     return lines.join("\n");
 }
+*/
 
 /**
  * Check if a request should be handled asynchronously by the AI collaborator
@@ -977,56 +976,10 @@ async function handleAsyncAIRequest(
     throw new Error(`Unknown async AI command: ${command}`);
 }
 
-function contentItemToText(item: any): string {
-    if (item.text) {
-        return item.text;
-    }
-
-    if (item.content) {
-        return item.content
-            .map((child: any) => contentItemToText(child))
-            .join("");
-    }
-
-    // Handle special node types
-    switch (item.type) {
-        case "paragraph":
-            return (
-                "\n" +
-                (item.content
-                    ? item.content.map(contentItemToText).join("")
-                    : "") +
-                "\n"
-            );
-        case "heading":
-            const level = item.attrs?.level || 1;
-            const prefix = "#".repeat(level) + " ";
-            return (
-                "\n" +
-                prefix +
-                (item.content
-                    ? item.content.map(contentItemToText).join("")
-                    : "") +
-                "\n"
-            );
-        case "code_block":
-            return (
-                "\n```\n" +
-                (item.content
-                    ? item.content.map(contentItemToText).join("")
-                    : "") +
-                "\n```\n"
-            );
-        case "mermaid":
-            return "\n```mermaid\n" + (item.attrs?.content || "") + "\n```\n";
-        case "math_display":
-            return "\n$$\n" + (item.attrs?.content || "") + "\n$$\n";
-        default:
-            return item.content
-                ? item.content.map(contentItemToText).join("")
-                : "";
-    }
-}
+// NOTE: Function commented out per Flow 1 consolidation
+// Content conversion now handled in view process via CollaborationManager
+// NOTE: contentItemToText function removed per Flow 1 consolidation
+// Function functionality moved to CollaborationManager in view process
 
 // Global process message handler for UI commands
 // This is a simplified version - in a full implementation, this would be properly 

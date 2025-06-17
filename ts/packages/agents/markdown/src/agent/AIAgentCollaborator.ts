@@ -31,14 +31,19 @@ export class AIAgentCollaborator {
     private userColor: string = "#4A90E2";
     private userAvatar: string = "🤖";
 
-    private collaborationProvider: TypeAgentYjsProvider;
+    private collaborationProvider: TypeAgentYjsProvider | null;
     private activeRequests: Map<string, AIRequest> = new Map();
     private insertionContexts: Map<string, InsertionContext> = new Map();
     private llmService?: LLMIntegrationService;
 
-    constructor(collaborationProvider: TypeAgentYjsProvider) {
+    constructor(collaborationProvider: TypeAgentYjsProvider | null) {
         this.collaborationProvider = collaborationProvider;
-        this.setupAIPresence();
+        
+        if (this.collaborationProvider) {
+            this.setupAIPresence();
+        } else {
+            console.log("🔄 AI Collaborator initialized without direct Yjs access - using view process for operations");
+        }
     }
 
     /**
@@ -53,6 +58,11 @@ export class AIAgentCollaborator {
      * Setup AI as a collaborative user with presence awareness
      */
     private setupAIPresence(): void {
+        if (!this.collaborationProvider) {
+            console.log("🔄 AI presence setup skipped - no collaboration provider");
+            return;
+        }
+        
         const context = this.collaborationProvider.getContext();
 
         // Set AI user presence
@@ -128,7 +138,7 @@ export class AIAgentCollaborator {
         this.updateAIStatus(true, command, `Processing ${command} request`);
 
         // Send status to collaboration context
-        if (this.collaborationProvider.getContext().onAIStatus) {
+        if (this.collaborationProvider?.getContext().onAIStatus) {
             this.collaborationProvider.getContext().onAIStatus!({
                 requestId,
                 status: "started",
@@ -193,9 +203,11 @@ export class AIAgentCollaborator {
      */
     private async executeAICommand(request: AIRequest): Promise<LocalAIResult> {
         if (this.llmService) {
-            // Use real LLM integration
+            // Get current content - use empty string if no collaboration provider
+            const currentContent = this.collaborationProvider?.getMarkdownContent() || "";
+            
             const context = {
-                currentContent: this.collaborationProvider.getMarkdownContent(),
+                currentContent: currentContent,
                 cursorPosition: request.insertionContext.originalPosition,
                 surroundingText: request.insertionContext.surroundingText,
                 sectionHeading: request.insertionContext.sectionHeading,
@@ -259,6 +271,11 @@ export class AIAgentCollaborator {
      * Capture current document state for context preservation
      */
     private captureDocumentSnapshot(): Uint8Array {
+        if (!this.collaborationProvider) {
+            console.log("🔄 Document snapshot skipped - no collaboration provider");
+            return new Uint8Array(); // Return empty state
+        }
+        
         const ydoc = this.collaborationProvider.getDocument();
         return Y.encodeStateAsUpdate(ydoc);
     }
@@ -270,6 +287,11 @@ export class AIAgentCollaborator {
         text: string;
         section?: string;
     } {
+        if (!this.collaborationProvider) {
+            console.log("🔄 Context extraction skipped - no collaboration provider");
+            return { text: "" };
+        }
+        
         const content = this.collaborationProvider.getMarkdownContent();
         const lines = content.split("\n");
 
@@ -314,6 +336,11 @@ export class AIAgentCollaborator {
      * Find optimal insertion point considering document changes
      */
     private findOptimalInsertionPoint(context: InsertionContext): number {
+        if (!this.collaborationProvider) {
+            console.log("🔄 Using original position - no collaboration provider");
+            return context.originalPosition;
+        }
+        
         const currentContent = this.collaborationProvider.getMarkdownContent();
 
         // Strategy 1: Try original position if document hasn't changed much
@@ -448,7 +475,11 @@ export class AIAgentCollaborator {
         }
 
         // Apply to Yjs document (this will sync to all users)
-        this.collaborationProvider.applyTextOperation(position, insertText);
+        if (this.collaborationProvider) {
+            this.collaborationProvider.applyTextOperation(position, insertText);
+        } else {
+            console.log("🔄 Text operation skipped - no collaboration provider");
+        }
 
         console.log(
             `🤖 AI applied ${result.type} content at position ${position}`,
@@ -463,6 +494,11 @@ export class AIAgentCollaborator {
         type?: string,
         description?: string,
     ): void {
+        if (!this.collaborationProvider) {
+            console.log(`🔄 AI status update skipped - no collaboration provider: ${type}`);
+            return;
+        }
+        
         const context = this.collaborationProvider.getContext();
         const aiPresence = context.userPresence.get(this.userId);
 
@@ -499,7 +535,7 @@ export class AIAgentCollaborator {
         }
 
         // Notify collaboration context
-        if (this.collaborationProvider.getContext().onAIStatus) {
+        if (this.collaborationProvider?.getContext().onAIStatus) {
             this.collaborationProvider.getContext().onAIStatus!({
                 requestId,
                 status,
@@ -513,8 +549,8 @@ export class AIAgentCollaborator {
      */
     getAIStatus(): UserPresence | undefined {
         return this.collaborationProvider
-            .getContext()
-            .userPresence.get(this.userId);
+            ?.getContext()
+            ?.userPresence?.get(this.userId) || undefined;
     }
 
     /**

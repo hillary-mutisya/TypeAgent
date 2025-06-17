@@ -7,7 +7,6 @@ import MarkdownIt from "markdown-it";
 import { GeoJSONPlugin } from "./plugins/geoJson.js";
 import { MermaidPlugin } from "./plugins/mermaid.js";
 import { LatexPlugin } from "./plugins/latex.js";
-import { DocumentOperation } from "../../agent/markdownOperationSchema.js";
 import { CollaborationManager } from "./collaborationManager.js";
 import { fileURLToPath } from "url";
 import path from "path";
@@ -666,8 +665,9 @@ async function streamRealAgentResponse(
 }
 
 /**
- * Detect AI command from user request (helper function for service.ts)
+ * Detect AI command from user request
  */
+/*
 function detectAICommand(
     request: string,
 ): "continue" | "diagram" | "augment" | "research" {
@@ -702,171 +702,44 @@ function detectAICommand(
     // Default to continue for general content requests
     return "continue";
 }
+*/
 
 /**
- * Extract hint from user request (helper function for service.ts)
+ * Extract hint from user request
  */
+/*
 function extractHintFromRequest(request: string): string | undefined {
     const match =
         request.match(/\/continue\s+(.+)/i) ||
         request.match(/continue writing\s+(.+)/i);
     return match ? match[1].trim() : undefined;
 }
+*/
 
 async function forwardToMarkdownAgent(
     action: string,
     parameters: any,
 ): Promise<any> {
     try {
-        console.log("🤖 Forwarding to TypeAgent LLM integration");
+        console.log("🔄 [VIEW] Forwarding LLM request to agent process:", action);
 
-        // Import our LLM integration components
-        const { LLMIntegrationService, DEFAULT_LLM_CONFIG } = await import(
-            "../../agent/LLMIntegrationService.js"
-        );
-
-        // Initialize LLM service
-        const llmService = new LLMIntegrationService(
-            "GPT_4o",
-            DEFAULT_LLM_CONFIG,
-        );
-
-        // Load current document content
-        const markdownContent = fs.readFileSync(filePath, "utf-8");
-
-        // Extract AI command from the original request
-        const originalRequest = parameters.originalRequest || "";
-        const aiCommand = detectAICommand(originalRequest);
-
-        // Build context for AI request
-        const context = {
-            currentContent: markdownContent,
-            cursorPosition:
-                parameters.context?.position || markdownContent.length,
-            surroundingText: markdownContent,
-        };
-
-        // Extract parameters for specific commands
-        let commandParams = {};
-        if (aiCommand === "continue") {
-            commandParams = { hint: extractHintFromRequest(originalRequest) };
-        } else if (aiCommand === "diagram") {
-            commandParams = {
-                description:
-                    originalRequest.replace(/\/diagram|diagram/, "").trim() ||
-                    "process flow",
-                diagramType: "mermaid",
-            };
-        } else if (aiCommand === "augment") {
-            commandParams = {
-                instruction:
-                    originalRequest.replace(/\/augment|augment/, "").trim() ||
-                    "improve formatting",
-                scope: "section",
-            };
-        }
-
-        // Process AI request (non-streaming for direct API calls)
-        const aiResult = await llmService.processAIRequest(
-            aiCommand,
-            commandParams,
-            context,
-            // No streaming callback for direct API calls
-        );
-
-        // Apply operations to file if successful
-        if (aiResult.operations && aiResult.operations.length > 0) {
-            const updatedContent = applyOperationsToMarkdown(
-                markdownContent,
-                aiResult.operations,
-            );
-            fs.writeFileSync(filePath, updatedContent, "utf-8");
-
-            // Trigger preview update
-            renderFileToClients(filePath);
-
+        // Route to agent process instead of creating duplicate LLM service
+        const result = await sendUICommandToAgent(action, parameters);
+        
+        if (result.success) {
             return {
-                operations: aiResult.operations,
-                summary: `Generated ${aiCommand} content successfully`,
+                operations: result.operations || [],
+                summary: result.message || `Generated ${action} content successfully`,
                 success: true,
             };
         } else {
-            // Fallback: treat as simple content update
-            const operation = {
-                type: "insert",
-                position: parameters.context?.position || 0,
-                content: [
-                    {
-                        type: "paragraph",
-                        content: [
-                            {
-                                type: "text",
-                                text:
-                                    aiResult.content || "AI response generated",
-                            },
-                        ],
-                    },
-                ],
-                description: `Generated ${aiCommand} content`,
-            };
-
-            return {
-                operations: [operation],
-                summary: `Generated ${aiCommand} content successfully`,
-                success: true,
-            };
+            throw new Error(result.error || result.message || "Agent command failed");
         }
+        
     } catch (error) {
-        console.error("❌ LLM integration failed:", error);
+        console.error("❌ [VIEW] Failed to route to agent:", error);
 
-        // Fallback to legacy agent if LLM integration fails
-        console.log("🔄 Falling back to legacy agent");
-
-        try {
-            // Import dynamically to avoid circular dependencies
-            const { createMarkdownAgent } = await import(
-                "../../agent/translator.js"
-            );
-
-            // Load current document
-            const markdownContent = fs.readFileSync(filePath, "utf-8");
-
-            // Create and call the legacy agent
-            const agent = await createMarkdownAgent("GPT_4o");
-            const response = await agent.updateDocument(
-                markdownContent,
-                parameters.originalRequest,
-            );
-
-            if (response.success) {
-                const updateResult = response.data;
-
-                // Apply operations to file if they exist
-                if (
-                    updateResult.operations &&
-                    updateResult.operations.length > 0
-                ) {
-                    const updatedContent = applyOperationsToMarkdown(
-                        markdownContent,
-                        updateResult.operations,
-                    );
-                    fs.writeFileSync(filePath, updatedContent, "utf-8");
-
-                    // Trigger preview update
-                    renderFileToClients(filePath);
-
-                    return {
-                        operations: updateResult.operations,
-                        summary: updateResult.operationSummary,
-                        success: true,
-                    };
-                }
-            }
-        } catch (legacyError) {
-            console.error("❌ Legacy agent also failed:", legacyError);
-        }
-
-        // Final fallback to test response for development
+        // Fallback to test response for development
         if (parameters.originalRequest?.includes("/test:")) {
             return generateTestResponse(
                 parameters.originalRequest,
@@ -963,130 +836,6 @@ function renderFileToClients(filePath: string) {
     clients.forEach((client) => {
         client.write(`data: ${encodeURIComponent(htmlContent)}\n\n`);
     });
-}
-
-function applyOperationsToMarkdown(
-    content: string,
-    operations: DocumentOperation[],
-): string {
-    const lines = content.split("\n");
-
-    // Sort operations by position (reverse order for insertions to avoid position shifts)
-    const sortedOps = [...operations].sort((a, b) => {
-        if (a.type === "insert" || a.type === "replace") {
-            return (
-                ((b as any).position || (b as any).from || 0) -
-                ((a as any).position || (a as any).from || 0)
-            );
-        }
-        return (
-            ((a as any).position || (a as any).from || 0) -
-            ((b as any).position || (b as any).from || 0)
-        );
-    });
-
-    for (const operation of sortedOps) {
-        try {
-            switch (operation.type) {
-                case "insert": {
-                    const insertContent = operation.content
-                        .map((item) => contentItemToText(item))
-                        .join("");
-
-                    // Simple position-based insertion (by line for simplicity)
-                    const lineIndex = Math.min(
-                        operation.position || 0,
-                        lines.length,
-                    );
-                    lines.splice(lineIndex, 0, insertContent);
-                    break;
-                }
-                case "replace": {
-                    const replaceContent = operation.content
-                        .map((item) => contentItemToText(item))
-                        .join("");
-
-                    const fromLine = Math.min(
-                        operation.from || 0,
-                        lines.length - 1,
-                    );
-                    const toLine = Math.min(
-                        operation.to || fromLine + 1,
-                        lines.length,
-                    );
-                    lines.splice(fromLine, toLine - fromLine, replaceContent);
-                    break;
-                }
-                case "delete": {
-                    const fromLine = Math.min(
-                        operation.from || 0,
-                        lines.length - 1,
-                    );
-                    const toLine = Math.min(
-                        operation.to || fromLine + 1,
-                        lines.length,
-                    );
-                    lines.splice(fromLine, toLine - fromLine);
-                    break;
-                }
-            }
-        } catch (error) {
-            console.error(
-                `Failed to apply operation ${operation.type}:`,
-                error,
-            );
-        }
-    }
-
-    return lines.join("\n");
-}
-
-function contentItemToText(item: any): string {
-    if (item.text) {
-        return item.text;
-    }
-
-    if (item.content) {
-        return item.content
-            .map((child: any) => contentItemToText(child))
-            .join("");
-    }
-
-    // Handle special node types
-    switch (item.type) {
-        case "paragraph":
-            return item.content
-                ? item.content.map(contentItemToText).join("")
-                : "";
-        case "heading":
-            const level = item.attrs?.level || 1;
-            const prefix = "#".repeat(level) + " ";
-            return (
-                prefix +
-                (item.content
-                    ? item.content.map(contentItemToText).join("")
-                    : "")
-            );
-        case "code_block":
-            const lang = item.attrs?.params || "";
-            return (
-                "```" +
-                lang +
-                "\n" +
-                (item.content
-                    ? item.content.map(contentItemToText).join("")
-                    : "") +
-                "\n```"
-            );
-        case "mermaid":
-            return "```mermaid\n" + (item.attrs?.content || "") + "\n```";
-        case "math_display":
-            return "$$\n" + (item.attrs?.content || "") + "\n$$";
-        default:
-            return item.content
-                ? item.content.map(contentItemToText).join("")
-                : "";
-    }
 }
 
 // Enhanced operation application in view process

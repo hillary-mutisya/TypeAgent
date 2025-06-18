@@ -71,12 +71,19 @@ export class AsyncResearchHandler {
         nextRequest.status = "processing";
 
         try {
+            // Create a basic insertion context from the position
+            const insertionContext: any = {
+                originalPosition: nextRequest.position,
+                surroundingText: "",
+                sectionHeading: undefined,
+            };
+
             // Start the AI collaborator processing
             await this.aiCollaborator.startAsyncRequest(
                 nextRequest.id,
                 nextRequest.command as any,
                 nextRequest.parameters,
-                nextRequest.position,
+                insertionContext,
             );
         } catch (error) {
             console.error(

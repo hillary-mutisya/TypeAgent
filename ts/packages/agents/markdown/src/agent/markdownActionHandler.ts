@@ -246,10 +246,8 @@ async function updateMarkdownContext(
         // All collaboration now handled in view process
         
         // Initialize AI collaborator without collaboration provider
-        // AIAgentCollaborator will be updated to work without direct Yjs access
-        context.agentContext.aiCollaborator = new AIAgentCollaborator(
-            null, // No collaboration provider - operations sent to view process
-        );
+        // AIAgentCollaborator now works without any direct document access
+        context.agentContext.aiCollaborator = new AIAgentCollaborator();
         context.agentContext.researchHandler = new AsyncResearchHandler(
             context.agentContext.aiCollaborator,
         );

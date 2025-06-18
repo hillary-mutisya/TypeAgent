@@ -20,7 +20,6 @@ import path from "node:path";
 import { CollaborationContext } from "./collaborationTypes.js";
 import { AIAgentCollaborator } from "./AIAgentCollaborator.js";
 import { AsyncResearchHandler } from "./AsyncResearchHandler.js";
-import { LLMIntegrationService, DEFAULT_LLM_CONFIG } from "./LLMIntegrationService.js";
 import { UICommandResult } from "./ipcTypes.js";
 
 export function instantiate(): AppAgent {
@@ -49,7 +48,6 @@ type MarkdownActionContext = {
     collaborationContext?: CollaborationContext | undefined;
     aiCollaborator?: AIAgentCollaborator | undefined;
     researchHandler?: AsyncResearchHandler | undefined;
-    llmService?: LLMIntegrationService | undefined;
 };
 
 async function handleUICommand(
@@ -256,21 +254,6 @@ async function updateMarkdownContext(
             context.agentContext.aiCollaborator,
         );
 
-        // Initialize LLM Integration Service
-        if (!context.agentContext.llmService) {
-            context.agentContext.llmService = new LLMIntegrationService(
-                "GPT_4o", // Default model
-                DEFAULT_LLM_CONFIG
-            );
-            
-            // Connect LLM service to AI collaborator
-            context.agentContext.aiCollaborator.setLLMService(
-                context.agentContext.llmService
-            );
-            
-            console.log("🧠 LLM Integration Service initialized and connected");
-        }
-
         console.log(
             "✅ Agent context initialized for:",
             fileName,
@@ -465,131 +448,107 @@ async function handleMarkdownAction(
             break;
         }
         case "streamingUpdateDocument": {
-            // Handle streaming AI commands with real-time updates
-            result = createActionResult("Processing AI request with streaming...");
+            // Handle streaming AI commands - now unified with regular updateDocument flow
+            console.log("🔍 [PHASE1] Starting streamingUpdateDocument action - using standard translator flow");
+            result = createActionResult("Updating document ...");
 
             const filePath = `${actionContext.sessionContext.agentContext.currentFileName}`;
+            console.log(filePath)
+            
             let markdownContent = "";
-            if (await storage?.exists(filePath)) {
-                markdownContent = (await storage?.read(filePath, "utf8")) || "";
-            }
-
-            // NOTE: collaborationProvider removed per Flow 1 consolidation
-            // const collaborationProvider = actionContext.sessionContext.agentContext.collaborationProvider;
-            const llmService = actionContext.sessionContext.agentContext.llmService;
-
-            // Get current content from view process (single source of truth)
-            try {
-                const viewProcess = actionContext.sessionContext.agentContext.viewProcess;
-                if (viewProcess) {
-                    markdownContent = await getDocumentContentFromView(viewProcess);
-                } else {
-                    throw new Error("View process not available");
-                }
-            } catch (error) {
-                console.warn("⚠️ Failed to get content from view process, falling back to storage:", error);
-                if (storage && await storage.exists(filePath)) {
-                    markdownContent = await storage.read(filePath, "utf8");
-                } else {
-                    markdownContent = "";
-                }
-            }
-
-            if (llmService) {
-                // Use streaming LLM integration
-                const request = action.parameters.originalRequest;
-                const aiCommand = action.parameters.aiCommand || detectAICommand(request);
-                
+            
+            if (actionContext.sessionContext.agentContext.viewProcess) {
                 try {
-                    // Build context for AI request
-                    const context = {
-                        currentContent: markdownContent,
-                        cursorPosition: markdownContent.length,
-                        surroundingText: markdownContent,
-                    };
-
-                    // Process with streaming callback
-                    const aiResult = await llmService.processAIRequest(
-                        aiCommand,
-                        { hint: extractHintFromRequest(request) },
-                        context,
-                        {
-                            onContent: (delta) => {
-                                // This will be handled by streamPartialAction
-                                console.log(`📝 Streaming content: ${delta.substring(0, 50)}...`);
-                            },
-                            onProgress: (status) => {
-                                console.log(`🔄 Progress: ${status}`);
-                            }
-                        }
+                    markdownContent = await getDocumentContentFromView(
+                        actionContext.sessionContext.agentContext.viewProcess
                     );
+                    console.log("🔍 Got content from view process:", markdownContent?.length, "chars");
+                    console.log(markdownContent)
+                } catch (error) {
+                    console.warn("⚠️ Failed to get content from view, falling back to storage:", error);
+                    // Fallback to storage only if view process fails
+                    if (await storage?.exists(filePath)) {
+                        markdownContent = await storage?.read(filePath, "utf8") || "";
+                        console.log("🔍 Fallback: Read content from storage:", markdownContent?.length, "chars");
+                    }
+                }
+            } else {
+                // Fallback if no view process
+                if (await storage?.exists(filePath)) {
+                    markdownContent = await storage?.read(filePath, "utf8") || "";
+                    console.log("🔍 No view process, read content from storage:", markdownContent?.length, "chars");
+                }
+            }
 
-                    // Apply the complete result to the document
-                    if (aiResult.operations) {
-                        // Apply operations via view process (Flow 1 approach)
-                        if (aiResult.operations && aiResult.operations.length > 0) {
+            const researchHandler =
+                actionContext.sessionContext.agentContext.researchHandler;
+
+            // Check if this is an AI command that should be handled asynchronously
+            const request = action.parameters.originalRequest;
+            const position = 0; // Default position for now - can be enhanced later
+
+            if (researchHandler && isAsyncAICommand(request)) {
+                // Handle async AI requests through the research handler
+                const requestId = await handleAsyncAIRequest(
+                    researchHandler,
+                    request,
+                    position,
+                );
+                result = createActionResult(
+                    `AI request queued (${requestId}). Working asynchronously...`,
+                );
+            } else {
+                // Handle streaming requests through the standard agent (same as updateDocument)
+                const response = await agent.updateDocument(
+                    markdownContent,
+                    action.parameters.originalRequest,
+                );
+
+                if (response.success) {
+                    const updateResult = response.data;
+
+                    // Apply operations to the document
+                    if (
+                        updateResult.operations &&
+                        updateResult.operations.length > 0
+                    ) {
+                        // Send operations to view process for application
+                        if (actionContext.sessionContext.agentContext.viewProcess) {
+                            console.log("🔍 Agent sending operations to view process for Yjs application");
+                            
                             const success = await sendOperationsToView(
                                 actionContext.sessionContext.agentContext.viewProcess,
-                                aiResult.operations
+                                updateResult.operations
                             );
                             
                             if (!success) {
                                 throw new Error("Failed to apply operations in view process");
                             }
                             
-                            console.log("✅ [AGENT] Operations sent to view process successfully");
+                            console.log("✅ Operations applied successfully via view process");
+                        } else {
+                            console.warn("⚠️ No view process available, operations not applied");
                         }
                     }
 
+                    if (updateResult.operationSummary) {
+                        result = createActionResult(
+                            updateResult.operationSummary,
+                        );
+                    } else {
+                        result = createActionResult("Updated document");
+                    }
+                } else {
+                    console.error(response.message);
                     result = createActionResult(
-                        `AI ${aiCommand} command completed successfully`
-                    );
-                } catch (error) {
-                    console.error("Streaming AI request failed:", error);
-                    result = createActionResult(
-                        `Failed to process AI request: ${(error as Error).message}`
+                        "Failed to update document: " + response.message,
                     );
                 }
-            } else {
-                result = createActionResult(
-                    "LLM service not available - using fallback"
-                );
             }
             break;
         }
     }
     return result;
-}
-
-/**
- * Detect AI command from user request
- */
-function detectAICommand(request: string): "continue" | "diagram" | "augment" | "research" {
-    const lowerRequest = request.toLowerCase();
-    
-    if (lowerRequest.includes("/continue") || lowerRequest.includes("continue writing")) {
-        return "continue";
-    }
-    if (lowerRequest.includes("/diagram") || lowerRequest.includes("create diagram")) {
-        return "diagram";
-    }
-    if (lowerRequest.includes("/augment") || lowerRequest.includes("improve") || lowerRequest.includes("enhance")) {
-        return "augment";
-    }
-    if (lowerRequest.includes("/research") || lowerRequest.includes("research")) {
-        return "research";
-    }
-    
-    // Default to continue for general content requests
-    return "continue";
-}
-
-/**
- * Extract hint from user request
- */
-function extractHintFromRequest(request: string): string | undefined {
-    const match = request.match(/\/continue\s+(.+)/i) || request.match(/continue writing\s+(.+)/i);
-    return match ? match[1].trim() : undefined;
 }
 
 /**

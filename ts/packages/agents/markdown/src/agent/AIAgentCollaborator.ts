@@ -12,15 +12,6 @@ interface LocalAIResult {
     confidence: number;
 }
 
-// Forward declaration for LLMIntegrationService to avoid circular dependency
-interface LLMIntegrationService {
-    processAIRequest(
-        command: "continue" | "diagram" | "augment" | "research",
-        parameters: any,
-        context: any
-    ): Promise<LocalAIResult>;
-}
-
 /**
  * AI Agent that appears as a collaborative user in the editing session
  * Handles asynchronous AI operations while maintaining real-time collaboration
@@ -34,7 +25,6 @@ export class AIAgentCollaborator {
     private collaborationProvider: TypeAgentYjsProvider | null;
     private activeRequests: Map<string, AIRequest> = new Map();
     private insertionContexts: Map<string, InsertionContext> = new Map();
-    private llmService?: LLMIntegrationService;
 
     constructor(collaborationProvider: TypeAgentYjsProvider | null) {
         this.collaborationProvider = collaborationProvider;
@@ -44,14 +34,6 @@ export class AIAgentCollaborator {
         } else {
             console.log("🔄 AI Collaborator initialized without direct Yjs access - using view process for operations");
         }
-    }
-
-    /**
-     * Set the LLM service for real AI integration
-     */
-    setLLMService(llmService: LLMIntegrationService): void {
-        this.llmService = llmService;
-        console.log("🧠 AI Collaborator connected to LLM service");
     }
 
     /**
@@ -202,35 +184,10 @@ export class AIAgentCollaborator {
      * Execute the actual AI command using LLM Integration Service
      */
     private async executeAICommand(request: AIRequest): Promise<LocalAIResult> {
-        if (this.llmService) {
-            // Get current content - use empty string if no collaboration provider
-            const currentContent = this.collaborationProvider?.getMarkdownContent() || "";
-            
-            const context = {
-                currentContent: currentContent,
-                cursorPosition: request.insertionContext.originalPosition,
-                surroundingText: request.insertionContext.surroundingText,
-                sectionHeading: request.insertionContext.sectionHeading,
-            };
-
-            console.log(`🤖 Processing ${request.command} with LLM service`);
-            
-            const result = await this.llmService.processAIRequest(
-                request.command,
-                request.parameters,
-                context
-            );
-
-            return {
-                type: result.type,
-                content: result.content,
-                confidence: result.confidence
-            };
-        } else {
-            // Fallback to mock responses for backward compatibility
-            console.log(`🤖 Using mock response for ${request.command} (LLM service not available)`);
-            return this.getMockResponse(request);
-        }
+        // AIAgentCollaborator now only provides mock responses for backward compatibility
+        // All real LLM operations should go through the translator.js flow in markdownActionHandler
+        console.log(`🤖 Using mock response for ${request.command} (real LLM operations handled by translator)`);
+        return this.getMockResponse(request);
     }
 
     /**

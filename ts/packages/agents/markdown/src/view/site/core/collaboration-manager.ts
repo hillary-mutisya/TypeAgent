@@ -43,6 +43,7 @@ export class CollaborationManager {
         this.setupCollaborationStatus(this.websocketProvider);
         
         console.log(`✅ [COLLAB] Reconnected to document: "${newDocumentId}"`);
+        console.log(JSON.stringify(this.yjsDoc))
     }
 
     public async initialize(): Promise<void> {
@@ -71,6 +72,8 @@ export class CollaborationManager {
                 "✅ Collaboration initialized for document:",
                 this.config.documentId,
             );
+
+            console.log(JSON.stringify(this.yjsDoc))
         } catch (error) {
             console.error("❌ Failed to initialize collaboration:", error);
             console.log("⚠️ Continuing without collaboration features");
@@ -132,6 +135,9 @@ export class CollaborationManager {
         provider.on("sync", (isSynced: boolean) => {
             if (isSynced) {
                 console.log("📄 Document synchronized");
+                console.log(JSON.stringify(this.yjsDoc))
+
+
                 statusElement.textContent = "📄 Document synchronized";
                 statusElement.className = "collaboration-status connected";
                 statusElement.style.display = "block";

@@ -12,9 +12,9 @@ export type DocumentOperation =
 // Insert content at a specific position
 export type InsertOperation = {
     type: "insert";
-    // Position in the ProseMirror document where content should be inserted
+    // Position in the document where content should be inserted
     position: number;
-    // Content to insert in a simplified format that can be converted to ProseMirror nodes
+    // Content to insert. This should be provided in github-flavored markdown
     content: ContentItem[];
     // Human-readable description of what is being inserted
     description?: string;
@@ -38,7 +38,7 @@ export type ReplaceOperation = {
     from: number;
     // End position of content to replace
     to: number;
-    // New content to insert in place of the replaced content
+    // Content to insert. This should be provided in github-flavored markdown
     content: ContentItem[];
     // Human-readable description of what is being replaced
     description?: string;
@@ -67,7 +67,7 @@ export type ContentItem = {
     text?: string;
     // Attributes for the node (e.g., level for headings)
     attrs?: {};
-    // Child content for container nodes
+    // Child content for container nodes. This should be provided in github-flavored markdown
     content?: ContentItem[];
     // Marks applied to this content (bold, italic, etc.)
     marks?: MarkItem[];

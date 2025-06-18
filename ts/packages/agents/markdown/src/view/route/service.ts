@@ -215,18 +215,12 @@ function performAutoSave(): void {
     try {
         const documentId = path.basename(filePath, ".md");
         
-        // Get content from WebSocket Y.js document (single source of truth)
-        let updatedContent = "";
-        if (docs.has(documentId)) {
-            const ydoc = docs.get(documentId)!;
-            const ytext = ydoc.getText("content");
-            updatedContent = ytext.toString();
-            console.log(`💾 [AUTO-SAVE] Got content from WebSocket Y.js doc "${documentId}": ${updatedContent.length} chars`);
-        } else {
-            // Fallback to collaboration manager if WebSocket doc doesn't exist
-            updatedContent = collaborationManager.getDocumentContent(documentId);
-            console.log(`💾 [AUTO-SAVE] Fallback to CollaborationManager for "${documentId}": ${updatedContent.length} chars`);
-        }
+        // Use authoritative document function to ensure consistency
+        const ydoc = getAuthoritativeDocument(documentId);
+        const ytext = ydoc.getText("content");
+        const updatedContent = ytext.toString();
+        
+        console.log(`💾 [AUTO-SAVE] Got content from authoritative Y.js doc "${documentId}": ${updatedContent.length} chars`);
         
         fs.writeFileSync(filePath, updatedContent, "utf-8");
         console.log("💾 [AUTO-SAVE] Document saved to disk:", filePath);
@@ -309,78 +303,47 @@ Start typing to see the editor in action!
 // Get document as markdown text
 app.get("/document", (req: Request, res: Response) => {
     if (!filePath) {
-        // Memory-only mode: get content from WebSocket Y.js document (single source of truth)
+        console.log("[NO-FILE-MODE]  No file provided when resolving the /document call")
+        // Memory-only mode: get content from authoritative Y.js document
         const documentId = "default"; // Use consistent document ID
         
-        if (docs.has(documentId)) {
-            const ydoc = docs.get(documentId)!;
-            const ytext = ydoc.getText("content");
-            const content = ytext.toString();
-            console.log(`📄 [GET /document] Retrieved content from WebSocket Y.js doc: ${content.length} chars`);
-            res.send(content);
-            return;
-        }
-        
-        // If no WebSocket document exists yet, return default content and initialize it
-        const defaultContent = `# Welcome to AI-Enhanced Markdown Editor
-
-Start editing your markdown document with AI assistance!
-
-## Features
-
-- **WYSIWYG Editing** with Milkdown Crepe
-- **AI-Powered Tools** integrated with TypeAgent
-- **Real-time Preview** with full markdown support
-- **Mermaid Diagrams** with visual editing
-- **Math Equations** with LaTeX support
-- **GeoJSON Maps** for location data
-
-## AI Commands
-
-Try these AI-powered commands:
-
-- Type \`/\` to open the block edit menu with AI tools
-- Use **Continue Writing** to let AI continue writing
-- Use **Generate Diagram** to create Mermaid diagrams
-- Use **Augment Document** to improve the document
-- Test versions available for testing without API calls
-
-## Example Diagram
-
-\`\`\`mermaid
-graph TD
-    A[Start Editing] --> B{Need AI Help?}
-    B -->|Yes| C[Use / Commands]
-    B -->|No| D[Continue Writing]
-    C --> E[AI Generates Content]
-    E --> F[Review & Edit]
-    F --> G[Save Document]
-    D --> G
-\`\`\`
-
-Start typing to see the editor in action!
-`;
-        
-        // Initialize WebSocket Y.js document with default content for consistency
-        const ydoc = new Y.Doc();
+        const ydoc = getAuthoritativeDocument(documentId);
         const ytext = ydoc.getText("content");
-        ytext.insert(0, defaultContent);
-        docs.set(documentId, ydoc);
-        awarenessStates.set(documentId, new Awareness(ydoc));
+        const content = ytext.toString();
         
-        console.log(`📄 [GET /document] Initialized WebSocket Y.js doc with default content: ${defaultContent.length} chars`);
-        res.send(defaultContent);
+        console.log(`📄 [GET /document] Retrieved content from authoritative Y.js doc: ${content.length} chars`);
+        console.log(content)
+        res.send(content);
         return;
     }
 
     try {
-        const fileContent = fs.readFileSync(filePath, "utf-8");
-        res.send(fileContent);
+        console.log( "[FILE_MODE] File provided when resolving the /document call "+ filePath )
+
+        // File mode: get content from authoritative document (which should be synced with file)
+        const documentId = path.basename(filePath, ".md");
+        const ydoc = getAuthoritativeDocument(documentId);
+        const ytext = ydoc.getText("content");
+        const content = ytext.toString();
+        
+        console.log(`📄 [GET /document] Retrieved content from authoritative Y.js doc "${documentId}": ${content.length} chars`);
+        console.log(content)
+
+        res.send(content);
     } catch (error) {
-        res.status(500).json({
-            error: "Failed to load document",
-            details: error,
-        });
+        // Fallback to reading from file if authoritative document fails
+        try {
+            const fileContent = fs.readFileSync(filePath, "utf-8");
+            console.log(`📄 [GET /document] Fallback: read content from file: ${fileContent.length} chars`);
+            console.log(fileContent)
+
+            res.send(fileContent);
+        } catch (fileError) {
+            res.status(500).json({
+                error: "Failed to load document",
+                details: fileError,
+            });
+        }
     }
 });
 
@@ -389,25 +352,17 @@ app.post("/document", express.json(), (req: Request, res: Response) => {
     const markdownContent = req.body.content || "";
     
     if (!filePath) {
-        // Memory-only mode: save to WebSocket Y.js document (single source of truth)
+        // Memory-only mode: save to authoritative Y.js document
         const documentId = "default"; // Use consistent document ID
         
-        if (!docs.has(documentId)) {
-            // Initialize WebSocket Y.js document if it doesn't exist
-            const ydoc = new Y.Doc();
-            docs.set(documentId, ydoc);
-            awarenessStates.set(documentId, new Awareness(ydoc));
-            console.log(`📄 [POST /document] Initialized WebSocket Y.js doc for save operation`);
-        }
-        
-        const ydoc = docs.get(documentId)!;
+        const ydoc = getAuthoritativeDocument(documentId);
         const ytext = ydoc.getText("content");
         
         // Replace entire content atomically
         ytext.delete(0, ytext.length);
         ytext.insert(0, markdownContent);
         
-        console.log(`💾 [POST /document] Saved content to WebSocket Y.js doc: ${markdownContent.length} chars`);
+        console.log(`💾 [POST /document] Saved content to authoritative Y.js doc: ${markdownContent.length} chars`);
         res.json({ success: true, message: "Content saved to memory (no file mode)" });
         
         // Notify clients via SSE of the change (WebSocket will auto-sync)
@@ -416,7 +371,19 @@ app.post("/document", express.json(), (req: Request, res: Response) => {
     }
 
     try {
+        // File mode: save to both authoritative document and file
+        const documentId = path.basename(filePath, ".md");
+        const ydoc = getAuthoritativeDocument(documentId);
+        const ytext = ydoc.getText("content");
+        
+        // Update authoritative document first
+        ytext.delete(0, ytext.length);
+        ytext.insert(0, markdownContent);
+        
+        // Then save to file
         fs.writeFileSync(filePath, markdownContent, "utf-8");
+        
+        console.log(`💾 [POST /document] Saved content to both authoritative Y.js doc and file: ${markdownContent.length} chars`);
         res.json({ success: true });
 
         // Notify clients of the change
@@ -1110,92 +1077,88 @@ function applyLLMOperationsToCollaboration(operations: any[]): void {
     console.log(`🔍 [OPERATION-DEBUG] Target document ID: "${documentId}", filePath: ${filePath}`);
     console.log(`🔍 [OPERATION-DEBUG] Available WebSocket docs: [${Array.from(docs.keys()).join(', ')}]`);
     
-    // Apply operations directly to the live Y.js documents used by WebSocket server
-    // This ensures AI operations appear in real-time for all connected clients
-    if (!docs.has(documentId)) {
-        // Create Y.js document if it doesn't exist
-        docs.set(documentId, new Y.Doc());
-        awarenessStates.set(documentId, new Awareness(docs.get(documentId)!));
-        console.log(`📄 [VIEW] Created new Y.js document: ${documentId}`);
-    }
-    
-    const ydoc = docs.get(documentId)!;
+    // Use authoritative document function to ensure single source of truth
+    const ydoc = getAuthoritativeDocument(documentId);
     const ytext = ydoc.getText("content");
+
+
+    console.log("::Document contents::")
+    Array.from(docs.keys()).forEach(key =>{
+        console.log("Key: " + key + " Current: "+ JSON.stringify(docs.get(key)))
+        console.log("Key: " + key + " Authoritative: "+ JSON.stringify(getAuthoritativeDocument(key)))
+    })
     
-    console.log(`🔍 [OPERATION-DEBUG] Y.js document "${documentId}" current content length: ${ytext.length} chars`);
+    console.log(`🔍 [OPERATION-DEBUG] Authoritative Y.js document "${documentId}" current content length: ${ytext.length} chars`);
     
-    // Apply operations to live Y.js document (SINGLE SOURCE OF TRUTH)
-    for (const operation of operations) {
-        console.log("📝 [VIEW] Applying operation:", operation.type, "to live document:", documentId);
-        
-        try {
-            switch (operation.type) {
-                case "insert": {
-                    const insertText = operation.content
-                        .map((item: any) => contentItemToText(item))
-                        .join("");
-                    const position = Math.min(operation.position || 0, ytext.length);
-                    ytext.insert(position, insertText);
-
-
-                    console.log("Inserted text: "+ insertText)
-                    console.log(JSON.stringify(ytext))
-
-                    console.log(`✅ [VIEW] Inserted ${insertText.length} chars at position ${position} in live doc`);
-                    break;
-                }
-                case "replace": {
-                    const replaceText = operation.content
-                        .map((item: any) => contentItemToText(item))
-                        .join("");
-                    const fromPos = Math.min(operation.from || 0, ytext.length);
-                    const toPos = Math.min(operation.to || fromPos + 1, ytext.length);
-                    const deleteLength = toPos - fromPos;
-                    
-                    ytext.delete(fromPos, deleteLength);
-                    ytext.insert(fromPos, replaceText);
-
-                    console.log("Replacement text: "+ replaceText)
-                    console.log(JSON.stringify(ytext))
-
-                    console.log(`✅ [VIEW] Replaced ${deleteLength} chars with ${replaceText.length} chars at position ${fromPos} in live doc`);
-                    break;
-                }
-                case "delete": {
-                    const fromPos = Math.min(operation.from || 0, ytext.length);
-                    const toPos = Math.min(operation.to || fromPos + 1, ytext.length);
-                    const deleteLength = toPos - fromPos;
-                    ytext.delete(fromPos, deleteLength);
-                    console.log(`✅ [VIEW] Deleted ${deleteLength} chars at position ${fromPos} in live doc`);
-                    break;
-                }
-                default:
-                    console.warn(`❌ [VIEW] Unknown operation type: ${operation.type}`);
-                    break;
-            }
-        } catch (operationError) {
-            console.error(`❌ [VIEW] Failed to apply operation ${operation.type}:`, operationError);
-        }
-    }
+    // Add update event listener to debug broadcasting
+    let updateEventFired = false;
+    const debugUpdateHandler = (update: Uint8Array, origin: any) => {
+        updateEventFired = true;
+        console.log(`🔔 [BROADCAST-DEBUG] Y.js update event fired for "${documentId}" (${update.length} bytes), origin:`, origin);
+    };
+    ydoc.on('update', debugUpdateHandler);
     
-    // Also apply to collaboration manager for backward compatibility, using same Y.js document
-    try {
-        // Ensure collaboration manager uses the same document instance as WebSocket server
-        if (docs.has(documentId)) {
-            // Use existing WebSocket document for consistency
-            collaborationManager.useExistingDocument(documentId, docs.get(documentId)!, filePath);
-            console.log(`🔄 [VIEW] CollaborationManager now using WebSocket Y.js doc for consistency`);
-        } else {
-            // Standard initialization if no WebSocket doc exists yet
-            collaborationManager.initializeDocument(documentId, filePath);
-        }
-        
+    // Apply operations to authoritative Y.js document (SINGLE SOURCE OF TRUTH)
+    // Wrap all operations in a single transaction to ensure proper update event firing
+    ydoc.transact(() => {
         for (const operation of operations) {
-            collaborationManager.applyOperation(documentId, operation);
+            console.log("📝 [VIEW] Applying operation:", operation.type, "to authoritative document:", documentId);
+            
+            try {
+                switch (operation.type) {
+                    case "insert": {
+                        const insertText = operation.content
+                            .map((item: any) => contentItemToText(item))
+                            .join("");
+                        const position = Math.min(operation.position || 0, ytext.length);
+                        ytext.insert(position, insertText);
+
+                        console.log("Inserted text: "+ insertText)
+                        console.log(`✅ [VIEW] Inserted ${insertText.length} chars at position ${position} in authoritative doc`);
+                        break;
+                    }
+                    case "replace": {
+                        const replaceText = operation.content
+                            .map((item: any) => contentItemToText(item))
+                            .join("");
+                        const fromPos = Math.min(operation.from || 0, ytext.length);
+                        const toPos = Math.min(operation.to || fromPos + 1, ytext.length);
+                        const deleteLength = toPos - fromPos;
+                        
+                        ytext.delete(fromPos, deleteLength);
+                        ytext.insert(fromPos, replaceText);
+
+                        console.log("Replacement text: "+ replaceText)
+                        console.log(`✅ [VIEW] Replaced ${deleteLength} chars with ${replaceText.length} chars at position ${fromPos} in authoritative doc`);
+                        break;
+                    }
+                    case "delete": {
+                        const fromPos = Math.min(operation.from || 0, ytext.length);
+                        const toPos = Math.min(operation.to || fromPos + 1, ytext.length);
+                        const deleteLength = toPos - fromPos;
+                        ytext.delete(fromPos, deleteLength);
+                        console.log(`✅ [VIEW] Deleted ${deleteLength} chars at position ${fromPos} in authoritative doc`);
+                        break;
+                    }
+                    default:
+                        console.warn(`❌ [VIEW] Unknown operation type: ${operation.type}`);
+                        break;
+                }
+            } catch (operationError) {
+                console.error(`❌ [VIEW] Failed to apply operation ${operation.type}:`, operationError);
+            }
         }
-    } catch (collabError) {
-        console.warn("⚠️ [VIEW] Failed to apply to collaboration manager (non-critical):", collabError);
-    }
+    }, 'llm-operations'); // Set origin to identify these operations
+    
+    // Remove debug handler after a brief delay
+    setTimeout(() => {
+        ydoc.off('update', debugUpdateHandler);
+        if (!updateEventFired) {
+            console.warn(`⚠️ [BROADCAST-DEBUG] No Y.js update event fired for operations on "${documentId}" - this may be why frontend doesn't receive updates!`);
+        } else {
+            console.log(`✅ [BROADCAST-DEBUG] Y.js update event fired successfully for "${documentId}"`);
+        }
+    }, 100);
     
     // AUTO-SAVE: Trigger async save to disk (non-blocking) only if we have a file
     if (filePath) {
@@ -1207,7 +1170,7 @@ function applyLLMOperationsToCollaboration(operations: any[]): void {
     // Notify frontend clients via SSE (Y.js changes will auto-sync via WebSocket)
     renderFileToClients(filePath || "");
     
-    console.log("✅ [VIEW] Operations applied to live Y.js document successfully");
+    console.log("✅ [VIEW] Operations applied to authoritative Y.js document successfully");
 }
 
 // Helper function to convert content items to text (from collaboration manager)
@@ -1242,17 +1205,28 @@ process.on("message", (message: any) => {
             const oldFilePath = filePath;
             filePath = message.filePath;
 
-            // Initialize collaboration for this document
+            // Initialize collaboration for this document using authoritative document
             const documentId = path.basename(message.filePath, ".md");
-            collaborationManager.initializeDocument(
-                documentId,
-                message.filePath,
-            );
-
-            // Load existing content into collaboration manager
+            
+            // Get or create the authoritative Y.js document
+            const ydoc = getAuthoritativeDocument(documentId);
+            
+            // Load existing content into the authoritative document
             if (fs.existsSync(message.filePath)) {
                 const content = fs.readFileSync(message.filePath, "utf-8");
-                collaborationManager.setDocumentContent(documentId, content);
+                
+                // Set content directly in the authoritative Y.js document
+                const ytext = ydoc.getText("content");
+                ytext.delete(0, ytext.length); // Clear existing content
+                ytext.insert(0, content); // Insert file content
+
+                
+                
+                console.log(`📄 [FILE-LOAD] Loaded ${content.length} chars into authoritative document "${documentId}"`);
+
+                console.log("Loaded content: "+ JSON.stringify(ytext))
+            } else {
+                console.log(`📄 [FILE-LOAD] File doesn't exist, authoritative document "${documentId}" remains empty`);
             }
 
             // Notify frontend clients if the document has changed
@@ -1278,24 +1252,16 @@ process.on("message", (message: any) => {
                 renderFileToClients(filePath!);
             });
         } else {
-            // No file mode - initialize with default content (SINGLE SOURCE OF TRUTH SETUP)
+            // No file mode - initialize with default content using authoritative document
             filePath = null;
             console.log("🔄 Running in memory-only mode (no file)");
             
             const documentId = "default";
             
-            // Initialize WebSocket Y.js document first (single source of truth)
-            if (!docs.has(documentId)) {
-                const ydoc = new Y.Doc();
-                docs.set(documentId, ydoc);
-                awarenessStates.set(documentId, new Awareness(ydoc));
-                console.log(`📄 [MEMORY-ONLY] Created WebSocket Y.js document: ${documentId}`);
-            }
+            // Get or create authoritative Y.js document for memory-only mode
+            const ydoc = getAuthoritativeDocument(documentId);
             
-            // Make CollaborationManager use the same Y.js document instance
-            collaborationManager.useExistingDocument(documentId, docs.get(documentId)!, null);
-            
-            // Set default content in the shared Y.js document
+            // Set default content in the authoritative Y.js document
             const defaultContent = `# Welcome to AI-Enhanced Markdown Editor
 
 Start editing your markdown document with AI assistance!
@@ -1335,11 +1301,15 @@ graph TD
 Start typing to see the editor in action!
 `;
             
-            const ydoc = docs.get(documentId)!;
             const ytext = ydoc.getText("content");
-            ytext.insert(0, defaultContent);
             
-            console.log(`📄 [MEMORY-ONLY] Initialized shared Y.js document with default content: ${defaultContent.length} chars`);
+            // Only set content if document is empty to avoid overwriting existing content
+            if (ytext.length === 0) {
+                ytext.insert(0, defaultContent);
+                console.log(`📄 [MEMORY-ONLY] Initialized authoritative Y.js document "${documentId}" with default content: ${defaultContent.length} chars`);
+            } else {
+                console.log(`📄 [MEMORY-ONLY] Authoritative Y.js document "${documentId}" already has content: ${ytext.length} chars`);
+            }
             
             // Initial render for clients with default content
             renderFileToClients("");
@@ -1377,9 +1347,8 @@ Start typing to see the editor in action!
             });
         }
     } else if (message.type === "getDocumentContent") {
-        // Handle content requests from agent - read from live Y.js document
+        // Handle content requests from agent - read from authoritative Y.js document
         try {
-            let content = "";
             let documentId = "";
             
             if (!filePath) {
@@ -1391,41 +1360,18 @@ Start typing to see the editor in action!
             
             console.log("Using documentID "+ documentId)
 
-            // Get content from WebSocket Y.js document (single source of truth in memory-only mode)
-            if (docs.has(documentId)) {
-                const ydoc = docs.get(documentId)!;
-                const yText = ydoc.getText('content');
-                content = yText.toString();
-                
+            // Get content from authoritative Y.js document (single source of truth)
+            const ydoc = getAuthoritativeDocument(documentId);
+            const yText = ydoc.getText('content');
+            const content = yText.toString();
+            
+            console.log(`📄 [VIEW] Retrieved content from authoritative Y.js doc "${documentId}": ${content.length} chars`);
 
-                
-                console.log(`📄 [VIEW] Retrieved live content from WebSocket Y.js doc "${documentId}": ${content.length} chars`);
+            console.log("Initial content")
+            console.log(content)
 
-                console.log("Initial content")
-                console.log(content)
-
-                console.log("From Prosemirror:")
-                console.log(JSON.stringify(ydoc))
-
-            } else {
-                // Initialize with default content if document doesn't exist yet
-                const defaultContent = `# Welcome to AI-Enhanced Markdown Editor
-
-Start editing your markdown document with AI assistance!
-
-Start typing to see the editor in action!
-`;
-                
-                // Create WebSocket Y.js document with default content for consistency
-                const ydoc = new Y.Doc();
-                const yText = ydoc.getText('content');
-                yText.insert(0, defaultContent);
-                docs.set(documentId, ydoc);
-                awarenessStates.set(documentId, new Awareness(ydoc));
-                
-                content = defaultContent;
-                console.log(`📄 [VIEW] Initialized WebSocket Y.js doc "${documentId}" with default content: ${content.length} chars`);
-            }
+            console.log("From Prosemirror:")
+            console.log(JSON.stringify(ydoc))
             
             process.send?.({
                 type: "documentContent",
@@ -1482,23 +1428,54 @@ process.on('unhandledRejection', (reason, promise) => {
 const docs = new Map<string, Y.Doc>();
 // A map to store Awareness instances for each room  
 const awarenessStates = new Map<string, any>();
+// Track WebSocket connections per room for debugging
+const roomConnections = new Map<string, Set<any>>();
+
+/**
+ * Get the authoritative Y.js document for a given document ID
+ * This ensures we always use the same Y.js document instance across:
+ * - WebSocket connections
+ * - LLM operations  
+ * - Auto-save
+ * - CollaborationManager
+ */
+function getAuthoritativeDocument(documentId: string): Y.Doc {
+    // Always prefer WebSocket document as single source of truth
+    if (docs.has(documentId)) {
+        console.log(`📄 [AUTHORITATIVE] Using existing WebSocket Y.js document: ${documentId}`);
+        return docs.get(documentId)!;
+    }
+    
+    // Create if doesn't exist
+    console.log(`📄 [AUTHORITATIVE] Creating new Y.js document: ${documentId}`);
+    const ydoc = new Y.Doc();
+    docs.set(documentId, ydoc);
+    awarenessStates.set(documentId, new Awareness(ydoc));
+    
+    // Ensure CollaborationManager uses same instance
+    collaborationManager.useExistingDocument(documentId, ydoc, filePath);
+    console.log(`🔄 [AUTHORITATIVE] CollaborationManager now using authoritative document: ${documentId}`);
+    
+    return ydoc;
+}
 
 // Helper function to setup a Yjs connection (compatible with y-websocket)
 function setupWSConnection(conn: any, req: any, roomName: string): void {
     console.log(`📡 [WEBSOCKET] Setting up connection for room: "${roomName}"`);
     
-    if (!docs.has(roomName)) {
-        docs.set(roomName, new Y.Doc());
-        awarenessStates.set(roomName, new Awareness(docs.get(roomName)!));
-        console.log(`📄 [WEBSOCKET] Created new Y.js document for room: "${roomName}"`);
-    } else {
-        console.log(`📄 [WEBSOCKET] Using existing Y.js document for room: "${roomName}"`);
+    // Track this connection
+    if (!roomConnections.has(roomName)) {
+        roomConnections.set(roomName, new Set());
     }
+    roomConnections.get(roomName)!.add(conn);
     
-    const ydoc = docs.get(roomName)!;
+    // Use authoritative document function to ensure single source of truth
+    const ydoc = getAuthoritativeDocument(roomName);
     const ytext = ydoc.getText("content");
-    console.log(`🔍 [WEBSOCKET] Room "${roomName}" document content length: ${ytext.length} chars`);
+    console.log(`🔍 [WEBSOCKET] Room "${roomName}" authoritative document content length: ${ytext.length} chars`);
+    console.log(`🔍 [WEBSOCKET] Room "${roomName}" has ${roomConnections.get(roomName)!.size} connected clients`);
     
+    // Get awareness for this room (should already exist from getAuthoritativeDocument)
     const awareness = awarenessStates.get(roomName)!;
     
     console.log(`📡 Client connected to room: ${roomName}`);
@@ -1560,11 +1537,23 @@ function setupWSConnection(conn: any, req: any, roomName: string): void {
     
     // Listen for document updates and broadcast to other clients
     const updateHandler = (update: Uint8Array, origin: any) => {
-        if (origin !== conn) {
-            const encoder = encoding.createEncoder();
-            encoding.writeVarUint(encoder, 0); // messageSync
-            syncProtocol.writeUpdate(encoder, update);
-            send(ydoc, conn, encoding.toUint8Array(encoder));
+        console.log(`🔔 [WEBSOCKET-BROADCAST] Update event in room "${roomName}" (${update.length} bytes), origin:`, origin);
+        console.log(`🔍 [WEBSOCKET-BROADCAST] Broadcasting to ${roomConnections.get(roomName)?.size || 0} clients in room "${roomName}"`);
+        
+        // Broadcast to all clients in this room (including the current one for AI updates)
+        const connections = roomConnections.get(roomName);
+        if (connections) {
+            let broadcastCount = 0;
+            connections.forEach(clientConn => {
+                if (clientConn.readyState === clientConn.OPEN) {
+                    const encoder = encoding.createEncoder();
+                    encoding.writeVarUint(encoder, 0); // messageSync
+                    syncProtocol.writeUpdate(encoder, update);
+                    send(ydoc, clientConn, encoding.toUint8Array(encoder));
+                    broadcastCount++;
+                }
+            });
+            console.log(`📡 [WEBSOCKET-BROADCAST] Broadcasted update to ${broadcastCount} clients in room "${roomName}"`);
         }
     };
     ydoc.on('update', updateHandler);
@@ -1592,6 +1581,13 @@ function setupWSConnection(conn: any, req: any, roomName: string): void {
         try {
             ydoc.off('update', updateHandler);
             awareness.off('change', awarenessChangeHandler);
+            
+            // Remove from connection tracking
+            const connections = roomConnections.get(roomName);
+            if (connections) {
+                connections.delete(conn);
+                console.log(`🔌 [WEBSOCKET] Client disconnected from room "${roomName}", ${connections.size} clients remaining`);
+            }
             
             // Remove awareness state for this client using correct API
             awarenessProtocol.removeAwarenessStates(awareness, [ydoc.clientID], 'disconnect');

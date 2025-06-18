@@ -20,6 +20,8 @@ export class CollaborationManager {
             this.yjsDoc = new Doc();
 
             // Create WebSocket provider
+            console.log(`🔄 [FRONTEND] Connecting to WebSocket: ${this.config.websocketServerUrl} with documentId: "${this.config.documentId}"`);
+            
             this.websocketProvider = new WebsocketProvider(
                 this.config.websocketServerUrl,
                 this.config.documentId,

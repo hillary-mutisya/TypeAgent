@@ -214,7 +214,19 @@ function performAutoSave(): void {
     
     try {
         const documentId = path.basename(filePath, ".md");
-        const updatedContent = collaborationManager.getDocumentContent(documentId);
+        
+        // Get content from WebSocket Y.js document (single source of truth)
+        let updatedContent = "";
+        if (docs.has(documentId)) {
+            const ydoc = docs.get(documentId)!;
+            const ytext = ydoc.getText("content");
+            updatedContent = ytext.toString();
+            console.log(`💾 [AUTO-SAVE] Got content from WebSocket Y.js doc "${documentId}": ${updatedContent.length} chars`);
+        } else {
+            // Fallback to collaboration manager if WebSocket doc doesn't exist
+            updatedContent = collaborationManager.getDocumentContent(documentId);
+            console.log(`💾 [AUTO-SAVE] Fallback to CollaborationManager for "${documentId}": ${updatedContent.length} chars`);
+        }
         
         fs.writeFileSync(filePath, updatedContent, "utf-8");
         console.log("💾 [AUTO-SAVE] Document saved to disk:", filePath);
@@ -420,10 +432,14 @@ app.post("/document", express.json(), (req: Request, res: Response) => {
 // Add collaboration info endpoint
 app.get("/collaboration/info", (req: Request, res: Response) => {
     const stats = collaborationManager.getStats();
+    const currentDocument = filePath ? path.basename(filePath, ".md") : "default";
+    
+    console.log(`📊 [COLLAB-INFO] Returning collaboration info - currentDocument: "${currentDocument}", filePath: ${filePath}`);
+    
     res.json({
         ...stats,
         websocketServerUrl: `ws://localhost:${port}`,
-        currentDocument: filePath ? path.basename(filePath) : null,
+        currentDocument: currentDocument,
     });
 });
 
@@ -1091,6 +1107,9 @@ function applyLLMOperationsToCollaboration(operations: any[]): void {
     // Use default document ID for memory-only mode
     const documentId = filePath ? path.basename(filePath, ".md") : "default";
     
+    console.log(`🔍 [OPERATION-DEBUG] Target document ID: "${documentId}", filePath: ${filePath}`);
+    console.log(`🔍 [OPERATION-DEBUG] Available WebSocket docs: [${Array.from(docs.keys()).join(', ')}]`);
+    
     // Apply operations directly to the live Y.js documents used by WebSocket server
     // This ensures AI operations appear in real-time for all connected clients
     if (!docs.has(documentId)) {
@@ -1102,6 +1121,8 @@ function applyLLMOperationsToCollaboration(operations: any[]): void {
     
     const ydoc = docs.get(documentId)!;
     const ytext = ydoc.getText("content");
+    
+    console.log(`🔍 [OPERATION-DEBUG] Y.js document "${documentId}" current content length: ${ytext.length} chars`);
     
     // Apply operations to live Y.js document (SINGLE SOURCE OF TRUTH)
     for (const operation of operations) {
@@ -1448,12 +1469,20 @@ const awarenessStates = new Map<string, any>();
 
 // Helper function to setup a Yjs connection (compatible with y-websocket)
 function setupWSConnection(conn: any, req: any, roomName: string): void {
+    console.log(`📡 [WEBSOCKET] Setting up connection for room: "${roomName}"`);
+    
     if (!docs.has(roomName)) {
         docs.set(roomName, new Y.Doc());
         awarenessStates.set(roomName, new Awareness(docs.get(roomName)!));
+        console.log(`📄 [WEBSOCKET] Created new Y.js document for room: "${roomName}"`);
+    } else {
+        console.log(`📄 [WEBSOCKET] Using existing Y.js document for room: "${roomName}"`);
     }
     
     const ydoc = docs.get(roomName)!;
+    const ytext = ydoc.getText("content");
+    console.log(`🔍 [WEBSOCKET] Room "${roomName}" document content length: ${ytext.length} chars`);
+    
     const awareness = awarenessStates.get(roomName)!;
     
     console.log(`📡 Client connected to room: ${roomName}`);

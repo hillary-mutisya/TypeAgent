@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 // Document operation types for incremental updates to ProseMirror documents
+// Position references should be line numbers (0-based) in the document.
 export type DocumentOperation =
     | InsertOperation
     | DeleteOperation
@@ -65,7 +66,7 @@ export type ContentItem = {
     // Text content for text nodes
     text?: string;
     // Attributes for the node (e.g., level for headings)
-    attrs?: Record<string, any>;
+    attrs?: {};
     // Child content for container nodes
     content?: ContentItem[];
     // Marks applied to this content (bold, italic, etc.)
@@ -77,7 +78,7 @@ export type MarkItem = {
     // Type of mark (strong, em, code, link, etc.)
     type: string;
     // Attributes for the mark (e.g., href for links)
-    attrs?: Record<string, any>;
+    attrs?: {};
 };
 
 // Result of an LLM markdown update operation

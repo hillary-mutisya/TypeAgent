@@ -302,9 +302,6 @@ async function updateMarkdownContext(
             context.agentContext.researchHandler = undefined;
         }
 
-        // NOTE: No separate collaboration process to clean up
-        // Collaboration is now handled by Express service
-
         if (context.agentContext.viewProcess) {
             context.agentContext.viewProcess.kill();
             context.agentContext.viewProcess = undefined;
@@ -717,166 +714,6 @@ export async function createViewServiceHost(filePath: string, port: number) {
     });
 }
 
-// NOTE: Function commented out per Flow 1 consolidation
-// All Yjs operations now handled in view process via sendOperationsToView()
-/*
-function applyOperationsToYjsDocument(
-    provider: TypeAgentYjsProvider,
-    operations: DocumentOperation[],
-): void {
-    const ytext = provider.getText();
-
-    // Sort operations by position (reverse order for insertions to avoid position shifts)
-    const sortedOps = [...operations].sort((a, b) => {
-        if (a.type === "insert" || a.type === "replace") {
-            return (
-                ((b as any).position || (b as any).from || 0) -
-                ((a as any).position || (a as any).from || 0)
-            );
-        }
-        return (
-            ((a as any).position || (a as any).from || 0) -
-            ((b as any).position || (b as any).from || 0)
-        );
-    });
-
-    for (const operation of sortedOps) {
-        try {
-            switch (operation.type) {
-                case "insert": {
-                    const insertText = operation.content
-                        .map((item) => contentItemToText(item))
-                        .join("");
-
-                    const position = Math.min(
-                        operation.position || 0,
-                        ytext.length,
-                    );
-                    provider.applyTextOperation(position, insertText);
-                    break;
-                }
-                case "replace": {
-                    const replaceText = operation.content
-                        .map((item) => contentItemToText(item))
-                        .join("");
-
-                    const fromPos = Math.min(operation.from || 0, ytext.length);
-                    const toPos = Math.min(
-                        operation.to || fromPos + 1,
-                        ytext.length,
-                    );
-                    const deleteLength = toPos - fromPos;
-
-                    provider.applyTextOperation(
-                        fromPos,
-                        replaceText,
-                        deleteLength,
-                    );
-                    break;
-                }
-                case "delete": {
-                    const fromPos = Math.min(operation.from || 0, ytext.length);
-                    const toPos = Math.min(
-                        operation.to || fromPos + 1,
-                        ytext.length,
-                    );
-                    const deleteLength = toPos - fromPos;
-
-                    provider.applyTextOperation(fromPos, "", deleteLength);
-                    break;
-                }
-            }
-        } catch (error) {
-            console.error(
-                `Failed to apply Yjs operation ${operation.type}:`,
-                error,
-            );
-        }
-    }
-}
-*/
-
-// NOTE: Function commented out per Flow 1 consolidation
-// All markdown operations now handled via sendOperationsToView()
-/*
-function applyOperationsToMarkdown(
-    content: string,
-    operations: DocumentOperation[],
-): string {
-    const lines = content.split("\n");
-
-    // Sort operations by position (reverse order for insertions)
-    const sortedOps = [...operations].sort((a, b) => {
-        if (a.type === "insert" || a.type === "replace") {
-            return (
-                (b as any).position - (a as any).position ||
-                ((b as any).from || 0) - ((a as any).from || 0)
-            );
-        }
-        return (
-            (a as any).position - (b as any).position ||
-            ((a as any).from || 0) - ((b as any).from || 0)
-        );
-    });
-
-    for (const operation of sortedOps) {
-        try {
-            switch (operation.type) {
-                case "insert": {
-                    const insertContent = operation.content
-                        .map((item) => contentItemToText(item))
-                        .join("");
-
-                    // Simple position-based insertion (by line for simplicity)
-                    const lineIndex = Math.min(
-                        operation.position || 0,
-                        lines.length,
-                    );
-                    lines.splice(lineIndex, 0, insertContent);
-                    break;
-                }
-
-                case "replace": {
-                    const replaceContent = operation.content
-                        .map((item) => contentItemToText(item))
-                        .join("");
-
-                    const fromLine = Math.min(
-                        operation.from || 0,
-                        lines.length - 1,
-                    );
-                    const toLine = Math.min(
-                        operation.to || fromLine + 1,
-                        lines.length,
-                    );
-                    lines.splice(fromLine, toLine - fromLine, replaceContent);
-                    break;
-                }
-
-                case "delete": {
-                    const fromLine = Math.min(
-                        operation.from || 0,
-                        lines.length - 1,
-                    );
-                    const toLine = Math.min(
-                        operation.to || fromLine + 1,
-                        lines.length,
-                    );
-                    lines.splice(fromLine, toLine - fromLine);
-                    break;
-                }
-            }
-        } catch (error) {
-            console.error(
-                `Failed to apply operation ${operation.type}:`,
-                error,
-            );
-        }
-    }
-
-    return lines.join("\n");
-}
-*/
 
 /**
  * Check if a request should be handled asynchronously by the AI collaborator
@@ -936,14 +773,7 @@ async function handleAsyncAIRequest(
     throw new Error(`Unknown async AI command: ${command}`);
 }
 
-// NOTE: Function commented out per Flow 1 consolidation
-// Content conversion now handled in view process via CollaborationManager
-// NOTE: contentItemToText function removed per Flow 1 consolidation
-// Function functionality moved to CollaborationManager in view process
-
 // Global process message handler for UI commands
-// This is a simplified version - in a full implementation, this would be properly 
-// integrated with the TypeAgent framework's message handling
 let currentAgentContext: MarkdownActionContext | null = null;
 
 // Store agent context for UI command processing

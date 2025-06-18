@@ -1044,14 +1044,75 @@ Start typing to see the editor in action!
 
 // Enhanced operation application in view process
 function applyLLMOperationsToCollaboration(operations: any[]): void {
-    console.log("📝 [VIEW] Applying LLM operations to collaboration document:", operations.length);
+    console.log("📝 [VIEW] Applying LLM operations to live Y.js document:", operations.length);
     
     // Use default document ID for memory-only mode
     const documentId = filePath ? path.basename(filePath, ".md") : "default";
     
-    // Apply operations to local Yjs document (SINGLE SOURCE OF TRUTH)
+    // Apply operations directly to the live Y.js documents used by WebSocket server
+    // This ensures AI operations appear in real-time for all connected clients
+    if (!docs.has(documentId)) {
+        // Create Y.js document if it doesn't exist
+        docs.set(documentId, new Y.Doc());
+        awarenessStates.set(documentId, new Awareness(docs.get(documentId)!));
+        console.log(`📄 [VIEW] Created new Y.js document: ${documentId}`);
+    }
+    
+    const ydoc = docs.get(documentId)!;
+    const ytext = ydoc.getText("content");
+    
+    // Apply operations to live Y.js document (SINGLE SOURCE OF TRUTH)
     for (const operation of operations) {
-        collaborationManager.applyOperation(documentId, operation);
+        console.log("📝 [VIEW] Applying operation:", operation.type, "to live document:", documentId);
+        
+        try {
+            switch (operation.type) {
+                case "insert": {
+                    const insertText = operation.content
+                        .map((item: any) => contentItemToText(item))
+                        .join("");
+                    const position = Math.min(operation.position || 0, ytext.length);
+                    ytext.insert(position, insertText);
+                    console.log(`✅ [VIEW] Inserted ${insertText.length} chars at position ${position} in live doc`);
+                    break;
+                }
+                case "replace": {
+                    const replaceText = operation.content
+                        .map((item: any) => contentItemToText(item))
+                        .join("");
+                    const fromPos = Math.min(operation.from || 0, ytext.length);
+                    const toPos = Math.min(operation.to || fromPos + 1, ytext.length);
+                    const deleteLength = toPos - fromPos;
+                    
+                    ytext.delete(fromPos, deleteLength);
+                    ytext.insert(fromPos, replaceText);
+                    console.log(`✅ [VIEW] Replaced ${deleteLength} chars with ${replaceText.length} chars at position ${fromPos} in live doc`);
+                    break;
+                }
+                case "delete": {
+                    const fromPos = Math.min(operation.from || 0, ytext.length);
+                    const toPos = Math.min(operation.to || fromPos + 1, ytext.length);
+                    const deleteLength = toPos - fromPos;
+                    ytext.delete(fromPos, deleteLength);
+                    console.log(`✅ [VIEW] Deleted ${deleteLength} chars at position ${fromPos} in live doc`);
+                    break;
+                }
+                default:
+                    console.warn(`❌ [VIEW] Unknown operation type: ${operation.type}`);
+                    break;
+            }
+        } catch (operationError) {
+            console.error(`❌ [VIEW] Failed to apply operation ${operation.type}:`, operationError);
+        }
+    }
+    
+    // Also apply to collaboration manager for backward compatibility
+    try {
+        for (const operation of operations) {
+            collaborationManager.applyOperation(documentId, operation);
+        }
+    } catch (collabError) {
+        console.warn("⚠️ [VIEW] Failed to apply to collaboration manager (non-critical):", collabError);
     }
     
     // AUTO-SAVE: Trigger async save to disk (non-blocking) only if we have a file
@@ -1061,10 +1122,31 @@ function applyLLMOperationsToCollaboration(operations: any[]): void {
         console.log("💡 [VIEW] Memory-only mode - operations applied but not saved to disk");
     }
     
-    // Notify frontend clients via SSE (Yjs also syncs via y-websocket)
+    // Notify frontend clients via SSE (Y.js changes will auto-sync via WebSocket)
     renderFileToClients(filePath || "");
     
-    console.log("✅ [VIEW] Operations applied successfully");
+    console.log("✅ [VIEW] Operations applied to live Y.js document successfully");
+}
+
+// Helper function to convert content items to text (from collaboration manager)
+function contentItemToText(item: any): string {
+    if (typeof item === "string") {
+        return item;
+    }
+    if (item && typeof item === "object") {
+        if (item.type === "text" && item.text) {
+            return item.text;
+        }
+        if (item.text) {
+            return item.text;
+        }
+        if (item.content) {
+            return Array.isArray(item.content)
+                ? item.content.map(contentItemToText).join("")
+                : String(item.content);
+        }
+    }
+    return String(item || "");
 }
 
 process.send?.("Success");
@@ -1183,36 +1265,50 @@ Start typing to see the editor in action!
             });
         }
     } else if (message.type === "getDocumentContent") {
-        // NEW: Handle content requests from agent (Flow 1 simplification)
+        // Handle content requests from agent - read from live Y.js document
         try {
+            let content = "";
+            let documentId = "";
+            
             if (!filePath) {
                 // Use default document ID for memory-only mode
-                const documentId = "default";
-                const content = collaborationManager.getDocumentContent(documentId);
+                documentId = "default";
+            } else {
+                documentId = path.basename(filePath, ".md");
                 
-                // If no content in collaboration manager, return default content
-                const finalContent = content || `# Welcome to AI-Enhanced Markdown Editor
+                // TEMP for debugging
+                documentId = "default";
+            }
+            
+            // Get content from live Y.js document instead of collaboration manager
+            if (docs.has(documentId)) {
+                const ydoc = docs.get(documentId)!;
+                // Get the text content from Y.js document using same field as collaboration manager
+                const yText = ydoc.getText('content');
+                content = yText.toString();
+                
+                console.log(`📄 [VIEW] Retrieved live content from Y.js doc "${documentId}": ${content.length} chars`);
+            } else {
+                // Fallback to collaboration manager if no Y.js doc exists yet
+                content = collaborationManager.getDocumentContent(documentId);
+                
+                if (!content) {
+                    // Final fallback to default content
+                    content = `# Welcome to AI-Enhanced Markdown Editor
 
 Start editing your markdown document with AI assistance!
 
 Start typing to see the editor in action!
 `;
-                
-                process.send?.({
-                    type: "documentContent",
-                    content: finalContent,
-                    timestamp: Date.now()
-                });
-            } else {
-                const documentId = path.basename(filePath, ".md");
-                const content = collaborationManager.getDocumentContent(documentId);
-                
-                process.send?.({
-                    type: "documentContent",
-                    content: content,
-                    timestamp: Date.now()
-                });
+                }
+                console.log(`📄 [VIEW] No Y.js doc found, using fallback content: ${content.length} chars`);
             }
+            
+            process.send?.({
+                type: "documentContent",
+                content: content,
+                timestamp: Date.now()
+            });
             
             console.log("📤 [VIEW] Sent document content to agent process");
         } catch (error) {

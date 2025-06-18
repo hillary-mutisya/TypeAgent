@@ -19,6 +19,7 @@ import { Awareness } from 'y-protocols/awareness';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
+// import { json } from "stream/consumers";
 
 
 const app: Express = express();
@@ -1114,6 +1115,11 @@ function applyLLMOperationsToCollaboration(operations: any[]): void {
                         .join("");
                     const position = Math.min(operation.position || 0, ytext.length);
                     ytext.insert(position, insertText);
+
+
+                    console.log("Inserted text: "+ insertText)
+                    console.log(JSON.stringify(ytext))
+
                     console.log(`✅ [VIEW] Inserted ${insertText.length} chars at position ${position} in live doc`);
                     break;
                 }
@@ -1127,6 +1133,10 @@ function applyLLMOperationsToCollaboration(operations: any[]): void {
                     
                     ytext.delete(fromPos, deleteLength);
                     ytext.insert(fromPos, replaceText);
+
+                    console.log("Replacement text: "+ replaceText)
+                    console.log(JSON.stringify(ytext))
+
                     console.log(`✅ [VIEW] Replaced ${deleteLength} chars with ${replaceText.length} chars at position ${fromPos} in live doc`);
                     break;
                 }
@@ -1342,13 +1352,24 @@ Start typing to see the editor in action!
                 documentId = path.basename(filePath, ".md");
             }
             
+            console.log("Using documentID "+ documentId)
+
             // Get content from WebSocket Y.js document (single source of truth in memory-only mode)
             if (docs.has(documentId)) {
                 const ydoc = docs.get(documentId)!;
                 const yText = ydoc.getText('content');
                 content = yText.toString();
                 
+
+                
                 console.log(`📄 [VIEW] Retrieved live content from WebSocket Y.js doc "${documentId}": ${content.length} chars`);
+
+                console.log("Initial content")
+                console.log(content)
+
+                console.log("From Prosemirror:")
+                console.log(JSON.stringify(ydoc))
+
             } else {
                 // Initialize with default content if document doesn't exist yet
                 const defaultContent = `# Welcome to AI-Enhanced Markdown Editor

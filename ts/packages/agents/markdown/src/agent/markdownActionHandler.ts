@@ -370,6 +370,8 @@ async function handleMarkdownAction(
             result = createActionResult("Updating document ...");
 
             const filePath = `${actionContext.sessionContext.agentContext.currentFileName}`;
+            console.log(filePath)
+            
             let markdownContent = "";
             
             if (actionContext.sessionContext.agentContext.viewProcess) {
@@ -378,6 +380,7 @@ async function handleMarkdownAction(
                         actionContext.sessionContext.agentContext.viewProcess
                     );
                     console.log("🔍 Got content from view process:", markdownContent?.length, "chars");
+                    console.log(markdownContent)
                 } catch (error) {
                     console.warn("⚠️ Failed to get content from view, falling back to storage:", error);
                     // Fallback to storage only if view process fails

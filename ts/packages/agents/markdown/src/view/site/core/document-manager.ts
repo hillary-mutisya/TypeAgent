@@ -15,6 +15,10 @@ export class DocumentManager {
         this.editorManager = editorManager;
     }
 
+    public getEditorManager(): any {
+        return this.editorManager;
+    }
+
     public async saveDocument(editor?: Editor): Promise<void> {
         try {
             this.showSaveStatus("saving");
@@ -46,22 +50,36 @@ export class DocumentManager {
         if (!editor) return "";
 
         try {
-            // First try to get content from server (most accurate)
+            // Get content directly from editor first (most current state)
+            const editorContent = await new Promise<string>((resolve) => {
+                editor.action((ctx) => {
+                    const view = ctx.get(editorViewCtx);
+                    resolve(view.state.doc.textContent || "");
+                });
+            });
+            
+            if (editorContent) {
+                console.log("📄 [DOCUMENT] Got content from live editor:", editorContent.length, "chars");
+                
+                return editorContent;
+            }
+        } catch (error) {
+            console.warn("Failed to get content from editor:", error);
+        }
+
+        try {
+            // Fallback to server content if editor content is empty
             const response = await fetch(AI_CONFIG.ENDPOINTS.DOCUMENT);
             if (response.ok) {
-                return await response.text();
+                const serverContent = await response.text();
+                console.log("📄 [DOCUMENT] Fallback to server content:", serverContent.length, "chars");
+                return serverContent;
             }
         } catch (error) {
             console.warn("Failed to fetch document from server:", error);
         }
 
-        // Fallback to editor content
-        return new Promise((resolve) => {
-            editor.action((ctx) => {
-                const view = ctx.get(editorViewCtx);
-                resolve(view.state.doc.textContent || "");
-            });
-        });
+        return "";
     }
 
     public async loadInitialContent(): Promise<string> {

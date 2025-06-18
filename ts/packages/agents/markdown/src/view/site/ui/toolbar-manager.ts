@@ -1,5 +1,6 @@
 import { DocumentManager } from "../core/document-manager";
 import { getElementById } from "../utils";
+import { editorViewCtx } from "@milkdown/core";
 
 export class ToolbarManager {
     private documentManager: DocumentManager | null = null;
@@ -66,7 +67,26 @@ export class ToolbarManager {
                 throw new Error("DocumentManager not initialized");
             }
             
-            const content = await this.documentManager.getDocumentContent();
+            // Get content directly from the live editor (not server) to ensure we export what user sees
+            let content = "";
+            
+            // Try to get content from the editor manager first (most current)
+            const editorManager = this.documentManager.getEditorManager();
+            if (editorManager) {
+                const editor = editorManager.getEditor();
+                if (editor) {
+                    content = await this.getEditorMarkdownContent(editor);
+                    console.log("📥 [EXPORT] Got content from live editor:", content.length, "chars");
+                    console.log(content)
+                } else {
+                    console.warn("⚠️ [EXPORT] No editor available, falling back to server");
+                    content = await this.documentManager.getDocumentContent();
+                }
+            } else {
+                console.warn("⚠️ [EXPORT] No editor manager available, falling back to server");
+                content = await this.documentManager.getDocumentContent();
+            }
+            
             const blob = new Blob([content], { type: "text/markdown" });
             const url = URL.createObjectURL(blob);
             
@@ -86,6 +106,24 @@ export class ToolbarManager {
             console.error("Failed to export file:", error);
             this.showNotification("❌ Failed to export file", "error");
         }
+    }
+
+    /**
+     * Get markdown content directly from the editor (bypassing server)
+     */
+    private async getEditorMarkdownContent(editor: any): Promise<string> {
+        return new Promise((resolve) => {
+            try {
+                editor.action((ctx: any) => {
+                    const view = ctx.get(editorViewCtx);
+                    const markdown = view.state.doc.textContent || "";
+                    resolve(markdown);
+                });
+            } catch (error) {
+                console.error("Failed to get editor content:", error);
+                resolve("");
+            }
+        });
     }
 
     private showNotification(message: string, type: "success" | "error"): void {

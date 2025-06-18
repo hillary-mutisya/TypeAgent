@@ -48,7 +48,7 @@ export const COLLABORATION_CONFIG = {
         // Fallback for server-side or when window is not available
         return "ws://localhost:3000";
     })(),
-    DEFAULT_DOCUMENT_ID: "live",
+    DEFAULT_DOCUMENT_ID: "default",
     RETRY_ATTEMPTS: 3,
     RETRY_DELAY: 1000,
 } as const;

@@ -25,8 +25,14 @@ export class CollaborationManager {
     }
 
     /**
-     * Get collaboration statistics
+     * Use an existing Y.js document instead of creating a new one
+     * This ensures consistency between CollaborationManager and WebSocket server
      */
+    useExistingDocument(documentId: string, ydoc: Y.Doc, filePath: string | null): void {
+        this.documents.set(documentId, ydoc);
+        this.documentPaths.set(documentId, filePath || "");
+        console.log(`🔄 [COLLAB] Using existing Y.js document: ${documentId} ${filePath ? `(${filePath})` : '(memory-only)'}`);
+    }
     getStats(): any {
         return {
             documents: this.documents.size,

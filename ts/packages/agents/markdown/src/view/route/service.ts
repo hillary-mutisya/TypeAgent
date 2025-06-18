@@ -296,7 +296,19 @@ Start typing to see the editor in action!
 // Get document as markdown text
 app.get("/document", (req: Request, res: Response) => {
     if (!filePath) {
-        // Return default content instead of error when no file is loaded
+        // Memory-only mode: get content from WebSocket Y.js document (single source of truth)
+        const documentId = "default"; // Use consistent document ID
+        
+        if (docs.has(documentId)) {
+            const ydoc = docs.get(documentId)!;
+            const ytext = ydoc.getText("content");
+            const content = ytext.toString();
+            console.log(`📄 [GET /document] Retrieved content from WebSocket Y.js doc: ${content.length} chars`);
+            res.send(content);
+            return;
+        }
+        
+        // If no WebSocket document exists yet, return default content and initialize it
         const defaultContent = `# Welcome to AI-Enhanced Markdown Editor
 
 Start editing your markdown document with AI assistance!
@@ -335,6 +347,15 @@ graph TD
 
 Start typing to see the editor in action!
 `;
+        
+        // Initialize WebSocket Y.js document with default content for consistency
+        const ydoc = new Y.Doc();
+        const ytext = ydoc.getText("content");
+        ytext.insert(0, defaultContent);
+        docs.set(documentId, ydoc);
+        awarenessStates.set(documentId, new Awareness(ydoc));
+        
+        console.log(`📄 [GET /document] Initialized WebSocket Y.js doc with default content: ${defaultContent.length} chars`);
         res.send(defaultContent);
         return;
     }
@@ -352,16 +373,36 @@ Start typing to see the editor in action!
 
 // Save document from markdown text
 app.post("/document", express.json(), (req: Request, res: Response) => {
+    const markdownContent = req.body.content || "";
+    
     if (!filePath) {
-        // If no file is loaded, we can't save to disk, but we can still accept the content
-        // This allows the editor to work in memory-only mode
-        console.log("⚠️ No file path set, cannot save to disk. Content received but not persisted.");
-        res.json({ success: true, warning: "No file loaded - content not saved to disk" });
+        // Memory-only mode: save to WebSocket Y.js document (single source of truth)
+        const documentId = "default"; // Use consistent document ID
+        
+        if (!docs.has(documentId)) {
+            // Initialize WebSocket Y.js document if it doesn't exist
+            const ydoc = new Y.Doc();
+            docs.set(documentId, ydoc);
+            awarenessStates.set(documentId, new Awareness(ydoc));
+            console.log(`📄 [POST /document] Initialized WebSocket Y.js doc for save operation`);
+        }
+        
+        const ydoc = docs.get(documentId)!;
+        const ytext = ydoc.getText("content");
+        
+        // Replace entire content atomically
+        ytext.delete(0, ytext.length);
+        ytext.insert(0, markdownContent);
+        
+        console.log(`💾 [POST /document] Saved content to WebSocket Y.js doc: ${markdownContent.length} chars`);
+        res.json({ success: true, message: "Content saved to memory (no file mode)" });
+        
+        // Notify clients via SSE of the change (WebSocket will auto-sync)
+        renderFileToClients("");
         return;
     }
 
     try {
-        const markdownContent = req.body.content || "";
         fs.writeFileSync(filePath, markdownContent, "utf-8");
         res.json({ success: true });
 
@@ -1106,8 +1147,18 @@ function applyLLMOperationsToCollaboration(operations: any[]): void {
         }
     }
     
-    // Also apply to collaboration manager for backward compatibility
+    // Also apply to collaboration manager for backward compatibility, using same Y.js document
     try {
+        // Ensure collaboration manager uses the same document instance as WebSocket server
+        if (docs.has(documentId)) {
+            // Use existing WebSocket document for consistency
+            collaborationManager.useExistingDocument(documentId, docs.get(documentId)!, filePath);
+            console.log(`🔄 [VIEW] CollaborationManager now using WebSocket Y.js doc for consistency`);
+        } else {
+            // Standard initialization if no WebSocket doc exists yet
+            collaborationManager.initializeDocument(documentId, filePath);
+        }
+        
         for (const operation of operations) {
             collaborationManager.applyOperation(documentId, operation);
         }
@@ -1149,7 +1200,7 @@ function contentItemToText(item: any): string {
     return String(item || "");
 }
 
-process.send?.("Success");
+// Success signal moved to server.listen() callback to ensure WebSocket server is ready
 
 process.on("message", (message: any) => {
     if (message.type == "setFile") {
@@ -1180,15 +1231,24 @@ process.on("message", (message: any) => {
                 renderFileToClients(filePath!);
             });
         } else {
-            // No file mode - initialize with default content
+            // No file mode - initialize with default content (SINGLE SOURCE OF TRUTH SETUP)
             filePath = null;
             console.log("🔄 Running in memory-only mode (no file)");
             
-            // Initialize collaboration with default document
             const documentId = "default";
-            collaborationManager.initializeDocument(documentId, null);
             
-            // Set default content in collaboration manager
+            // Initialize WebSocket Y.js document first (single source of truth)
+            if (!docs.has(documentId)) {
+                const ydoc = new Y.Doc();
+                docs.set(documentId, ydoc);
+                awarenessStates.set(documentId, new Awareness(ydoc));
+                console.log(`📄 [MEMORY-ONLY] Created WebSocket Y.js document: ${documentId}`);
+            }
+            
+            // Make CollaborationManager use the same Y.js document instance
+            collaborationManager.useExistingDocument(documentId, docs.get(documentId)!, null);
+            
+            // Set default content in the shared Y.js document
             const defaultContent = `# Welcome to AI-Enhanced Markdown Editor
 
 Start editing your markdown document with AI assistance!
@@ -1227,7 +1287,12 @@ graph TD
 
 Start typing to see the editor in action!
 `;
-            collaborationManager.setDocumentContent(documentId, defaultContent);
+            
+            const ydoc = docs.get(documentId)!;
+            const ytext = ydoc.getText("content");
+            ytext.insert(0, defaultContent);
+            
+            console.log(`📄 [MEMORY-ONLY] Initialized shared Y.js document with default content: ${defaultContent.length} chars`);
             
             // Initial render for clients with default content
             renderFileToClients("");
@@ -1275,33 +1340,33 @@ Start typing to see the editor in action!
                 documentId = "default";
             } else {
                 documentId = path.basename(filePath, ".md");
-                
-                // TEMP for debugging
-                documentId = "default";
             }
             
-            // Get content from live Y.js document instead of collaboration manager
+            // Get content from WebSocket Y.js document (single source of truth in memory-only mode)
             if (docs.has(documentId)) {
                 const ydoc = docs.get(documentId)!;
-                // Get the text content from Y.js document using same field as collaboration manager
                 const yText = ydoc.getText('content');
                 content = yText.toString();
                 
-                console.log(`📄 [VIEW] Retrieved live content from Y.js doc "${documentId}": ${content.length} chars`);
+                console.log(`📄 [VIEW] Retrieved live content from WebSocket Y.js doc "${documentId}": ${content.length} chars`);
             } else {
-                // Fallback to collaboration manager if no Y.js doc exists yet
-                content = collaborationManager.getDocumentContent(documentId);
-                
-                if (!content) {
-                    // Final fallback to default content
-                    content = `# Welcome to AI-Enhanced Markdown Editor
+                // Initialize with default content if document doesn't exist yet
+                const defaultContent = `# Welcome to AI-Enhanced Markdown Editor
 
 Start editing your markdown document with AI assistance!
 
 Start typing to see the editor in action!
 `;
-                }
-                console.log(`📄 [VIEW] No Y.js doc found, using fallback content: ${content.length} chars`);
+                
+                // Create WebSocket Y.js document with default content for consistency
+                const ydoc = new Y.Doc();
+                const yText = ydoc.getText('content');
+                yText.insert(0, defaultContent);
+                docs.set(documentId, ydoc);
+                awarenessStates.set(documentId, new Awareness(ydoc));
+                
+                content = defaultContent;
+                console.log(`📄 [VIEW] Initialized WebSocket Y.js doc "${documentId}" with default content: ${content.length} chars`);
             }
             
             process.send?.({
@@ -1524,4 +1589,7 @@ process.on('unhandledRejection', (reason, promise) => {
 server.listen(port, () => {
     console.log(`✅ Express server with WebSocket support listening on port ${port}`);
     console.log(`📡 Y.js collaboration available at ws://localhost:${port}/<room-name>`);
+    
+    // Send success signal to parent process AFTER server is ready to accept WebSocket connections
+    process.send?.("Success");
 });

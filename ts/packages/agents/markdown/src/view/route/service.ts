@@ -1014,57 +1014,27 @@ app.get("/events", (req: Request, res: Response) => {
 app.use(express.static(staticPath));
 
 function renderFileToClients(filePath: string) {
-    let fileContent: string;
+    // SSE should only send JSON events, not HTML content
+    // HTML content is served via HTTP endpoints, not SSE
     
-    if (!filePath || !fs.existsSync(filePath)) {
-        // Use default content if no file or file doesn't exist
-        fileContent = `# Welcome to AI-Enhanced Markdown Editor
-
-Start editing your markdown document with AI assistance!
-
-## Features
-
-- **WYSIWYG Editing** with Milkdown Crepe
-- **AI-Powered Tools** integrated with TypeAgent
-- **Real-time Preview** with full markdown support
-- **Mermaid Diagrams** with visual editing
-- **Math Equations** with LaTeX support
-- **GeoJSON Maps** for location data
-
-## AI Commands
-
-Try these AI-powered commands:
-
-- Type \`/\` to open the block edit menu with AI tools
-- Use **Continue Writing** to let AI continue writing
-- Use **Generate Diagram** to create Mermaid diagrams
-- Use **Augment Document** to improve the document
-- Test versions available for testing without API calls
-
-## Example Diagram
-
-\`\`\`mermaid
-graph TD
-    A[Start Editing] --> B{Need AI Help?}
-    B -->|Yes| C[Use / Commands]
-    B -->|No| D[Continue Writing]
-    C --> E[AI Generates Content]
-    E --> F[Review & Edit]
-    F --> G[Save Document]
-    D --> G
-\`\`\`
-
-Start typing to see the editor in action!
-`;
-    } else {
-        fileContent = fs.readFileSync(filePath, "utf-8");
-    }
+    const documentName = filePath ? path.basename(filePath, ".md") : "default";
     
-    const htmlContent = md.render(fileContent);
+    // Send a JSON event to notify clients of document changes
+    const event = {
+        type: "documentUpdated",
+        documentName: documentName,
+        timestamp: Date.now()
+    };
 
     clients.forEach((client) => {
-        client.write(`data: ${encodeURIComponent(htmlContent)}\n\n`);
+        try {
+            client.write(`data: ${JSON.stringify(event)}\n\n`);
+        } catch (error) {
+            console.error("❌ [SSE] Failed to send event to client:", error);
+        }
     });
+    
+    console.log(`📡 [SSE] Sent documentUpdated event for: ${documentName}`);
 }
 
 // Enhanced operation application in view process
@@ -1082,12 +1052,6 @@ function applyLLMOperationsToCollaboration(operations: any[]): void {
     const ytext = ydoc.getText("content");
 
 
-    console.log("::Document contents::")
-    Array.from(docs.keys()).forEach(key =>{
-        console.log("Key: " + key + " Current: "+ JSON.stringify(docs.get(key)))
-        console.log("Key: " + key + " Authoritative: "+ JSON.stringify(getAuthoritativeDocument(key)))
-    })
-    
     console.log(`🔍 [OPERATION-DEBUG] Authoritative Y.js document "${documentId}" current content length: ${ytext.length} chars`);
     
     // Add update event listener to debug broadcasting
@@ -1430,6 +1394,7 @@ const docs = new Map<string, Y.Doc>();
 const awarenessStates = new Map<string, any>();
 // Track WebSocket connections per room for debugging
 const roomConnections = new Map<string, Set<any>>();
+const roomAwarenessConnections = new Map<string, Map<any, Set<number>>>();
 
 /**
  * Get the authoritative Y.js document for a given document ID
@@ -1478,16 +1443,52 @@ function setupWSConnection(conn: any, req: any, roomName: string): void {
     // Get awareness for this room (should already exist from getAuthoritativeDocument)
     const awareness = awarenessStates.get(roomName)!;
     
+    // Track controlled awareness states for this connection
+    const controlledIds = new Set<number>();
+    if (!roomAwarenessConnections.has(roomName)) {
+        roomAwarenessConnections.set(roomName, new Map());
+    }
+    roomAwarenessConnections.get(roomName)!.set(conn, controlledIds);
+    
     console.log(`📡 Client connected to room: ${roomName}`);
     
-    // Send function for broadcasting to other clients
+    // Send function for broadcasting to clients
     const send = (doc: Y.Doc, conn: any, message: Uint8Array) => {
         if (conn.readyState === conn.OPEN) {
-            conn.send(message);
+            try {
+                conn.send(message);
+                console.log(`[WEBSOCKET] Sent message to client (${message.length} bytes)`);
+            } catch (error) {
+                console.error(`❌ Failed to send message to client:`, error);
+                closeConnection(doc, conn);
+            }
+        } else {
+            closeConnection(doc, conn);
         }
     };
     
-    // Message handler - exact copy of y-websocket implementation
+    // Function to close connection and clean up
+    const closeConnection = (doc: Y.Doc, conn: any) => {
+        const connMap = roomAwarenessConnections.get(roomName);
+        if (connMap && connMap.has(conn)) {
+            const controlledIds = connMap.get(conn);
+            connMap.delete(conn);
+            
+            // Remove awareness states for this connection
+            if (controlledIds && controlledIds.size > 0) {
+                awarenessProtocol.removeAwarenessStates(awareness, Array.from(controlledIds), null);
+            }
+        }
+        
+        // Remove from room connections
+        const connections = roomConnections.get(roomName);
+        if (connections) {
+            connections.delete(conn);
+            console.log(`🔌 [WEBSOCKET] Client disconnected from room "${roomName}", ${connections.size} clients remaining`);
+        }
+    };
+    
+    // Message handler - based on y-websocket-server implementation
     const messageListener = (conn: any, doc: Y.Doc, message: Uint8Array) => {
         try {
             const encoder = encoding.createEncoder();
@@ -1496,6 +1497,7 @@ function setupWSConnection(conn: any, req: any, roomName: string): void {
             
             switch (messageType) {
                 case 0: // messageSync
+                    console.log(`📥 [SYNC-MESSAGE] Received sync message from client in room "${roomName}"`);
                     encoding.writeVarUint(encoder, 0); // messageSync
                     syncProtocol.readSyncMessage(decoder, encoder, doc, conn);
                     
@@ -1503,7 +1505,9 @@ function setupWSConnection(conn: any, req: any, roomName: string): void {
                     // message, there is no need to send the message. When encoder only
                     // contains the type of reply, its length is 1.
                     if (encoding.length(encoder) > 1) {
-                        send(doc, conn, encoding.toUint8Array(encoder));
+                        const responseMessage = encoding.toUint8Array(encoder);
+                        console.log(`📤 [SYNC-RESPONSE] Sending sync response to client (${responseMessage.length} bytes)`);
+                        send(doc, conn, responseMessage);
                     }
                     break;
                 case 1: // messageAwareness
@@ -1520,7 +1524,6 @@ function setupWSConnection(conn: any, req: any, roomName: string): void {
             }
         } catch (err) {
             console.error('❌ Failed to process WebSocket message:', err);
-            // Y.Doc doesn't have an 'error' event, so just log the error
         }
     };
     
@@ -1529,27 +1532,47 @@ function setupWSConnection(conn: any, req: any, roomName: string): void {
         messageListener(conn, ydoc, new Uint8Array(message));
     });
     
-    // Send initial sync message to new client
+    // Send initial sync step 1 to new client
     const encoder = encoding.createEncoder();
     encoding.writeVarUint(encoder, 0); // messageSync
     syncProtocol.writeSyncStep1(encoder, ydoc);
-    send(ydoc, conn, encoding.toUint8Array(encoder));
+    const syncMessage = encoding.toUint8Array(encoder);
     
-    // Listen for document updates and broadcast to other clients
+    console.log(`📤 [INITIAL-SYNC] Sending sync step 1 to new client in room "${roomName}" (${syncMessage.length} bytes)`);
+    console.log(`📄 [INITIAL-SYNC] Backend document content: ${ydoc.getText("content").length} chars`);
+    const backendContent = ydoc.getText("content").toString();
+    if (backendContent.length > 0 && backendContent.length < 500) {
+        console.log(`📝 [INITIAL-SYNC] Backend content preview: "${backendContent.substring(0, 200)}..."`);
+    }
+    
+    send(ydoc, conn, syncMessage);
+    
+    // Send existing awareness states to new client if any exist
+    const awarenessStatesMap = awareness.getStates();
+    if (awarenessStatesMap.size > 0) {
+        const awarenessEncoder = encoding.createEncoder();
+        encoding.writeVarUint(awarenessEncoder, 1); // messageAwareness
+        encoding.writeVarUint8Array(awarenessEncoder, awarenessProtocol.encodeAwarenessUpdate(awareness, Array.from(awarenessStatesMap.keys())));
+        send(ydoc, conn, encoding.toUint8Array(awarenessEncoder));
+    }
+    
+    // Listen for document updates and broadcast to ALL clients (matching y-websocket-server behavior)
     const updateHandler = (update: Uint8Array, origin: any) => {
         console.log(`🔔 [WEBSOCKET-BROADCAST] Update event in room "${roomName}" (${update.length} bytes), origin:`, origin);
-        console.log(`🔍 [WEBSOCKET-BROADCAST] Broadcasting to ${roomConnections.get(roomName)?.size || 0} clients in room "${roomName}"`);
         
-        // Broadcast to all clients in this room (including the current one for AI updates)
         const connections = roomConnections.get(roomName);
         if (connections) {
             let broadcastCount = 0;
+            const encoder = encoding.createEncoder();
+            encoding.writeVarUint(encoder, 0); // messageSync
+            syncProtocol.writeUpdate(encoder, update);
+            const message = encoding.toUint8Array(encoder);
+            
+            // Broadcast to ALL clients (y-websocket-server broadcasts to all clients)
+            // This is correct behavior - the client-side will handle deduplication
             connections.forEach(clientConn => {
                 if (clientConn.readyState === clientConn.OPEN) {
-                    const encoder = encoding.createEncoder();
-                    encoding.writeVarUint(encoder, 0); // messageSync
-                    syncProtocol.writeUpdate(encoder, update);
-                    send(ydoc, clientConn, encoding.toUint8Array(encoder));
+                    send(ydoc, clientConn, message);
                     broadcastCount++;
                 }
             });
@@ -1558,16 +1581,35 @@ function setupWSConnection(conn: any, req: any, roomName: string): void {
     };
     ydoc.on('update', updateHandler);
     
-    // Handle awareness changes and broadcast to other clients  
+    // Handle awareness changes and broadcast to all clients  
     const awarenessChangeHandler = (changes: any, origin: any) => {
         try {
-            if (origin !== conn) {
-                const changedClients = changes.added.concat(changes.updated, changes.removed);
-                if (changedClients.length > 0) {
-                    const encoder = encoding.createEncoder();
-                    encoding.writeVarUint(encoder, 1); // messageAwareness
-                    encoding.writeVarUint8Array(encoder, awarenessProtocol.encodeAwarenessUpdate(awareness, changedClients));
-                    send(ydoc, conn, encoding.toUint8Array(encoder));
+            const changedClients = changes.added.concat(changes.updated, changes.removed);
+            
+            // Track controlled client IDs for this connection
+            if (origin === conn) {
+                const connMap = roomAwarenessConnections.get(roomName);
+                const connControlledIDs = connMap?.get(conn);
+                if (connControlledIDs) {
+                    changes.added.forEach((clientID: number) => connControlledIDs.add(clientID));
+                    changes.removed.forEach((clientID: number) => connControlledIDs.delete(clientID));
+                }
+            }
+            
+            // Broadcast awareness update to all clients
+            if (changedClients.length > 0) {
+                const encoder = encoding.createEncoder();
+                encoding.writeVarUint(encoder, 1); // messageAwareness
+                encoding.writeVarUint8Array(encoder, awarenessProtocol.encodeAwarenessUpdate(awareness, changedClients));
+                const message = encoding.toUint8Array(encoder);
+                
+                const connections = roomConnections.get(roomName);
+                if (connections) {
+                    connections.forEach(clientConn => {
+                        if (clientConn.readyState === clientConn.OPEN) {
+                            send(ydoc, clientConn, message);
+                        }
+                    });
                 }
             }
         } catch (awarenessError) {
@@ -1577,29 +1619,51 @@ function setupWSConnection(conn: any, req: any, roomName: string): void {
     awareness.on('change', awarenessChangeHandler);
     
     // Clean up when client disconnects
-    conn.on('close', () => {
+    conn.on('close', (code?: number, reason?: string) => {
         try {
             ydoc.off('update', updateHandler);
             awareness.off('change', awarenessChangeHandler);
             
-            // Remove from connection tracking
-            const connections = roomConnections.get(roomName);
-            if (connections) {
-                connections.delete(conn);
-                console.log(`🔌 [WEBSOCKET] Client disconnected from room "${roomName}", ${connections.size} clients remaining`);
-            }
+            closeConnection(ydoc, conn);
             
-            // Remove awareness state for this client using correct API
-            awarenessProtocol.removeAwarenessStates(awareness, [ydoc.clientID], 'disconnect');
-            
-            console.log(`📡 Client disconnected from room: ${roomName}`);
+            console.log(`� Client disconnected from room: ${roomName} (code: ${code}, reason: ${reason})`);
         } catch (cleanupError) {
             console.error('❌ Error during connection cleanup:', cleanupError);
         }
     });
     
     conn.on('error', (error: any) => {
-        console.error('❌ WebSocket error:', error);
+        console.error(`❌ WebSocket error in room "${roomName}":`, error);
+        closeConnection(ydoc, conn);
+    });
+    
+    // Add ping/pong to keep connection alive
+    let pongReceived = true;
+    const pingInterval = setInterval(() => {
+        if (!pongReceived) {
+            console.warn(`⚠️ Client in room "${roomName}" didn't respond to ping, closing connection`);
+            closeConnection(ydoc, conn);
+            clearInterval(pingInterval);
+        } else if (conn.readyState === conn.OPEN) {
+            pongReceived = false;
+            try {
+                conn.ping();
+            } catch (error) {
+                console.warn(`⚠️ Failed to ping client in room "${roomName}":`, error);
+                closeConnection(ydoc, conn);
+                clearInterval(pingInterval);
+            }
+        } else {
+            clearInterval(pingInterval);
+        }
+    }, 30000); // Ping every 30 seconds
+    
+    conn.on('pong', () => {
+        pongReceived = true;
+    });
+    
+    conn.on('close', () => {
+        clearInterval(pingInterval);
     });
 }
 

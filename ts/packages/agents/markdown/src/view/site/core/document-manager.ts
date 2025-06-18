@@ -20,6 +20,10 @@ export class DocumentManager {
         return this.editorManager;
     }
 
+    public getCollaborationManager(): any {
+        return this.editorManager?.getCollaborationManager();
+    }
+
     public async initialize(): Promise<void> {
         // Set up SSE connection for document change notifications
         this.setupSSEConnection();
@@ -39,6 +43,8 @@ export class DocumentManager {
                     this.handleSSEEvent(data);
                 } catch (error) {
                     console.error('❌ [SSE] Failed to parse event data:', error);
+                    console.error('❌ [SSE] Raw event data:', event.data?.substring(0, 100) + '...');
+                    // Don't crash on parse errors - just log and continue
                 }
             };
             
@@ -67,8 +73,66 @@ export class DocumentManager {
                 await this.handleDocumentChangeFromBackend(data.newDocumentId, data.newDocumentName);
                 break;
                 
+            case 'documentUpdated':
+                console.log(`📄 [SSE] Document updated: ${data.documentName}`);
+                console.log(`📄 [SSE] Document updated timestamp: ${data.timestamp}`);
+                
+                // Document content was updated - WebSocket should handle the sync
+                // But let's add a fallback check in case WebSocket fails
+                if (this.editorManager) {
+                    console.log(`🔍 [SSE-FALLBACK] Checking WebSocket connection status...`);
+                    const collaborationManager = this.getCollaborationManager();
+                    
+                    if (collaborationManager && !collaborationManager.isConnected()) {
+                        console.log(`⚠️ [SSE-FALLBACK] WebSocket disconnected, triggering content refresh from SSE event`);
+                        
+                        // Fallback: manually refresh content from server
+                        try {
+                            const currentContent = await this.getDocumentContent();
+                            // Note: We don't set content directly to avoid conflicts, just log for debugging
+                            console.log(`📡 [SSE-FALLBACK] Server has ${currentContent.length} chars available for sync`);
+                            
+                            if (this.notificationManager) {
+                                this.notificationManager.showNotification(
+                                    "📡 Document updated (WebSocket reconnecting...)",
+                                    "info"
+                                );
+                            }
+                        } catch (error) {
+                            console.error(`❌ [SSE-FALLBACK] Failed to refresh content:`, error);
+                        }
+                    } else {
+                        console.log(`✅ [SSE] WebSocket connected - no fallback needed`);
+                    }
+                } else {
+                    console.log(`⚠️ [SSE] No editor manager available for WebSocket status check`);
+                }
+                break;
+                
+            case 'autoSave':
+                console.log(`💾 [SSE] Auto-save completed for: ${data.filePath}`);
+                // Show brief save notification
+                if (this.notificationManager) {
+                    this.notificationManager.showNotification(
+                        `💾 Auto-saved: ${data.filePath}`,
+                        "info"
+                    );
+                }
+                break;
+                
+            case 'autoSaveError':
+                console.error(`❌ [SSE] Auto-save error: ${data.error}`);
+                if (this.notificationManager) {
+                    this.notificationManager.showNotification(
+                        `❌ Auto-save failed: ${data.error}`,
+                        "error"
+                    );
+                }
+                break;
+                
             default:
-                // Ignore other event types
+                // Log unknown event types for debugging
+                console.log(`📡 [SSE] Unknown event type: ${data.type}`, data);
                 break;
         }
     }
@@ -77,9 +141,15 @@ export class DocumentManager {
         try {
             console.log(`🔄 [DOCUMENT] Backend switched to: ${documentName}, reconnecting frontend...`);
             
-            // Get content from server
-            const response = await fetch(AI_CONFIG.ENDPOINTS.DOCUMENT);
+            // Get content from server with URL logging
+            const documentUrl = AI_CONFIG.ENDPOINTS.DOCUMENT;
+            console.log(`📡 [HTTP-REQUEST] GET ${documentUrl} - Fetching document content for: ${documentName}`);
+            
+            const response = await fetch(documentUrl);
+            console.log(`📡 [HTTP-RESPONSE] GET ${documentUrl} - Status: ${response.status} ${response.statusText}`);
+            
             const content = response.ok ? await response.text() : "";
+            console.log(`📡 [HTTP-CONTENT] GET ${documentUrl} - Content length: ${content.length} chars`);
             
             // Switch editor collaboration to new document room
             if (this.editorManager) {
@@ -120,19 +190,25 @@ export class DocumentManager {
                 ? await this.getMarkdownContent(editor)
                 : await this.loadContentFromServer();
 
-            const response = await fetch(AI_CONFIG.ENDPOINTS.DOCUMENT, {
+            const saveUrl = AI_CONFIG.ENDPOINTS.DOCUMENT;
+            console.log(`📡 [HTTP-REQUEST] POST ${saveUrl} - Saving document content (${content.length} chars)`);
+
+            const response = await fetch(saveUrl, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ content }),
             });
 
+            console.log(`📡 [HTTP-RESPONSE] POST ${saveUrl} - Status: ${response.status} ${response.statusText}`);
+
             if (!response.ok) {
                 throw new Error(`Save failed: ${response.status}`);
             }
 
+            console.log(`✅ [DOCUMENT] Document saved successfully via POST ${saveUrl}`);
             this.showSaveStatus("saved");
         } catch (error) {
-            console.error("Failed to save document:", error);
+            console.error("❌ [DOCUMENT] Failed to save document:", error);
             this.showSaveStatus("error");
             throw error;
         }
@@ -176,24 +252,39 @@ export class DocumentManager {
 
     public async loadInitialContent(): Promise<string> {
         try {
-            const response = await fetch(AI_CONFIG.ENDPOINTS.DOCUMENT);
+            const documentUrl = AI_CONFIG.ENDPOINTS.DOCUMENT;
+            console.log(`📡 [HTTP-REQUEST] GET ${documentUrl} - Loading initial document content`);
+            
+            const response = await fetch(documentUrl);
+            console.log(`📡 [HTTP-RESPONSE] GET ${documentUrl} - Status: ${response.status} ${response.statusText}`);
+            
             if (response.ok) {
-                return await response.text();
+                const content = await response.text();
+                console.log(`📡 [HTTP-CONTENT] GET ${documentUrl} - Initial content loaded: ${content.length} chars`);
+                return content;
             } else {
+                console.log(`⚠️ [DOCUMENT] GET ${documentUrl} failed, using default content`);
                 return this.getDefaultContent();
             }
         } catch (error) {
-            console.error("Failed to load initial content:", error);
+            console.error("❌ [DOCUMENT] Failed to load initial content:", error);
             return this.getDefaultContent();
         }
     }
 
     private async loadContentFromServer(): Promise<string> {
-        const response = await fetch(AI_CONFIG.ENDPOINTS.DOCUMENT);
+        const documentUrl = AI_CONFIG.ENDPOINTS.DOCUMENT;
+        console.log(`📡 [HTTP-REQUEST] GET ${documentUrl} - Loading content from server`);
+        
+        const response = await fetch(documentUrl);
+        console.log(`📡 [HTTP-RESPONSE] GET ${documentUrl} - Status: ${response.status} ${response.statusText}`);
+        
         if (response.ok) {
-            return await response.text();
+            const content = await response.text();
+            console.log(`📡 [HTTP-CONTENT] GET ${documentUrl} - Server content loaded: ${content.length} chars`);
+            return content;
         }
-        throw new Error("Failed to load content from server");
+        throw new Error(`Failed to load content from server: ${response.status} ${response.statusText}`);
     }
 
     private getDefaultContent(): string {
@@ -209,33 +300,46 @@ export class DocumentManager {
 
     public async getDocumentContent(): Promise<string> {
         try {
-            const response = await fetch(AI_CONFIG.ENDPOINTS.DOCUMENT);
+            const documentUrl = AI_CONFIG.ENDPOINTS.DOCUMENT;
+            console.log(`📡 [HTTP-REQUEST] GET ${documentUrl} - Getting current document content`);
+            
+            const response = await fetch(documentUrl);
+            console.log(`📡 [HTTP-RESPONSE] GET ${documentUrl} - Status: ${response.status} ${response.statusText}`);
+            
             if (response.ok) {
-                return await response.text();
+                const content = await response.text();
+                console.log(`📡 [HTTP-CONTENT] GET ${documentUrl} - Current content: ${content.length} chars`);
+                return content;
             }
-            throw new Error("Failed to fetch document content");
+            throw new Error(`Failed to fetch document content: ${response.status} ${response.statusText}`);
         } catch (error) {
-            console.error("Failed to get document content:", error);
+            console.error("❌ [DOCUMENT] Failed to get document content:", error);
             throw error;
         }
     }
 
     public async setDocumentContent(content: string): Promise<void> {
         try {
-            const response = await fetch(AI_CONFIG.ENDPOINTS.DOCUMENT, {
+            const saveUrl = AI_CONFIG.ENDPOINTS.DOCUMENT;
+            console.log(`📡 [HTTP-REQUEST] POST ${saveUrl} - Setting document content (${content.length} chars)`);
+            
+            const response = await fetch(saveUrl, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ content }),
             });
 
+            console.log(`📡 [HTTP-RESPONSE] POST ${saveUrl} - Status: ${response.status} ${response.statusText}`);
+
             if (!response.ok) {
-                throw new Error(`Failed to set document content: ${response.status}`);
+                throw new Error(`Failed to set document content: ${response.status} ${response.statusText}`);
             }
             
+            console.log(`✅ [DOCUMENT] Document content updated successfully via POST ${saveUrl}`);
             // Don't reload the whole page, just notify the editor will update via collaboration
-            console.log("Document content updated successfully");
+            console.log("📄 [DOCUMENT] Content set - WebSocket collaboration will sync changes");
         } catch (error) {
-            console.error("Failed to set document content:", error);
+            console.error("❌ [DOCUMENT] Failed to set document content:", error);
             throw error;
         }
     }
@@ -293,18 +397,24 @@ export class DocumentManager {
 
     public async switchToDocument(documentName: string): Promise<void> {
         try {
+            const switchUrl = "/api/switch-document";
+            console.log(`📡 [HTTP-REQUEST] POST ${switchUrl} - Switching to document: ${documentName}`);
+            
             // Call server to switch document
-            const response = await fetch("/api/switch-document", {
+            const response = await fetch(switchUrl, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ documentName }),
             });
 
+            console.log(`📡 [HTTP-RESPONSE] POST ${switchUrl} - Status: ${response.status} ${response.statusText}`);
+
             if (!response.ok) {
-                throw new Error(`Failed to switch document: ${response.status}`);
+                throw new Error(`Failed to switch document: ${response.status} ${response.statusText}`);
             }
 
             const result = await response.json();
+            console.log(`📡 [HTTP-CONTENT] POST ${switchUrl} - Response:`, result);
             console.log(`📄 [DOCUMENT] Server switched to: ${documentName}`, result);
             
             // Switch editor collaboration to new document room

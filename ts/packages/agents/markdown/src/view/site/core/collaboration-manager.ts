@@ -14,24 +14,36 @@ export class CollaborationManager {
         
         // Destroy existing connection
         if (this.websocketProvider) {
-            console.log(`🔌 [COLLAB] Disconnecting from previous room`);
+            console.log(`🔌 [COLLAB] Disconnecting from previous room, was connected: ${this.websocketProvider.wsconnected}`);
             this.websocketProvider.destroy();
             this.websocketProvider = null;
         }
         
         if (this.yjsDoc) {
+            const oldContent = this.yjsDoc.getText('content').toString();
+            console.log(`📄 [COLLAB] Destroying old Y.js document (had ${oldContent.length} chars)`);
             this.yjsDoc.destroy();
             this.yjsDoc = null;
         }
         
         // Create new Y.js document for the new room
         this.yjsDoc = new Doc();
+        console.log(`📄 [COLLAB] Created new Y.js document for reconnection with client ID: ${this.yjsDoc.clientID}`);
+
+        // Add debugging for Y.js document updates during reconnection
+        this.yjsDoc.on('update', (update: Uint8Array, origin: any) => {
+            const content = this.yjsDoc?.getText('content').toString() || '';
+            console.log(`🔄 [RECONNECT-UPDATE] Document updated during reconnection (${update.length} bytes), origin:`, origin);
+            console.log(`📄 [RECONNECT-CONTENT] Document content: ${content.length} chars`);
+        });
+        console.log(`📄 [COLLAB] Created new Y.js document with client ID: ${this.yjsDoc.clientID}`);
         
         // Get the WebSocket server URL (should be same as before)
         const config = await this.getCollaborationConfig();
+        console.log(`📡 [COLLAB] Using WebSocket URL: ${config.websocketServerUrl}`);
         
         // Create new WebSocket provider for the new document
-        console.log(`🔄 [COLLAB] Connecting to WebSocket: ${config.websocketServerUrl} with documentId: "${newDocumentId}"`);
+        console.log(`🔄 [COLLAB] Connecting to WebSocket room: "${newDocumentId}"`);
         
         this.websocketProvider = new WebsocketProvider(
             config.websocketServerUrl,
@@ -42,22 +54,41 @@ export class CollaborationManager {
         // Setup connection status monitoring for new connection
         this.setupCollaborationStatus(this.websocketProvider);
         
-        console.log(`✅ [COLLAB] Reconnected to document: "${newDocumentId}"`);
-        console.log(JSON.stringify(this.yjsDoc))
+        // Log when connection is established and document is synced
+        this.websocketProvider.on("sync", (isSynced: boolean) => {
+            if (isSynced) {
+                const content = this.yjsDoc?.getText('content').toString() || '';
+                console.log(`✅ [COLLAB] Reconnected and synced to document: "${newDocumentId}" (${content.length} chars)`);
+            }
+        });
+        
+        console.log(`🔄 [COLLAB] Reconnection initiated for document: "${newDocumentId}"`);
     }
 
     public async initialize(): Promise<void> {
-        console.log("🔄 Initializing Collaboration Manager...");
+        console.log("🔄 [COLLAB] Initializing Collaboration Manager...");
 
         try {
             // Get collaboration configuration
             this.config = await this.getCollaborationConfig();
+            console.log(`📡 [COLLAB] Got configuration:`, this.config);
 
             // Create Yjs document
             this.yjsDoc = new Doc();
+            console.log(`📄 [COLLAB] Created Y.js document with client ID: ${this.yjsDoc.clientID}`);
+
+            // Add debugging for Y.js document updates
+            this.yjsDoc.on('update', (update: Uint8Array, origin: any) => {
+                const content = this.yjsDoc?.getText('content').toString() || '';
+                console.log(`🔄 [Y.JS-UPDATE] Frontend document updated (${update.length} bytes), origin:`, origin);
+                console.log(`📄 [Y.JS-CONTENT] Frontend document content: ${content.length} chars`);
+                if (content.length < 500) {
+                    console.log(`📝 [Y.JS-PREVIEW] Content preview: "${content.substring(0, 200)}..."`);
+                }
+            });
 
             // Create WebSocket provider
-            console.log(`🔄 [FRONTEND] Connecting to WebSocket: ${this.config.websocketServerUrl} with documentId: "${this.config.documentId}"`);
+            console.log(`🔄 [COLLAB] Connecting to WebSocket: ${this.config.websocketServerUrl} with documentId: "${this.config.documentId}"`);
             
             this.websocketProvider = new WebsocketProvider(
                 this.config.websocketServerUrl,
@@ -69,30 +100,39 @@ export class CollaborationManager {
             this.setupCollaborationStatus(this.websocketProvider);
 
             console.log(
-                "✅ Collaboration initialized for document:",
-                this.config.documentId,
+                `✅ [COLLAB] Collaboration initialized for document: "${this.config.documentId}"`,
             );
 
-            console.log(JSON.stringify(this.yjsDoc))
+            // Log initial document state
+            setTimeout(() => {
+                const content = this.yjsDoc?.getText('content').toString() || '';
+                console.log(`📄 [COLLAB] Initial document content: ${content.length} chars`);
+            }, 1000);
         } catch (error) {
-            console.error("❌ Failed to initialize collaboration:", error);
-            console.log("⚠️ Continuing without collaboration features");
+            console.error("❌ [COLLAB] Failed to initialize collaboration:", error);
+            console.log("⚠️ [COLLAB] Continuing without collaboration features");
 
             if (this.config?.fallbackToLocal) {
                 // Create a local-only Yjs document as fallback
                 this.yjsDoc = new Doc();
+                console.log("📄 [COLLAB] Created local-only Y.js document fallback");
             }
         }
     }
 
     private async getCollaborationConfig(): Promise<CollaborationConfig> {
         try {
-            const response = await fetch("/collaboration/info");
+            const collabInfoUrl = "/collaboration/info";
+            console.log(`📡 [HTTP-REQUEST] GET ${collabInfoUrl} - Getting collaboration configuration`);
+            
+            const response = await fetch(collabInfoUrl);
+            console.log(`📡 [HTTP-RESPONSE] GET ${collabInfoUrl} - Status: ${response.status} ${response.statusText}`);
+            
             if (response.ok) {
                 const collabInfo: CollaborationInfo = await response.json();
-                console.log("🔄 Initializing collaboration:", collabInfo);
+                console.log(`📡 [HTTP-CONTENT] GET ${collabInfoUrl} - Collaboration info:`, collabInfo);
 
-                return {
+                const config = {
                     websocketServerUrl:
                         collabInfo.websocketServerUrl ||
                         COLLABORATION_CONFIG.DEFAULT_WEBSOCKET_URL,
@@ -101,21 +141,27 @@ export class CollaborationManager {
                         : COLLABORATION_CONFIG.DEFAULT_DOCUMENT_ID,
                     fallbackToLocal: true,
                 };
+                
+                console.log(`📡 [COLLAB-CONFIG] Resolved configuration:`, config);
+                return config;
             } else {
-                throw new Error(`Server returned ${response.status}`);
+                throw new Error(`Server returned ${response.status} ${response.statusText}`);
             }
         } catch (fetchError) {
             console.warn(
-                "⚠️ Could not get collaboration info from server, using defaults:",
+                `⚠️ [COLLAB] Could not get collaboration info from server, using defaults:`,
                 fetchError,
             );
 
             // Use default configuration if server endpoint is not available
-            return {
+            const defaultConfig = {
                 websocketServerUrl: COLLABORATION_CONFIG.DEFAULT_WEBSOCKET_URL,
                 documentId: COLLABORATION_CONFIG.DEFAULT_DOCUMENT_ID,
                 fallbackToLocal: true,
             };
+            
+            console.log(`📡 [COLLAB-CONFIG] Using default configuration:`, defaultConfig);
+            return defaultConfig;
         }
     }
 
@@ -125,7 +171,7 @@ export class CollaborationManager {
             createCollaborationStatusElement();
 
         provider.on("status", ({ status }: { status: string }) => {
-            console.log("Collaboration status:", status);
+            console.log(`📡 [WEBSOCKET] Collaboration status changed: ${status}`);
 
             statusElement.className = `collaboration-status ${status}`;
 
@@ -134,9 +180,8 @@ export class CollaborationManager {
 
         provider.on("sync", (isSynced: boolean) => {
             if (isSynced) {
-                console.log("📄 Document synchronized");
-                console.log(JSON.stringify(this.yjsDoc))
-
+                console.log("📄 [WEBSOCKET] Document synchronized");
+                console.log(`📡 [WEBSOCKET] Y.js document content length: ${this.yjsDoc?.getText('content').length || 0} chars`);
 
                 statusElement.textContent = "📄 Document synchronized";
                 statusElement.className = "collaboration-status connected";
@@ -144,7 +189,22 @@ export class CollaborationManager {
                 setTimeout(() => {
                     statusElement.style.display = "none";
                 }, 3000);
+            } else {
+                console.log("⚠️ [WEBSOCKET] Document sync lost");
             }
+        });
+
+        // Add connection event logging
+        provider.on("connection-open", () => {
+            console.log("🔗 [WEBSOCKET] Connection opened");
+        });
+
+        provider.on("connection-close", () => {
+            console.log("🔌 [WEBSOCKET] Connection closed");
+        });
+
+        provider.on("connection-error", (error: any) => {
+            console.error("❌ [WEBSOCKET] Connection error:", error);
         });
     }
 
@@ -199,4 +259,4 @@ export class CollaborationManager {
             this.yjsDoc = null;
         }
     }
-}
+}        // Create WebSocket provider

@@ -11,6 +11,15 @@ import { CollaborationManager } from "./collaborationManager.js";
 import { fileURLToPath } from "url";
 import path from "path";
 import fs from "fs";
+import http from "http";
+import { WebSocketServer } from 'ws';
+import * as Y from 'yjs';
+import * as syncProtocol from 'y-protocols/sync';
+import { Awareness } from 'y-protocols/awareness';
+import * as awarenessProtocol from 'y-protocols/awareness';
+import * as encoding from 'lib0/encoding';
+import * as decoding from 'lib0/decoding';
+
 
 const app: Express = express();
 const port = parseInt(process.argv[2]);
@@ -371,7 +380,7 @@ app.get("/collaboration/info", (req: Request, res: Response) => {
     const stats = collaborationManager.getStats();
     res.json({
         ...stats,
-        websocketServerUrl: "ws://localhost:1234",
+        websocketServerUrl: `ws://localhost:${port}`,
         currentDocument: filePath ? path.basename(filePath) : null,
     });
 });
@@ -1249,5 +1258,174 @@ process.on('unhandledRejection', (reason, promise) => {
     console.error('Service continuing despite rejection...');
 });
 
-// Start the server
-app.listen(port);
+// Y.js WebSocket Server Implementation
+// A map to store Y.Doc instances for each room
+const docs = new Map<string, Y.Doc>();
+// A map to store Awareness instances for each room  
+const awarenessStates = new Map<string, any>();
+
+// Helper function to setup a Yjs connection (compatible with y-websocket)
+function setupWSConnection(conn: any, req: any, roomName: string): void {
+    if (!docs.has(roomName)) {
+        docs.set(roomName, new Y.Doc());
+        awarenessStates.set(roomName, new Awareness(docs.get(roomName)!));
+    }
+    
+    const ydoc = docs.get(roomName)!;
+    const awareness = awarenessStates.get(roomName)!;
+    
+    console.log(`📡 Client connected to room: ${roomName}`);
+    
+    // Send function for broadcasting to other clients
+    const send = (doc: Y.Doc, conn: any, message: Uint8Array) => {
+        if (conn.readyState === conn.OPEN) {
+            conn.send(message);
+        }
+    };
+    
+    // Message handler - exact copy of y-websocket implementation
+    const messageListener = (conn: any, doc: Y.Doc, message: Uint8Array) => {
+        try {
+            const encoder = encoding.createEncoder();
+            const decoder = decoding.createDecoder(message);
+            const messageType = decoding.readVarUint(decoder);
+            
+            switch (messageType) {
+                case 0: // messageSync
+                    encoding.writeVarUint(encoder, 0); // messageSync
+                    syncProtocol.readSyncMessage(decoder, encoder, doc, conn);
+                    
+                    // If the encoder only contains the type of reply message and no
+                    // message, there is no need to send the message. When encoder only
+                    // contains the type of reply, its length is 1.
+                    if (encoding.length(encoder) > 1) {
+                        send(doc, conn, encoding.toUint8Array(encoder));
+                    }
+                    break;
+                case 1: // messageAwareness
+                    try {
+                        const awarenessUpdate = decoding.readVarUint8Array(decoder);
+                        awarenessProtocol.applyAwarenessUpdate(awareness, awarenessUpdate, conn);
+                    } catch (awarenessError) {
+                        console.warn('❌ Error processing awareness message:', awarenessError);
+                    }
+                    break;
+                default:
+                    console.warn(`❌ Unknown message type: ${messageType}`);
+                    break;
+            }
+        } catch (err) {
+            console.error('❌ Failed to process WebSocket message:', err);
+            // Y.Doc doesn't have an 'error' event, so just log the error
+        }
+    };
+    
+    // Set up message handling
+    conn.on('message', (message: Buffer) => {
+        messageListener(conn, ydoc, new Uint8Array(message));
+    });
+    
+    // Send initial sync message to new client
+    const encoder = encoding.createEncoder();
+    encoding.writeVarUint(encoder, 0); // messageSync
+    syncProtocol.writeSyncStep1(encoder, ydoc);
+    send(ydoc, conn, encoding.toUint8Array(encoder));
+    
+    // Listen for document updates and broadcast to other clients
+    const updateHandler = (update: Uint8Array, origin: any) => {
+        if (origin !== conn) {
+            const encoder = encoding.createEncoder();
+            encoding.writeVarUint(encoder, 0); // messageSync
+            syncProtocol.writeUpdate(encoder, update);
+            send(ydoc, conn, encoding.toUint8Array(encoder));
+        }
+    };
+    ydoc.on('update', updateHandler);
+    
+    // Handle awareness changes and broadcast to other clients  
+    const awarenessChangeHandler = (changes: any, origin: any) => {
+        try {
+            if (origin !== conn) {
+                const changedClients = changes.added.concat(changes.updated, changes.removed);
+                if (changedClients.length > 0) {
+                    const encoder = encoding.createEncoder();
+                    encoding.writeVarUint(encoder, 1); // messageAwareness
+                    encoding.writeVarUint8Array(encoder, awarenessProtocol.encodeAwarenessUpdate(awareness, changedClients));
+                    send(ydoc, conn, encoding.toUint8Array(encoder));
+                }
+            }
+        } catch (awarenessError) {
+            console.error('❌ Error handling awareness change:', awarenessError);
+        }
+    };
+    awareness.on('change', awarenessChangeHandler);
+    
+    // Clean up when client disconnects
+    conn.on('close', () => {
+        try {
+            ydoc.off('update', updateHandler);
+            awareness.off('change', awarenessChangeHandler);
+            
+            // Remove awareness state for this client using correct API
+            awarenessProtocol.removeAwarenessStates(awareness, [ydoc.clientID], 'disconnect');
+            
+            console.log(`📡 Client disconnected from room: ${roomName}`);
+        } catch (cleanupError) {
+            console.error('❌ Error during connection cleanup:', cleanupError);
+        }
+    });
+    
+    conn.on('error', (error: any) => {
+        console.error('❌ WebSocket error:', error);
+    });
+}
+
+// Create Yjs WebSocket Server
+function createYjsWSServer(server: http.Server): WebSocketServer {
+    const wss = new WebSocketServer({ noServer: true });
+    
+    server.on('upgrade', (request, socket, head) => {
+        try {
+            // Extract room name from URL path
+            const url = new URL(request.url || '/', `http://${request.headers.host}`);
+            const roomName = url.pathname.substring(1) || 'default-room';
+            
+            console.log(`🔄 WebSocket upgrade request for room: ${roomName}`);
+            
+            wss.handleUpgrade(request, socket, head, (ws) => {
+                wss.emit('connection', ws, request, roomName);
+            });
+        } catch (error) {
+            console.error('❌ Error handling WebSocket upgrade:', error);
+            socket.destroy();
+        }
+    });
+    
+    wss.on('connection', (ws: any, request: any, roomName: string) => {
+        setupWSConnection(ws, request, roomName);
+    });
+    
+    return wss;
+}
+
+// Create HTTP server and integrate WebSocket support
+const server = http.createServer(app);
+
+// Add Y.js WebSocket server for real-time collaboration
+createYjsWSServer(server);
+console.log(`📡 Y.js WebSocket server integrated`);
+
+// Add global error handlers to prevent crashes
+process.on('uncaughtException', (error) => {
+    console.error('❌ [CRITICAL] Uncaught exception:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ [CRITICAL] Unhandled promise rejection:', reason);
+});
+
+// Start the HTTP server (which includes WebSocket support)
+server.listen(port, () => {
+    console.log(`✅ Express server with WebSocket support listening on port ${port}`);
+    console.log(`📡 Y.js collaboration available at ws://localhost:${port}/<room-name>`);
+});

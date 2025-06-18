@@ -44,7 +44,6 @@ async function executeMarkdownAction(
 type MarkdownActionContext = {
     currentFileName?: string | undefined;
     viewProcess?: ChildProcess | undefined;
-    collaborationProcess?: ChildProcess | undefined;
     localHostPort: number;
     // collaborationProvider?: TypeAgentYjsProvider | undefined; // Commented out per Flow 1 consolidation
     collaborationContext?: CollaborationContext | undefined;
@@ -242,10 +241,8 @@ async function updateMarkdownContext(
             await storage?.write(fileName, "");
         }
 
-        // Start y-websocket server if not already running
-        if (!context.agentContext.collaborationProcess) {
-            context.agentContext.collaborationProcess = await startCollaborationServer();
-        }
+        // NOTE: Collaboration server is now integrated into the Express service.ts
+        // No separate collaboration process needed
 
         // NOTE: Collaboration provider initialization removed per Flow 1 consolidation
         // All collaboration now handled in view process
@@ -305,10 +302,8 @@ async function updateMarkdownContext(
             context.agentContext.researchHandler = undefined;
         }
 
-        if (context.agentContext.collaborationProcess) {
-            context.agentContext.collaborationProcess.kill();
-            context.agentContext.collaborationProcess = undefined;
-        }
+        // NOTE: No separate collaboration process to clean up
+        // Collaboration is now handled by Express service
 
         if (context.agentContext.viewProcess) {
             context.agentContext.viewProcess.kill();
@@ -667,41 +662,6 @@ async function getDocumentContentFromView(viewProcess: ChildProcess): Promise<st
 }
 // NOTE: Function commented out per Flow 1 consolidation
 // Collaboration server now managed by view process
-
-async function startCollaborationServer(): Promise<ChildProcess | undefined> {
-    return new Promise((resolve, reject) => {
-        try {
-            console.log("🔄 Starting y-websocket collaboration server...");
-            
-            // Use spawn to run npx y-websocket-server
-            const { spawn } = require("child_process");
-            const collaborationProcess = spawn("npx", ["-y", "y-websocket-server", "--port", "1234"], {
-                stdio: ["pipe", "pipe", "pipe"],
-                env: process.env,
-            });
-
-            // Handle process events
-            collaborationProcess.on("error", (error: Error) => {
-                console.error("❌ Failed to start collaboration server:", error);
-                reject(error);
-            });
-
-            collaborationProcess.on("exit", (code: number | null) => {
-                console.log(`📡 Collaboration server exited with code: ${code}`);
-            });
-
-            // Wait a moment for the server to start, then resolve
-            setTimeout(() => {
-                console.log("✅ Collaboration server started on port 1234");
-                resolve(collaborationProcess);
-            }, 2000);
-
-        } catch (error) {
-            console.error("❌ Error starting collaboration server:", error);
-            resolve(undefined);
-        }
-    });
-}
 
 export async function createViewServiceHost(filePath: string, port: number) {
     let timeoutHandle: NodeJS.Timeout;

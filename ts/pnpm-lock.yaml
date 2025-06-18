@@ -1423,6 +1423,9 @@ importers:
       katex:
         specifier: ^0.16.21
         version: 0.16.22
+      lib0:
+        specifier: ^0.2.52
+        version: 0.2.108
       markdown-it:
         specifier: ^14.1.0
         version: 14.1.0
@@ -1456,6 +1459,9 @@ importers:
       ws:
         specifier: ^8.14.2
         version: 8.18.2
+      y-protocols:
+        specifier: ^1.0.5
+        version: 1.0.6(yjs@13.6.27)
       y-websocket:
         specifier: ^1.5.0
         version: 1.5.4(yjs@13.6.27)

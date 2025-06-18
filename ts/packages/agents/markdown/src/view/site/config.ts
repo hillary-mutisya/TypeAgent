@@ -37,7 +37,17 @@ export const EDITOR_CONFIG = {
 } as const;
 
 export const COLLABORATION_CONFIG = {
-    DEFAULT_WEBSOCKET_URL: "ws://localhost:1234",
+    DEFAULT_WEBSOCKET_URL: (() => {
+        // Dynamically determine WebSocket URL based on current page location
+        if (typeof window !== 'undefined') {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const host = window.location.hostname;
+            const port = window.location.port;
+            return `${protocol}//${host}${port ? ':' + port : ''}`;
+        }
+        // Fallback for server-side or when window is not available
+        return "ws://localhost:3000";
+    })(),
     DEFAULT_DOCUMENT_ID: "live",
     RETRY_ATTEMPTS: 3,
     RETRY_DELAY: 1000,

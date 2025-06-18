@@ -1239,6 +1239,7 @@ process.on("message", (message: any) => {
             fs.unwatchFile(filePath);
         }
         if (message.filePath) {
+            const oldFilePath = filePath;
             filePath = message.filePath;
 
             // Initialize collaboration for this document
@@ -1252,6 +1253,21 @@ process.on("message", (message: any) => {
             if (fs.existsSync(message.filePath)) {
                 const content = fs.readFileSync(message.filePath, "utf-8");
                 collaborationManager.setDocumentContent(documentId, content);
+            }
+
+            // Notify frontend clients if the document has changed
+            if (oldFilePath !== filePath) {
+                console.log(`📡 [SSE] Document changed from ${oldFilePath ? path.basename(oldFilePath, ".md") : "none"} to ${documentId}`);
+                
+                // Send SSE notification to all clients to switch rooms
+                clients.forEach((client) => {
+                    client.write(`data: ${JSON.stringify({
+                        type: "documentChanged",
+                        newDocumentId: documentId,
+                        newDocumentName: path.basename(message.filePath, ".md"),
+                        timestamp: Date.now()
+                    })}\n\n`);
+                });
             }
 
             // initial render/reset for clients

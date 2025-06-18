@@ -9,6 +9,42 @@ export class CollaborationManager {
     private websocketProvider: WebsocketProvider | null = null;
     private config: CollaborationConfig | null = null;
 
+    public async reconnectToDocument(newDocumentId: string): Promise<void> {
+        console.log(`🔄 [COLLAB] Reconnecting to document: "${newDocumentId}"`);
+        
+        // Destroy existing connection
+        if (this.websocketProvider) {
+            console.log(`🔌 [COLLAB] Disconnecting from previous room`);
+            this.websocketProvider.destroy();
+            this.websocketProvider = null;
+        }
+        
+        if (this.yjsDoc) {
+            this.yjsDoc.destroy();
+            this.yjsDoc = null;
+        }
+        
+        // Create new Y.js document for the new room
+        this.yjsDoc = new Doc();
+        
+        // Get the WebSocket server URL (should be same as before)
+        const config = await this.getCollaborationConfig();
+        
+        // Create new WebSocket provider for the new document
+        console.log(`🔄 [COLLAB] Connecting to WebSocket: ${config.websocketServerUrl} with documentId: "${newDocumentId}"`);
+        
+        this.websocketProvider = new WebsocketProvider(
+            config.websocketServerUrl,
+            newDocumentId,
+            this.yjsDoc,
+        );
+        
+        // Setup connection status monitoring for new connection
+        this.setupCollaborationStatus(this.websocketProvider);
+        
+        console.log(`✅ [COLLAB] Reconnected to document: "${newDocumentId}"`);
+    }
+
     public async initialize(): Promise<void> {
         console.log("🔄 Initializing Collaboration Manager...");
 

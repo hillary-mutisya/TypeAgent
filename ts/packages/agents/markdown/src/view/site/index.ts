@@ -48,6 +48,9 @@ async function initializeApplication(): Promise<void> {
     // Initialize UI first
     await uiManager.initialize();
     
+    // Initialize document manager (sets up SSE connection)
+    await documentManager.initialize();
+    
     // Connect DocumentManager to UI components
     uiManager.setDocumentManager(documentManager);
 
@@ -80,24 +83,14 @@ async function initializeApplication(): Promise<void> {
 
 async function switchToDocument(documentName: string): Promise<void> {
     try {
-        const response = await fetch("/api/switch-document", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ documentName }),
-        });
-
-        if (!response.ok) {
-            throw new Error(`Failed to switch document: ${response.status}`);
+        if (documentManager) {
+            await documentManager.switchToDocument(documentName);
+            console.log(`✅ [APP] Successfully switched to document: ${documentName}`);
+        } else {
+            throw new Error("DocumentManager not initialized");
         }
-
-        const result = await response.json();
-        console.log(result);
-        
-        // Update the page title to include document name
-        document.title = `${documentName} - AI-Enhanced Markdown Editor`;
-        
     } catch (error) {
-        console.error("❌ Failed to switch document:", error);
+        console.error("❌ [APP] Failed to switch document:", error);
         showError(`Failed to load document: ${documentName}`);
     }
 }

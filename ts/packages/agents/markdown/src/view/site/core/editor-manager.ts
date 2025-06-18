@@ -179,6 +179,35 @@ export class EditorManager {
         });
     }
 
+    public async switchToDocument(documentId: string, newContent?: string): Promise<void> {
+        console.log(`📝 [EDITOR] Switching to document: "${documentId}"`);
+        
+        if (!this.state.editor) {
+            throw new Error("Editor not initialized");
+        }
+        
+        // Reconnect collaboration to new document room
+        if (this.config.enableCollaboration) {
+            await this.collaborationManager.reconnectToDocument(documentId);
+            
+            // Update editor state to use new Y.js document
+            this.state.yjsDoc = this.collaborationManager.getYjsDoc();
+            this.state.websocketProvider = this.collaborationManager.getWebsocketProvider();
+            
+            // Reconnect the editor's collaboration service to new Y.js document
+            if (this.state.yjsDoc && this.state.websocketProvider) {
+                this.setupCollaboration(this.state.editor);
+            }
+        }
+        
+        // Set new content if provided
+        if (newContent !== undefined) {
+            await this.setContent(newContent);
+        }
+        
+        console.log(`✅ [EDITOR] Switched to document: "${documentId}"`);
+    }
+
     public destroy(): void {
         if (this.state.editor) {
             this.state.editor.destroy();

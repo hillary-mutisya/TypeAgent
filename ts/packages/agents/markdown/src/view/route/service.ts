@@ -129,10 +129,6 @@ let clients: any[] = [];
 let filePath: string | null;
 let collaborationManager: CollaborationManager;
 
-// Auto-save mechanism
-let autoSaveTimer: NodeJS.Timeout | null = null;
-const AUTO_SAVE_DELAY = 2000; // 2 seconds after last change
-
 // UI Command routing state
 let commandCounter = 0;
 const pendingCommands = new Map<string, any>();
@@ -295,60 +291,6 @@ function handleStreamingChunkFromAgent(streamId: string, chunk: string, isComple
                 position: position,
             })}\n\n`
         );
-    }
-}
-
-// Auto-save functions
-function scheduleAutoSave(): void {
-    // Cancel previous timer
-    if (autoSaveTimer) {
-        clearTimeout(autoSaveTimer);
-    }
-    
-    // Schedule new save
-    autoSaveTimer = setTimeout(() => {
-        performAutoSave();
-    }, AUTO_SAVE_DELAY);
-}
-
-function performAutoSave(): void {
-    if (!filePath) {
-        console.log("⚠️ [AUTO-SAVE] No file path set, skipping auto-save");
-        return;
-    }
-    
-    try {
-        const documentId = path.basename(filePath, ".md");
-        
-        // Use authoritative document function to ensure consistency
-        const ydoc = getAuthoritativeDocument(documentId);
-        const ytext = ydoc.getText("content");
-        const updatedContent = ytext.toString();
-        
-        console.log(`💾 [AUTO-SAVE] Got content from authoritative Y.js doc "${documentId}": ${updatedContent.length} chars`);
-        
-        fs.writeFileSync(filePath, updatedContent, "utf-8");
-        console.log("💾 [AUTO-SAVE] Document saved to disk:", filePath);
-        
-        // Notify clients of save status
-        clients.forEach((client) => {
-            client.write(`data: ${JSON.stringify({
-                type: "autoSave",
-                timestamp: Date.now(),
-                filePath: path.basename(filePath!)
-            })}\n\n`);
-        });
-    } catch (error) {
-        console.error("❌ [AUTO-SAVE] Failed to save document:", error);
-        
-        // Notify clients of save error
-        clients.forEach((client) => {
-            client.write(`data: ${JSON.stringify({
-                type: "autoSaveError",
-                timestamp: Date.now(),
-                error: (error as Error).message
-            })}\n\n`);
-        });
     }
 }
 
@@ -1319,9 +1261,9 @@ Start typing to see the editor in action!
             );
         });
     } else if (message.type === "applyLLMOperations") {
-        // TEMPORARY: Send operations to ALL clients via SSE for easier testing
+        // PRODUCTION: Send operations to PRIMARY client only via SSE to prevent duplicates
         try {
-            console.log(`📤 [VIEW] Forwarding ${message.operations?.length || 0} operations to ALL clients via SSE`);
+            console.log(`📤 [VIEW] Forwarding ${message.operations?.length || 0} operations to primary client via SSE`);
             
             if (clients.length === 0) {
                 console.warn(`⚠️ [SSE] No clients connected to receive operations`);
@@ -1334,36 +1276,54 @@ Start typing to see the editor in action!
                 return;
             }
             
-            // TEMPORARY: Send operations to ALL connected clients
+            // Send operations to ONLY the first client to prevent duplicates
+            const primaryClient = clients[0];
             const operationsEvent = {
                 type: "llmOperations",
                 operations: message.operations,
                 timestamp: message.timestamp || Date.now(),
                 source: "agent",
-                clientRole: "all" // Mark that all clients should apply
+                clientRole: "primary" // Mark this client as the primary applier
             };
             
-            let successCount = 0;
-            clients.forEach((client, index) => {
-                try {
-                    client.write(`data: ${JSON.stringify(operationsEvent)}\n\n`);
-                    successCount++;
-                    console.log(`📡 [SSE] Sent ${message.operations?.length || 0} operations to client ${index + 1}/${clients.length}`);
-                } catch (error) {
-                    console.error(`❌ [SSE] Failed to send operations to client ${index + 1}:`, error);
+            try {
+                primaryClient.write(`data: ${JSON.stringify(operationsEvent)}\n\n`);
+                console.log(`📡 [SSE] Sent ${message.operations?.length || 0} operations to PRIMARY client (${clients.indexOf(primaryClient)} of ${clients.length} clients)`);
+                
+                // Notify other clients that operations are being applied (optional)
+                if (clients.length > 1) {
+                    const notificationEvent = {
+                        type: "operationsBeingApplied",
+                        timestamp: Date.now(),
+                        operationCount: message.operations?.length || 0,
+                        source: "agent"
+                    };
+                    
+                    clients.slice(1).forEach((client, index) => {
+                        try {
+                            client.write(`data: ${JSON.stringify(notificationEvent)}\n\n`);
+                            console.log(`📢 [SSE] Notified secondary client ${index + 1} of pending operations`);
+                        } catch (error) {
+                            console.error(`❌ [SSE] Failed to notify secondary client ${index + 1}:`, error);
+                        }
+                    });
                 }
-            });
+                
+            } catch (error) {
+                console.error("❌ [SSE] Failed to send operations to primary client:", error);
+                throw error;
+            }
             
             // Send success confirmation back to agent
             process.send?.({
                 type: "operationsApplied",
-                success: successCount > 0,
+                success: true,
                 operationCount: message.operations?.length || 0,
                 method: "sse-forwarded",
-                clientsNotified: successCount
+                clientsNotified: clients.length
             });
             
-            console.log(`✅ [VIEW] Operations forwarded to ${successCount}/${clients.length} clients successfully`);
+            console.log(`✅ [VIEW] Operations forwarded to primary client successfully`);
             
         } catch (error) {
             console.error("❌ [VIEW] Failed to forward operations via SSE:", error);
@@ -1435,10 +1395,10 @@ Start typing to see the editor in action!
         
         const session = activeStreamingSessions.get(message.streamId);
         if (session) {
-            // Apply final operations to Y.js if provided
+            // NOTE: Operations are now sent via SSE to clients, not applied directly to Y.js
             if (message.operations && message.operations.length > 0) {
-                console.log(`📝 [VIEW] Applying ${message.operations.length} final operations from streaming`);
-                applyLLMOperationsToCollaboration(message.operations);
+                console.log(`📝 [VIEW] Streaming completed with ${message.operations.length} final operations`);
+                console.log(`📝 [VIEW] Operations will be sent to clients via SSE, not applied directly to Y.js`);
             }
             
             // Mark session as complete but don't remove yet - let the main handler do cleanup

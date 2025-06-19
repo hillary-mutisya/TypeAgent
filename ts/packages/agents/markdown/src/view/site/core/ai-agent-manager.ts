@@ -183,7 +183,7 @@ export class AIAgentManager {
                 break;
 
             case "llmOperations":
-                // TEMPORARY: Handle operations sent to ALL clients via SSE
+                // PRODUCTION: Handle operations sent to PRIMARY client only via SSE
                 console.log(`🎯 [LLM-OPS] Received ${(data as any).operations?.length || 0} operations via SSE (role: ${(data as any).clientRole || 'unknown'})`);
                 
                 // LOG DETAILED OPERATION OBJECTS
@@ -207,18 +207,24 @@ export class AIAgentManager {
                     });
                 }
                 
-                if (((data as any).clientRole === 'primary' || (data as any).clientRole === 'all') && (data as any).operations && Array.isArray((data as any).operations)) {
+                if ((data as any).clientRole === 'primary' && (data as any).operations && Array.isArray((data as any).operations)) {
                     // Apply operations through editor API (ensures proper markdown parsing)
                     console.log(`📝 [LLM-OPS-DEBUG] About to apply ${(data as any).operations.length} operations through applyAgentOperations`);
                     this.applyAgentOperations((data as any).operations);
                     operationsReceived = true;
                     
-                    console.log(`✅ [LLM-OPS] Applied ${(data as any).operations.length} operations via editor API (role: ${(data as any).clientRole})`);
-                } else if ((data as any).clientRole && (data as any).clientRole !== 'primary' && (data as any).clientRole !== 'all') {
-                    console.log(`ℹ️ [LLM-OPS] Ignoring operations - client role "${(data as any).clientRole}" not authorized`);
+                    console.log(`✅ [LLM-OPS] PRIMARY CLIENT applied ${(data as any).operations.length} operations via editor API`);
+                } else if ((data as any).clientRole !== 'primary') {
+                    console.log(`ℹ️ [LLM-OPS] Ignoring operations - not the primary client (role: ${(data as any).clientRole || 'unknown'})`);
                 } else {
                     console.warn(`⚠️ [LLM-OPS] No valid operations in SSE event:`, data);
                 }
+                break;
+
+            case "operationsBeingApplied":
+                // Handle notification that operations are being applied by primary client
+                console.log(`📢 [LLM-OPS] Operations being applied by primary client - ${(data as any).operationCount} changes incoming`);
+                this.updateAIPresenceMessage(`AI is applying ${(data as any).operationCount} changes...`);
                 break;
 
             case "complete":

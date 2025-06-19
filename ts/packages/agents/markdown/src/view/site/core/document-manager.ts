@@ -131,7 +131,7 @@ export class DocumentManager {
                 break;
 
             case 'llmOperations':
-                // TEMPORARY: Handle LLM operations sent to ALL clients via SSE
+                // PRODUCTION: Handle LLM operations sent to PRIMARY client only via SSE
                 console.log(`🎯 [SSE] Received ${data.operations?.length || 0} LLM operations from ${data.source} (role: ${data.clientRole || 'unknown'})`);
                 
                 // LOG DETAILED OPERATION OBJECTS
@@ -155,14 +155,14 @@ export class DocumentManager {
                     });
                 }
                 
-                if ((data.clientRole === 'primary' || data.clientRole === 'all') && data.operations && Array.isArray(data.operations) && this.editorManager) {
+                if (data.clientRole === 'primary' && data.operations && Array.isArray(data.operations) && this.editorManager) {
                     try {
                         // Apply operations through editor API for proper markdown parsing
                         const editor = this.editorManager.getEditor();
                         if (editor) {
                             console.log(`📝 [SSE-DEBUG] About to apply ${data.operations.length} operations through editor API`);
                             await this.applyOperationsThroughEditor(editor, data.operations);
-                            console.log(`✅ [SSE] Applied ${data.operations.length} operations via editor API (role: ${data.clientRole})`);
+                            console.log(`✅ [SSE] PRIMARY CLIENT applied ${data.operations.length} operations via editor API`);
                             
                             if (this.notificationManager) {
                                 this.notificationManager.showNotification(
@@ -182,10 +182,22 @@ export class DocumentManager {
                             );
                         }
                     }
-                } else if (data.clientRole && data.clientRole !== 'primary' && data.clientRole !== 'all') {
-                    console.log(`ℹ️ [SSE] Ignoring operations - client role "${data.clientRole}" not authorized`);
+                } else if (data.clientRole !== 'primary') {
+                    console.log(`ℹ️ [SSE] Ignoring operations - not the primary client (role: ${data.clientRole || 'unknown'})`);
                 } else {
                     console.warn(`⚠️ [SSE] Invalid LLM operations received:`, data);
+                }
+                break;
+
+            case 'operationsBeingApplied':
+                // Handle notification that operations are being applied by primary client
+                console.log(`📢 [SSE] Operations being applied by primary client - ${data.operationCount} changes incoming`);
+                
+                if (this.notificationManager) {
+                    this.notificationManager.showNotification(
+                        `🔄 AI is updating document (${data.operationCount} changes)...`,
+                        "info"
+                    );
                 }
                 break;
                 

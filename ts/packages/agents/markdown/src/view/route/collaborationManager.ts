@@ -2,6 +2,9 @@
 // Licensed under the MIT License.
 
 import * as Y from "yjs";
+import registerDebug from "debug";
+
+const debug = registerDebug("typeagent:markdown:collaboration");
 
 /**
  * Server-side collaboration manager for handling Yjs synchronization
@@ -20,7 +23,7 @@ export class CollaborationManager {
             this.documents.set(documentId, ydoc);
             this.documentPaths.set(documentId, filePath || ""); // Handle null paths
 
-            console.log(`📄 Initialized collaboration document: ${documentId} ${filePath ? `(${filePath})` : '(memory-only)'}`);
+            debug(`Initialized collaboration document: ${documentId} ${filePath ? `(${filePath})` : '(memory-only)'}`);
         }
     }
 
@@ -31,6 +34,7 @@ export class CollaborationManager {
     useExistingDocument(documentId: string, ydoc: Y.Doc, filePath: string | null): void {
         this.documents.set(documentId, ydoc);
         this.documentPaths.set(documentId, filePath || "");
+        debug(`Using existing Y.js document: ${documentId} ${filePath ? `(${filePath})` : '(memory-only)'}`);
     }
     getStats(): any {
         return {
@@ -51,7 +55,7 @@ export class CollaborationManager {
         }
         
         const ytext = ydoc.getText("content");
-        console.log("📝 [COLLAB] Applying operation:", operation.type, "to document:", documentId);
+        debug(`Applying operation: ${operation.type} to document: ${documentId}`);
         
         try {
             switch (operation.type) {
@@ -61,7 +65,7 @@ export class CollaborationManager {
                         .join("");
                     const position = Math.min(operation.position || 0, ytext.length);
                     ytext.insert(position, insertText);
-                    console.log(`✅ [COLLAB] Inserted ${insertText.length} chars at position ${position}`);
+                    debug(`Inserted ${insertText.length} chars at position ${position} in document ${documentId}`);
                     break;
                 }
                 case "replace": {
@@ -74,7 +78,7 @@ export class CollaborationManager {
                     
                     ytext.delete(fromPos, deleteLength);
                     ytext.insert(fromPos, replaceText);
-                    console.log(`✅ [COLLAB] Replaced ${deleteLength} chars with ${replaceText.length} chars at position ${fromPos}`);
+                    debug(`Replaced ${deleteLength} chars with ${replaceText.length} chars at position ${fromPos} in document ${documentId}`);
                     break;
                 }
                 case "delete": {
@@ -83,7 +87,7 @@ export class CollaborationManager {
                     const deleteLength = toPos - fromPos;
                     
                     ytext.delete(fromPos, deleteLength);
-                    console.log(`✅ [COLLAB] Deleted ${deleteLength} chars at position ${fromPos}`);
+                    debug(`Deleted ${deleteLength} chars at position ${fromPos} in document ${documentId}`);
                     break;
                 }
                 default:

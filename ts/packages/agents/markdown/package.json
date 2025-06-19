@@ -44,6 +44,7 @@
     "@typeagent/agent-sdk": "workspace:*",
     "aiclient": "workspace:*",
     "common-utils": "workspace:*",
+    "debug": "^4.3.4",
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",
     "katex": "^0.16.21",

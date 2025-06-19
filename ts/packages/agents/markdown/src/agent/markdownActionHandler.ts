@@ -21,6 +21,9 @@ import { CollaborationContext } from "./collaborationTypes.js";
 import { AIAgentCollaborator } from "./AIAgentCollaborator.js";
 import { AsyncResearchHandler } from "./AsyncResearchHandler.js";
 import { UICommandResult } from "./ipcTypes.js";
+import registerDebug from "debug";
+
+const debug = registerDebug("typeagent:markdown:agent");
 
 export function instantiate(): AppAgent {
     return {
@@ -55,7 +58,7 @@ async function handleUICommand(
     parameters: any,
     context: ActionContext<MarkdownActionContext>,
 ): Promise<UICommandResult> {
-    console.log(`🖥️ [AGENT] Processing UI command: ${command}`);
+    debug(`🖥️ [AGENT] Processing UI command: ${command}`);
     
     try {
         // Check if streaming is enabled for this command
@@ -63,7 +66,7 @@ async function handleUICommand(
         const streamId = parameters.streamId;
         
         if (enableStreaming) {
-            console.log(`🌊 [AGENT] Processing streaming command: ${command} (stream: ${streamId})`);
+            debug(`[AGENT] Processing streaming command: ${command}, stream: ${streamId}`);
             
             // Build action from UI command
             const action: MarkdownAction = {
@@ -122,7 +125,7 @@ async function streamPartialMarkdownAction(
         return;
     }
 
-    console.log(`🌊 Streaming ${name}: delta="${delta}"`);
+    debug(`Streaming ${name}: delta="${delta}"`);
 
     // NOTE: Collaboration provider removed per Flow 1 consolidation
     // const collaborationProvider = context.sessionContext.agentContext.collaborationProvider;
@@ -153,7 +156,7 @@ function handleStreamingContent(
     if (delta === undefined) {
         // Streaming completed - finalize
         context.actionIO.appendDisplay("");
-        console.log("🏁 Streaming completed");
+        debug("Streaming completed");
         return;
     }
 
@@ -171,17 +174,7 @@ function handleStreamingContent(
             speak: false, // Don't speak markdown content
         }, "inline");
 
-        // Apply to collaborative document in real-time via view process
-        // NOTE: Direct collaboration provider access removed per Flow 1 consolidation
-        // All document operations now go through view process for single source of truth
-        /*
-        if (collaborationProvider) {
-            const currentContent = collaborationProvider.getMarkdownContent();
-            const insertPosition = currentContent.length; // Append at end
-            collaborationProvider.applyTextOperation(insertPosition, delta);
-            console.log(`📝 Applied delta to collaboration doc at position ${insertPosition}`);
-        }
-        */
+
     }
 }
 
@@ -264,24 +257,15 @@ async function updateMarkdownContext(
             await storage?.write(fileName, "");
         }
 
-        // NOTE: Collaboration server is now integrated into the Express service.ts
-        // No separate collaboration process needed
-
-        // NOTE: Collaboration provider initialization removed per Flow 1 consolidation
-        // All collaboration now handled in view process
-        
-        // Initialize AI collaborator without collaboration provider
-        // AIAgentCollaborator now works without any direct document access
         context.agentContext.aiCollaborator = new AIAgentCollaborator();
         context.agentContext.researchHandler = new AsyncResearchHandler(
             context.agentContext.aiCollaborator,
         );
 
-        console.log(
-            "✅ Agent context initialized for:",
-            fileName,
+        debug(
+            `Agent context updated for: ${fileName}, port: ${context.agentContext.localHostPort}`,
         );
-        console.log("🤖 AI collaborator initialized and ready");
+        debug("AI collaborator initialized and ready");
 
         if (!context.agentContext.viewProcess) {
             const fullPath = await getFullMarkdownFilePath(fileName, storage!);
@@ -294,11 +278,7 @@ async function updateMarkdownContext(
             }
         }
     } else {
-        // Shut down services
-        // NOTE: Collaboration provider shutdown removed per Flow 1 consolidation
-        // NOTE: Collaboration provider cleanup removed per Flow 1 consolidation
-        // All collaboration now handled in view process
-
+        
         if (context.agentContext.aiCollaborator) {
             context.agentContext.aiCollaborator = undefined;
         }
@@ -337,7 +317,7 @@ async function handleStreamingMarkdownAction(
             markdownContent = await getDocumentContentFromView(
                 actionContext.sessionContext.agentContext.viewProcess
             );
-            console.log("🔍 [STREAMING] Got content from view process:", markdownContent?.length, "chars");
+            debug(`Got content from view process for streaming: ${markdownContent?.length || 0} chars`);
         } catch (error) {
             console.warn("⚠️ [STREAMING] Failed to get content from view, falling back to storage:", error);
             if (await storage?.exists(filePath)) {
@@ -410,7 +390,7 @@ function sendStreamingChunkToView(
             chunk: chunk,
             timestamp: Date.now()
         });
-        console.log(`🌊 [AGENT] Sent chunk to view (${chunk.length} chars): ${chunk.substring(0, 50)}...`);
+        debug(`Sent streaming chunk to view: ${chunk.length} chars`);
     } else {
         console.warn(`⚠️ [AGENT] No view process available for streaming chunk`);
     }
@@ -508,21 +488,21 @@ async function handleMarkdownAction(
                     markdownContent = await getDocumentContentFromView(
                         actionContext.sessionContext.agentContext.viewProcess
                     );
-                    console.log("🔍 Got content from view process:", markdownContent?.length, "chars");
-                    console.log(markdownContent)
+                    debug(`Got content from view process: ${markdownContent?.length || 0} chars`);
+                    debug(`Content preview: ${markdownContent?.substring(0, 200)}...`);
                 } catch (error) {
                     console.warn("⚠️ Failed to get content from view, falling back to storage:", error);
                     // Fallback to storage only if view process fails
                     if (await storage?.exists(filePath)) {
                         markdownContent = await storage?.read(filePath, "utf8") || "";
-                        console.log("🔍 Fallback: Read content from storage:", markdownContent?.length, "chars");
+                        debug("🔍 Fallback: Read content from storage:", markdownContent?.length, "chars");
                     }
                 }
             } else {
                 // Fallback if no view process
                 if (await storage?.exists(filePath)) {
                     markdownContent = await storage?.read(filePath, "utf8") || "";
-                    console.log("🔍 No view process, read content from storage:", markdownContent?.length, "chars");
+                    debug("🔍 No view process, read content from storage:", markdownContent?.length, "chars");
                 }
             }
 
@@ -560,7 +540,7 @@ async function handleMarkdownAction(
                     ) {
                         // Send operations to view process for application
                         if (actionContext.sessionContext.agentContext.viewProcess) {
-                            console.log("🔍 Agent sending operations to view process for Yjs application");
+                            debug("🔍 Agent sending operations to view process for Yjs application");
                             
                             const success = await sendOperationsToView(
                                 actionContext.sessionContext.agentContext.viewProcess,
@@ -571,7 +551,7 @@ async function handleMarkdownAction(
                                 throw new Error("Failed to apply operations in view process");
                             }
                             
-                            console.log("✅ Operations applied successfully via view process");
+                            debug("✅ Operations applied successfully via view process");
                         } else {
                             console.warn("⚠️ No view process available, operations not applied");
                         }
@@ -609,21 +589,21 @@ async function handleMarkdownAction(
                     markdownContent = await getDocumentContentFromView(
                         actionContext.sessionContext.agentContext.viewProcess
                     );
-                    console.log("🔍 Got content from view process:", markdownContent?.length, "chars");
-                    console.log(markdownContent)
+                    debug(`Got content from view process: ${markdownContent?.length || 0} chars`);
+                    debug(`Content preview: ${markdownContent?.substring(0, 200)}...`);
                 } catch (error) {
                     console.warn("⚠️ Failed to get content from view, falling back to storage:", error);
                     // Fallback to storage only if view process fails
                     if (await storage?.exists(filePath)) {
                         markdownContent = await storage?.read(filePath, "utf8") || "";
-                        console.log("🔍 Fallback: Read content from storage:", markdownContent?.length, "chars");
+                        debug("🔍 Fallback: Read content from storage:", markdownContent?.length, "chars");
                     }
                 }
             } else {
                 // Fallback if no view process
                 if (await storage?.exists(filePath)) {
                     markdownContent = await storage?.read(filePath, "utf8") || "";
-                    console.log("🔍 No view process, read content from storage:", markdownContent?.length, "chars");
+                    debug("🔍 No view process, read content from storage:", markdownContent?.length, "chars");
                 }
             }
 
@@ -661,7 +641,7 @@ async function handleMarkdownAction(
                     ) {
                         // Send operations to view process for application
                         if (actionContext.sessionContext.agentContext.viewProcess) {
-                            console.log("🔍 Agent sending operations to view process for Yjs application");
+                            debug("🔍 Agent sending operations to view process for Yjs application");
                             
                             const success = await sendOperationsToView(
                                 actionContext.sessionContext.agentContext.viewProcess,
@@ -672,7 +652,7 @@ async function handleMarkdownAction(
                                 throw new Error("Failed to apply operations in view process");
                             }
                             
-                            console.log("✅ Operations applied successfully via view process");
+                            debug("✅ Operations applied successfully via view process");
                         } else {
                             console.warn("⚠️ No view process available, operations not applied");
                         }
@@ -724,7 +704,6 @@ async function sendOperationsToView(
                 viewProcess.off("message", responseHandler);
                 
                 if (message.success) {
-                    console.log(`✅ [AGENT] View applied ${message.operationCount} operations`);
                     resolve(true);
                 } else {
                     console.error("❌ [AGENT] View failed to apply operations:", message.error);
@@ -742,7 +721,7 @@ async function sendOperationsToView(
             timestamp: Date.now()
         });
         
-        console.log(`📤 [AGENT] Sent ${operations.length} operations to view process`);
+        debug(`📤 [AGENT] Sent ${operations.length} operations to view process`);
     });
 }
 
@@ -895,7 +874,7 @@ export function setCurrentAgentContext(context: MarkdownActionContext) {
 if (typeof process !== 'undefined' && process.on) {
     process.on("message", (message: any) => {
         if (message.type === "uiCommand" && currentAgentContext) {
-            console.log(`📨 [AGENT] Received UI command: ${message.command}`);
+            debug(`📨 [AGENT] Received UI command: ${message.command}`);
             
             handleUICommandViaIPC(message, currentAgentContext)
                 .then(result => {

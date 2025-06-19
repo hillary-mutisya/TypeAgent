@@ -7,8 +7,11 @@ import { createTypeScriptJsonValidator } from "typechat/ts";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import registerDebug from "debug";
 
 import { MarkdownUpdateResult } from "./markdownOperationSchema.js";
+
+const debug = registerDebug("typeagent:markdown:translator");
 
 export async function createMarkdownAgent(
     model: "GPT_35_TURBO" | "GPT_4" | "GPT-v" | "GPT_4o",
@@ -108,7 +111,7 @@ export class MarkdownAgent<T extends object> {
         );
 
         this.translator.createRequestPrompt = (input: string) => {
-            console.log(input);
+            debug(`Request prompt: ${input}`);
             return "";
         };
         const response = await this.translator.translate("", [
@@ -122,7 +125,7 @@ export class MarkdownAgent<T extends object> {
         intent: string,
         onChunk: (chunk: string) => void
     ) {
-        console.log("🌊 [TRANSLATOR] Starting streaming updateDocument");
+        debug("Starting streaming updateDocument");
         
         // For streaming commands, we'll use a simpler approach that generates text content
         // and then converts it to operations at the end
@@ -149,7 +152,7 @@ export class MarkdownAgent<T extends object> {
             }
             
             // Simulate streaming by sending chunks with delays
-            console.log(`🌊 [TRANSLATOR] Simulating streaming for ${content.length} chars`);
+            debug(`Simulating streaming for ${content.length} chars`);
             const words = content.split(' ');
             
             for (let i = 0; i < words.length; i += 3) {
@@ -161,7 +164,7 @@ export class MarkdownAgent<T extends object> {
                 await new Promise(resolve => setTimeout(resolve, 150));
             }
             
-            console.log(`🌊 [TRANSLATOR] Streaming complete, accumulated ${accumulatedContent.length} chars`);
+            debug(`Streaming complete, accumulated ${accumulatedContent.length} chars`);
             
             // Convert the accumulated content to operations
             const operations = this.convertContentToOperations(accumulatedContent, intent);

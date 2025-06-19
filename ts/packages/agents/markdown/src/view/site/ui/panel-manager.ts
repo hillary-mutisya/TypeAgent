@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
 export class PanelManager {
     public async initialize(): Promise<void> {
         // No initialization needed
@@ -8,9 +11,12 @@ export class PanelManager {
         if (statusElement) {
             statusElement.textContent = status;
             statusElement.style.display = "block";
-            
+
             // Auto-hide after 3 seconds for success messages
-            if (status.includes("Connected") || status.includes("synchronized")) {
+            if (
+                status.includes("Connected") ||
+                status.includes("synchronized")
+            ) {
                 setTimeout(() => {
                     statusElement.style.display = "none";
                 }, 3000);

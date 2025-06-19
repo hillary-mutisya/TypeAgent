@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
 import type { NotificationType, SaveStatus } from "../types";
 import { EDITOR_CONFIG } from "../config";
 import {
@@ -9,9 +12,12 @@ import {
 } from "../utils";
 
 export class NotificationManager {
-    private documentSyncNotifications = new Map<string, { shown: boolean; lastDisconnect?: number }>();
+    private documentSyncNotifications = new Map<
+        string,
+        { shown: boolean; lastDisconnect?: number }
+    >();
     private readonly DISCONNECT_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
-    
+
     public async initialize(): Promise<void> {
         // No specific initialization needed
     }
@@ -20,7 +26,6 @@ export class NotificationManager {
         message: string,
         type: NotificationType = "info",
     ): void {
-
         const notification = createNotificationElement(message, type);
         addToBody(notification);
 
@@ -76,26 +81,33 @@ export class NotificationManager {
     public showDocumentSyncNotification(documentId: string): void {
         const syncInfo = this.documentSyncNotifications.get(documentId);
         const now = Date.now();
-        
+
         let shouldShow = false;
-        
+
         if (!syncInfo) {
             // First time for this document
             shouldShow = true;
-        } else if (syncInfo.lastDisconnect && (now - syncInfo.lastDisconnect > this.DISCONNECT_THRESHOLD_MS)) {
+        } else if (
+            syncInfo.lastDisconnect &&
+            now - syncInfo.lastDisconnect > this.DISCONNECT_THRESHOLD_MS
+        ) {
             // Was disconnected for more than 5 minutes
             shouldShow = true;
         } else if (!syncInfo.shown) {
             // Not shown yet for this session
             shouldShow = true;
         }
-        
+
         if (shouldShow) {
             this.showNotification("📡 Document is synchronized", "success");
             this.documentSyncNotifications.set(documentId, { shown: true });
-            console.log(`📡 [SYNC-NOTIFICATION] Shown for document: ${documentId}`);
+            console.log(
+                `📡 [SYNC-NOTIFICATION] Shown for document: ${documentId}`,
+            );
         } else {
-            console.log(`📡 [SYNC-NOTIFICATION] Skipped for document: ${documentId} (already shown)`);
+            console.log(
+                `📡 [SYNC-NOTIFICATION] Skipped for document: ${documentId} (already shown)`,
+            );
         }
     }
 
@@ -103,10 +115,14 @@ export class NotificationManager {
      * Mark document as disconnected
      */
     public markDocumentDisconnected(documentId: string): void {
-        const syncInfo = this.documentSyncNotifications.get(documentId) || { shown: false };
+        const syncInfo = this.documentSyncNotifications.get(documentId) || {
+            shown: false,
+        };
         syncInfo.lastDisconnect = Date.now();
         this.documentSyncNotifications.set(documentId, syncInfo);
-        console.log(`📡 [SYNC-NOTIFICATION] Marked document as disconnected: ${documentId}`);
+        console.log(
+            `📡 [SYNC-NOTIFICATION] Marked document as disconnected: ${documentId}`,
+        );
     }
 
     /**
@@ -114,6 +130,8 @@ export class NotificationManager {
      */
     public resetDocumentSyncState(documentId: string): void {
         this.documentSyncNotifications.delete(documentId);
-        console.log(`📡 [SYNC-NOTIFICATION] Reset state for document: ${documentId}`);
+        console.log(
+            `📡 [SYNC-NOTIFICATION] Reset state for document: ${documentId}`,
+        );
     }
 }

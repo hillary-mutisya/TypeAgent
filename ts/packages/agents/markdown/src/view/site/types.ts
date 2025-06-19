@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
 // Consolidated types for the markdown editor site
 
 import type { Editor } from "@milkdown/core";
@@ -35,7 +38,17 @@ export interface AgentCommandParams {
 }
 
 export interface StreamEvent {
-    type: "start" | "typing" | "content" | "operation" | "complete" | "error" | "notification" | "operationsApplied" | "llmOperations" | "operationsBeingApplied";
+    type:
+        | "start"
+        | "typing"
+        | "content"
+        | "operation"
+        | "complete"
+        | "error"
+        | "notification"
+        | "operationsApplied"
+        | "llmOperations"
+        | "operationsBeingApplied";
     message?: string;
     chunk?: string;
     position?: number;

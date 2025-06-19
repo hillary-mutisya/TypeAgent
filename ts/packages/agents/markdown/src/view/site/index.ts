@@ -47,10 +47,10 @@ async function initializeApplication(): Promise<void> {
 
     // Initialize UI first
     await uiManager.initialize();
-    
+
     // Initialize document manager (sets up SSE connection)
     await documentManager.initialize();
-    
+
     // Connect DocumentManager to UI components
     uiManager.setDocumentManager(documentManager);
 
@@ -85,7 +85,9 @@ async function switchToDocument(documentName: string): Promise<void> {
     try {
         if (documentManager) {
             await documentManager.switchToDocument(documentName);
-            console.log(`[APP] Successfully switched to document: ${documentName}`);
+            console.log(
+                `[APP] Successfully switched to document: ${documentName}`,
+            );
         } else {
             throw new Error("DocumentManager not initialized");
         }
@@ -97,11 +99,11 @@ async function switchToDocument(documentName: string): Promise<void> {
 
 function setupBrowserHistoryHandling(): void {
     // Handle browser back/forward navigation
-    window.addEventListener('popstate', async (event) => {
+    window.addEventListener("popstate", async (event) => {
         const urlPath = window.location.pathname;
         const documentNameMatch = urlPath.match(/\/document\/([^\/]+)/);
         const documentName = documentNameMatch ? documentNameMatch[1] : null;
-        
+
         if (documentName && event.state?.documentName !== documentName) {
             await switchToDocument(documentName);
         }

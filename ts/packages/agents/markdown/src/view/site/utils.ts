@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
 // Consolidated utilities for the markdown editor site
 
 import type { Editor } from "@milkdown/core";
@@ -378,9 +381,9 @@ export class EventHandlers {
 
     private handleEnterKeyForCommands(_e: KeyboardEvent): void {
         // Slash command handling is now done by the ProseMirror plugin system
-        // in slash-commands.ts. This event handler is disabled to prevent 
+        // in slash-commands.ts. This event handler is disabled to prevent
         // duplicate command execution.
-        
+
         // NOTE: The original slash command handling logic has been moved to
         // the ProseMirror plugin system for better integration and to prevent
         // conflicts between multiple command handlers.

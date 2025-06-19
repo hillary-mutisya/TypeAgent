@@ -42,7 +42,7 @@ export type StreamingUpdateDocumentAction = {
         originalRequest: string;
         // Stream-friendly properties that can be updated incrementally
         generatedContent?: string; // Streamed content for AI operations
-        progressStatus?: string;   // Status updates for long operations
+        progressStatus?: string; // Status updates for long operations
         validationResults?: string; // Validation feedback
         // AI command type for specialized processing
         aiCommand?: "continue" | "diagram" | "augment" | "research";

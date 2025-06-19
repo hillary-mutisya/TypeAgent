@@ -23,7 +23,9 @@ export class CollaborationManager {
             this.documents.set(documentId, ydoc);
             this.documentPaths.set(documentId, filePath || ""); // Handle null paths
 
-            debug(`Initialized collaboration document: ${documentId} ${filePath ? `(${filePath})` : '(memory-only)'}`);
+            debug(
+                `Initialized collaboration document: ${documentId} ${filePath ? `(${filePath})` : "(memory-only)"}`,
+            );
         }
     }
 
@@ -31,10 +33,16 @@ export class CollaborationManager {
      * Use an existing Y.js document instead of creating a new one
      * This ensures consistency between CollaborationManager and WebSocket server
      */
-    useExistingDocument(documentId: string, ydoc: Y.Doc, filePath: string | null): void {
+    useExistingDocument(
+        documentId: string,
+        ydoc: Y.Doc,
+        filePath: string | null,
+    ): void {
         this.documents.set(documentId, ydoc);
         this.documentPaths.set(documentId, filePath || "");
-        debug(`Using existing Y.js document: ${documentId} ${filePath ? `(${filePath})` : '(memory-only)'}`);
+        debug(
+            `Using existing Y.js document: ${documentId} ${filePath ? `(${filePath})` : "(memory-only)"}`,
+        );
     }
     getStats(): any {
         return {
@@ -50,22 +58,31 @@ export class CollaborationManager {
     applyOperation(documentId: string, operation: any): void {
         const ydoc = this.documents.get(documentId);
         if (!ydoc) {
-            console.warn(`No document found for ID: ${documentId}, cannot apply operation`);
+            console.warn(
+                `No document found for ID: ${documentId}, cannot apply operation`,
+            );
             return;
         }
-        
+
         const ytext = ydoc.getText("content");
-        debug(`Applying operation: ${operation.type} to document: ${documentId}`);
-        
+        debug(
+            `Applying operation: ${operation.type} to document: ${documentId}`,
+        );
+
         try {
             switch (operation.type) {
                 case "insert": {
                     const insertText = operation.content
                         .map((item: any) => this.contentItemToText(item))
                         .join("");
-                    const position = Math.min(operation.position || 0, ytext.length);
+                    const position = Math.min(
+                        operation.position || 0,
+                        ytext.length,
+                    );
                     ytext.insert(position, insertText);
-                    debug(`Inserted ${insertText.length} chars at position ${position} in document ${documentId}`);
+                    debug(
+                        `Inserted ${insertText.length} chars at position ${position} in document ${documentId}`,
+                    );
                     break;
                 }
                 case "replace": {
@@ -73,28 +90,43 @@ export class CollaborationManager {
                         .map((item: any) => this.contentItemToText(item))
                         .join("");
                     const fromPos = Math.min(operation.from || 0, ytext.length);
-                    const toPos = Math.min(operation.to || fromPos + 1, ytext.length);
+                    const toPos = Math.min(
+                        operation.to || fromPos + 1,
+                        ytext.length,
+                    );
                     const deleteLength = toPos - fromPos;
-                    
+
                     ytext.delete(fromPos, deleteLength);
                     ytext.insert(fromPos, replaceText);
-                    debug(`Replaced ${deleteLength} chars with ${replaceText.length} chars at position ${fromPos} in document ${documentId}`);
+                    debug(
+                        `Replaced ${deleteLength} chars with ${replaceText.length} chars at position ${fromPos} in document ${documentId}`,
+                    );
                     break;
                 }
                 case "delete": {
                     const fromPos = Math.min(operation.from || 0, ytext.length);
-                    const toPos = Math.min(operation.to || fromPos + 1, ytext.length);
+                    const toPos = Math.min(
+                        operation.to || fromPos + 1,
+                        ytext.length,
+                    );
                     const deleteLength = toPos - fromPos;
-                    
+
                     ytext.delete(fromPos, deleteLength);
-                    debug(`Deleted ${deleteLength} chars at position ${fromPos} in document ${documentId}`);
+                    debug(
+                        `Deleted ${deleteLength} chars at position ${fromPos} in document ${documentId}`,
+                    );
                     break;
                 }
                 default:
-                    console.warn(`[COLLAB] Unknown operation type: ${operation.type}`);
+                    console.warn(
+                        `[COLLAB] Unknown operation type: ${operation.type}`,
+                    );
             }
         } catch (error) {
-            console.error(`[COLLAB] Failed to apply operation ${operation.type}:`, error);
+            console.error(
+                `[COLLAB] Failed to apply operation ${operation.type}:`,
+                error,
+            );
         }
     }
 
@@ -104,10 +136,12 @@ export class CollaborationManager {
     getDocumentContent(documentId: string): string {
         const ydoc = this.documents.get(documentId);
         if (!ydoc) {
-            console.warn(`No document found for ID: ${documentId}, returning empty content`);
+            console.warn(
+                `No document found for ID: ${documentId}, returning empty content`,
+            );
             return "";
         }
-        
+
         const ytext = ydoc.getText("content");
         return ytext.toString(); // Yjs is the authoritative source
     }
@@ -144,26 +178,55 @@ export class CollaborationManager {
         // Handle special node types
         switch (item.type) {
             case "paragraph":
-                return "\n" + (item.content
-                    ? item.content.map((child: any) => this.contentItemToText(child)).join("")
-                    : "") + "\n";
+                return (
+                    "\n" +
+                    (item.content
+                        ? item.content
+                              .map((child: any) =>
+                                  this.contentItemToText(child),
+                              )
+                              .join("")
+                        : "") +
+                    "\n"
+                );
             case "heading":
                 const level = item.attrs?.level || 1;
                 const prefix = "#".repeat(level) + " ";
-                return "\n" + prefix + (item.content
-                    ? item.content.map((child: any) => this.contentItemToText(child)).join("")
-                    : "") + "\n";
+                return (
+                    "\n" +
+                    prefix +
+                    (item.content
+                        ? item.content
+                              .map((child: any) =>
+                                  this.contentItemToText(child),
+                              )
+                              .join("")
+                        : "") +
+                    "\n"
+                );
             case "code_block":
-                return "\n```\n" + (item.content
-                    ? item.content.map((child: any) => this.contentItemToText(child)).join("")
-                    : "") + "\n```\n";
+                return (
+                    "\n```\n" +
+                    (item.content
+                        ? item.content
+                              .map((child: any) =>
+                                  this.contentItemToText(child),
+                              )
+                              .join("")
+                        : "") +
+                    "\n```\n"
+                );
             case "mermaid":
-                return "\n```mermaid\n" + (item.attrs?.content || "") + "\n```\n";
+                return (
+                    "\n```mermaid\n" + (item.attrs?.content || "") + "\n```\n"
+                );
             case "math_display":
                 return "\n$$\n" + (item.attrs?.content || "") + "\n$$\n";
             default:
                 return item.content
-                    ? item.content.map((child: any) => this.contentItemToText(child)).join("")
+                    ? item.content
+                          .map((child: any) => this.contentItemToText(child))
+                          .join("")
                     : "";
         }
     }

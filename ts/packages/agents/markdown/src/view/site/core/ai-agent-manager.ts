@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
 import type { Editor } from "@milkdown/core";
 import { editorViewCtx } from "@milkdown/core";
 import type {
@@ -56,10 +59,10 @@ export class AIAgentManager {
         params: AgentCommandParams,
     ): Promise<void> {
         const request = this.buildAgentRequest(command, params);
-        
+
         // Track test mode to prevent duplicate content insertion
         this.isTestMode = params.testMode || false;
-        
+
         // Track if we actually received any successful operations
         let operationsReceived = false;
         let errorOccurred = false;
@@ -84,13 +87,16 @@ export class AIAgentManager {
                 throw new Error("No response stream available");
             }
 
-            const result = await this.processStreamResponse(reader, params.position || 0);
+            const result = await this.processStreamResponse(
+                reader,
+                params.position || 0,
+            );
             operationsReceived = result.operationsReceived;
             errorOccurred = result.errorOccurred;
 
             // Only show success message if we actually received operations and no errors occurred
             if (operationsReceived && !errorOccurred) {
-                console.log( "Streaming command completed successfully");
+                console.log("Streaming command completed successfully");
                 this.showNotification(
                     `${command} completed successfully!`,
                     "success",
@@ -100,7 +106,9 @@ export class AIAgentManager {
                 console.error("Streaming command failed");
             } else {
                 // No operations but no explicit error - agent might be unavailable
-                console.log("Streaming command completed but no content generated");
+                console.log(
+                    "Streaming command completed but no content generated",
+                );
             }
         } finally {
             // Hide AI presence cursor
@@ -131,8 +139,12 @@ export class AIAgentManager {
                 if (line.startsWith("data: ")) {
                     try {
                         const data = JSON.parse(line.slice(6));
-                        const result = await this.handleStreamEvent(data, position);
-                        if (result.operationsReceived) operationsReceived = true;
+                        const result = await this.handleStreamEvent(
+                            data,
+                            position,
+                        );
+                        if (result.operationsReceived)
+                            operationsReceived = true;
                         if (result.errorOccurred) errorOccurred = true;
                     } catch (e) {
                         console.warn("Failed to parse stream data:", line);
@@ -166,21 +178,21 @@ export class AIAgentManager {
                 // Handle success/error notifications from agent
                 const notificationType = (data as any).notificationType;
                 const message = (data as any).message;
-                
+
                 console.log(`[${notificationType?.toUpperCase()}] ${message}`);
                 this.showNotification(message, notificationType);
-                
+
                 // Track errors
                 if (notificationType === "error") {
                     errorOccurred = true;
                 }
                 break;
-                
+
             case "operationsApplied":
                 // Operations already applied by agent, just track completion
                 const operationCount = (data as any).operationCount || 0;
                 console.log(`Agent applied ${operationCount} operations`);
-                
+
                 // Only count as operations received if we actually got some operations
                 if (operationCount > 0) {
                     operationsReceived = true;
@@ -189,54 +201,84 @@ export class AIAgentManager {
 
             case "llmOperations":
                 // PRODUCTION: Handle operations sent to PRIMARY client only via SSE
-                console.log(`[LLM-OPS] Received ${(data as any).operations?.length || 0} operations via SSE (role: ${(data as any).clientRole || 'unknown'})`);
-                
+                console.log(
+                    `[LLM-OPS] Received ${(data as any).operations?.length || 0} operations via SSE (role: ${(data as any).clientRole || "unknown"})`,
+                );
+
                 // LOG DETAILED OPERATION OBJECTS
-                if ((data as any).operations && Array.isArray((data as any).operations)) {
+                if (
+                    (data as any).operations &&
+                    Array.isArray((data as any).operations)
+                ) {
                     console.log(`[LLM-OPS-DEBUG] Detailed operation objects:`);
-                    (data as any).operations.forEach((operation: any, index: number) => {
-                        console.log(`[LLM-OPS-DEBUG] Operation ${index + 1}:`, {
-                            type: operation.type,
-                            position: operation.position,
-                            from: operation.from,
-                            to: operation.to,
-                            content: operation.content,
-                            description: operation.description,
-                            fullOperation: operation
-                        });
-                        
-                        // Log content structure in detail
-                        if (operation.content) {
-                            console.log(`[LLM-OPS-DEBUG] Operation ${index + 1} content structure:`, JSON.stringify(operation.content, null, 2));
-                        }
-                    });
+                    (data as any).operations.forEach(
+                        (operation: any, index: number) => {
+                            console.log(
+                                `[LLM-OPS-DEBUG] Operation ${index + 1}:`,
+                                {
+                                    type: operation.type,
+                                    position: operation.position,
+                                    from: operation.from,
+                                    to: operation.to,
+                                    content: operation.content,
+                                    description: operation.description,
+                                    fullOperation: operation,
+                                },
+                            );
+
+                            // Log content structure in detail
+                            if (operation.content) {
+                                console.log(
+                                    `[LLM-OPS-DEBUG] Operation ${index + 1} content structure:`,
+                                    JSON.stringify(operation.content, null, 2),
+                                );
+                            }
+                        },
+                    );
                 }
-                
-                if ((data as any).clientRole === 'primary' && (data as any).operations && Array.isArray((data as any).operations)) {
+
+                if (
+                    (data as any).clientRole === "primary" &&
+                    (data as any).operations &&
+                    Array.isArray((data as any).operations)
+                ) {
                     // Apply operations through editor API (ensures proper markdown parsing)
-                    console.log(`[LLM-OPS-DEBUG] About to apply ${(data as any).operations.length} operations through applyAgentOperations`);
+                    console.log(
+                        `[LLM-OPS-DEBUG] About to apply ${(data as any).operations.length} operations through applyAgentOperations`,
+                    );
                     this.applyAgentOperations((data as any).operations);
                     operationsReceived = true;
-                    
-                    console.log(`[LLM-OPS] PRIMARY CLIENT applied ${(data as any).operations.length} operations via editor API`);
-                } else if ((data as any).clientRole !== 'primary') {
-                    console.log(`[LLM-OPS] Ignoring operations - not the primary client (role: ${(data as any).clientRole || 'unknown'})`);
+
+                    console.log(
+                        `[LLM-OPS] PRIMARY CLIENT applied ${(data as any).operations.length} operations via editor API`,
+                    );
+                } else if ((data as any).clientRole !== "primary") {
+                    console.log(
+                        `[LLM-OPS] Ignoring operations - not the primary client (role: ${(data as any).clientRole || "unknown"})`,
+                    );
                 } else {
-                    console.warn(`[LLM-OPS] No valid operations in SSE event:`, data);
+                    console.warn(
+                        `[LLM-OPS] No valid operations in SSE event:`,
+                        data,
+                    );
                 }
                 break;
 
             case "operationsBeingApplied":
                 // Handle notification that operations are being applied by primary client
-                console.log(`[LLM-OPS] Operations being applied by primary client - ${(data as any).operationCount} changes incoming`);
-                this.updateAIPresenceMessage(`AI is applying ${(data as any).operationCount} changes...`);
+                console.log(
+                    `[LLM-OPS] Operations being applied by primary client - ${(data as any).operationCount} changes incoming`,
+                );
+                this.updateAIPresenceMessage(
+                    `AI is applying ${(data as any).operationCount} changes...`,
+                );
                 break;
 
             case "complete":
                 this.showAIPresence(false);
                 this.hideAICursor(); // Ensure AI cursor is hidden when complete
                 this.isTestMode = false; // Reset test mode flag
-                console.log( "Streaming command completed");
+                console.log("Streaming command completed");
                 break;
 
             case "error":
@@ -253,11 +295,13 @@ export class AIAgentManager {
                 // Skip content events for test mode commands to prevent duplicate content
                 // Test mode sends both content chunks AND operations, but we only want operations
                 if (this.isTestMode) {
-                    console.log("Skipping content chunk in test mode to prevent duplicate:", 
-                        data.chunk?.substring(0, 50) + "...");
+                    console.log(
+                        "Skipping content chunk in test mode to prevent duplicate:",
+                        data.chunk?.substring(0, 50) + "...",
+                    );
                     break;
                 }
-                
+
                 // Insert content chunk at position for non-test content
                 if (this.editor && data.chunk) {
                     await insertContentChunk(
@@ -458,14 +502,17 @@ export class AIAgentManager {
         try {
             this.editor.action((ctx: any) => {
                 const view = ctx.get(editorViewCtx);
-                
+
                 // Create AI cursor decoration at the specified position
-                const validPosition = Math.min(position, view.state.doc.content.size);
-                
+                const validPosition = Math.min(
+                    position,
+                    view.state.doc.content.size,
+                );
+
                 // Add AI cursor styling (you can customize this CSS)
-                const cursorElement = document.createElement('span');
-                cursorElement.className = 'ai-cursor-indicator';
-                cursorElement.innerHTML = '🤖';
+                const cursorElement = document.createElement("span");
+                cursorElement.className = "ai-cursor-indicator";
+                cursorElement.innerHTML = "🤖";
                 cursorElement.style.cssText = `
                     position: absolute;
                     color: #3b82f6;
@@ -476,9 +523,9 @@ export class AIAgentManager {
                 `;
 
                 // Add blinking animation if not already added
-                if (!document.querySelector('#ai-cursor-styles')) {
-                    const styles = document.createElement('style');
-                    styles.id = 'ai-cursor-styles';
+                if (!document.querySelector("#ai-cursor-styles")) {
+                    const styles = document.createElement("style");
+                    styles.id = "ai-cursor-styles";
                     styles.textContent = `
                         @keyframes ai-cursor-blink {
                             0%, 50% { opacity: 1; }
@@ -492,34 +539,44 @@ export class AIAgentManager {
                 }
 
                 // Position the cursor element
-                this.positionAICursorElement(cursorElement, view, validPosition);
-                
+                this.positionAICursorElement(
+                    cursorElement,
+                    view,
+                    validPosition,
+                );
+
                 // Store reference for cleanup
                 this.aiPresenceIndicator = cursorElement;
             });
         } catch (error) {
-            console.error(' [AI-CURSOR] Failed to show AI cursor:', error);
+            console.error(" [AI-CURSOR] Failed to show AI cursor:", error);
         }
     }
-
 
     /**
      * Position the AI cursor element in the editor
      */
-    private positionAICursorElement(element: HTMLElement, view: any, position: number): void {
+    private positionAICursorElement(
+        element: HTMLElement,
+        view: any,
+        position: number,
+    ): void {
         try {
             const coords = view.coordsAtPos(position);
             const editorRect = view.dom.getBoundingClientRect();
-            
+
             element.style.left = `${coords.left - editorRect.left}px`;
             element.style.top = `${coords.top - editorRect.top}px`;
-            
+
             // Append to editor if not already there
             if (!element.parentNode) {
                 view.dom.appendChild(element);
             }
         } catch (error) {
-            console.warn(' [AI-CURSOR] Could not position cursor element:', error);
+            console.warn(
+                " [AI-CURSOR] Could not position cursor element:",
+                error,
+            );
         }
     }
 

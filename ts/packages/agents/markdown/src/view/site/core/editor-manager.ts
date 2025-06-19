@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
 // Editor initialization and management
 
 import { Editor } from "@milkdown/core";
@@ -102,7 +105,9 @@ export class EditorManager {
     private async configureEditorPlugins(crepe: Crepe): Promise<void> {
         // Import plugins dynamically to avoid circular dependencies
         const { mermaidPlugin } = await import("../mermaid-plugin");
-        const { slashCommandHandler, slashCommandPreview } = await import("../slash-commands");
+        const { slashCommandHandler, slashCommandPreview } = await import(
+            "../slash-commands"
+        );
 
         await crepe.editor
             .use(commonmark) // Basic markdown support
@@ -166,45 +171,53 @@ export class EditorManager {
         await this.state.editor.action((ctx) => {
             const view = ctx.get(editorViewCtx);
             const parser = ctx.get(parserCtx);
-            
+
             // Parse the markdown content to a ProseMirror document
             const doc = parser(content);
             if (!doc) {
                 throw new Error("Failed to parse markdown content");
             }
-            
+
             // Create transaction to replace all content with new content
-            const transaction = view.state.tr.replaceWith(0, view.state.doc.content.size, doc.content);
+            const transaction = view.state.tr.replaceWith(
+                0,
+                view.state.doc.content.size,
+                doc.content,
+            );
             view.dispatch(transaction);
         });
     }
 
-    public async switchToDocument(documentId: string, newContent?: string): Promise<void> {
+    public async switchToDocument(
+        documentId: string,
+        newContent?: string,
+    ): Promise<void> {
         console.log(`[EDITOR] Switching to document: "${documentId}"`);
-        
+
         if (!this.state.editor) {
             throw new Error("Editor not initialized");
         }
-        
+
         // Reconnect collaboration to new document room
         if (this.config.enableCollaboration) {
             await this.collaborationManager.reconnectToDocument(documentId);
-            
+
             // Update editor state to use new Y.js document
             this.state.yjsDoc = this.collaborationManager.getYjsDoc();
-            this.state.websocketProvider = this.collaborationManager.getWebsocketProvider();
-            
+            this.state.websocketProvider =
+                this.collaborationManager.getWebsocketProvider();
+
             // Reconnect the editor's collaboration service to new Y.js document
             if (this.state.yjsDoc && this.state.websocketProvider) {
                 this.setupCollaboration(this.state.editor);
             }
         }
-        
+
         // Set new content if provided
         if (newContent !== undefined) {
             await this.setContent(newContent);
         }
-        
+
         console.log(`[EDITOR] Switched to document: "${documentId}"`);
     }
 

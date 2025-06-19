@@ -243,18 +243,22 @@ export const slashCommandPreview = $prose(() => {
                         const commandDecoration = Decoration.inline(
                             lineStart,
                             lineStart + cmd.commandEnd,
-                            { class: "slash-command-name" }
+                            { class: "slash-command-name" },
                         );
                         decorations.push(commandDecoration);
 
                         // Style the instruction part if it exists
-                        if (match[3]) { // The instruction part
-                            const instructionStart = lineStart + match[1].length + (match[2].length - match[3].length);
+                        if (match[3]) {
+                            // The instruction part
+                            const instructionStart =
+                                lineStart +
+                                match[1].length +
+                                (match[2].length - match[3].length);
                             const instructionEnd = lineStart + lineText.length;
                             const instructionDecoration = Decoration.inline(
                                 instructionStart,
                                 instructionEnd,
-                                { class: "slash-command-instruction" }
+                                { class: "slash-command-instruction" },
                             );
                             decorations.push(instructionDecoration);
                         }

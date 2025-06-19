@@ -5,7 +5,7 @@ import { defineConfig } from "vite";
 import path from "path";
 
 export default defineConfig({
-    logLevel: 'warn', 
+    logLevel: "warn",
     root: "src/view/site",
     build: {
         outDir: "../../../dist/view/site",
@@ -50,7 +50,7 @@ export default defineConfig({
             "@": path.resolve(__dirname, "src/view/site"),
         },
     },
-    
+
     optimizeDeps: {
         include: [
             "@milkdown/core",
@@ -63,5 +63,4 @@ export default defineConfig({
             "@milkdown/utils",
         ],
     },
-    
 });

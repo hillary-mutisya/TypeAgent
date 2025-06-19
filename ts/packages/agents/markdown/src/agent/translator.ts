@@ -121,87 +121,102 @@ export class MarkdownAgent<T extends object> {
     }
 
     async updateDocumentWithStreaming(
-        currentMarkdown: string | undefined, 
+        currentMarkdown: string | undefined,
         intent: string,
-        onChunk: (chunk: string) => void
+        onChunk: (chunk: string) => void,
     ) {
         debug("Starting streaming updateDocument");
-        
+
         // For streaming commands, we'll use a simpler approach that generates text content
         // and then converts it to operations at the end
-        const streamingPrompt = this.getStreamingPrompts(currentMarkdown, intent);
-        
+        const streamingPrompt = this.getStreamingPrompts(
+            currentMarkdown,
+            intent,
+        );
+
         try {
             let accumulatedContent = "";
-            
+
             // Use the ChatModel's complete method with proper parameters
             const response = await this.model.complete(streamingPrompt);
-            
+
             // Extract content from response
             let content = "";
-            if (typeof response === 'string') {
+            if (typeof response === "string") {
                 content = response;
-            } else if (response && typeof response === 'object') {
+            } else if (response && typeof response === "object") {
                 // Handle different response formats
-                content = (response as any)?.choices?.[0]?.message?.content || 
-                         (response as any)?.content || 
-                         (response as any)?.text || 
-                         "Generated content for: " + intent;
+                content =
+                    (response as any)?.choices?.[0]?.message?.content ||
+                    (response as any)?.content ||
+                    (response as any)?.text ||
+                    "Generated content for: " + intent;
             } else {
                 content = "Generated content for: " + intent;
             }
-            
+
             // Simulate streaming by sending chunks with delays
             debug(`Simulating streaming for ${content.length} chars`);
-            const words = content.split(' ');
-            
+            const words = content.split(" ");
+
             for (let i = 0; i < words.length; i += 3) {
-                const chunk = words.slice(i, i + 3).join(' ') + (i + 3 < words.length ? ' ' : '');
+                const chunk =
+                    words.slice(i, i + 3).join(" ") +
+                    (i + 3 < words.length ? " " : "");
                 accumulatedContent += chunk;
                 onChunk(chunk);
-                
+
                 // Small delay to simulate streaming
-                await new Promise(resolve => setTimeout(resolve, 150));
+                await new Promise((resolve) => setTimeout(resolve, 150));
             }
-            
-            debug(`Streaming complete, accumulated ${accumulatedContent.length} chars`);
-            
+
+            debug(
+                `Streaming complete, accumulated ${accumulatedContent.length} chars`,
+            );
+
             // Convert the accumulated content to operations
-            const operations = this.convertContentToOperations(accumulatedContent, intent);
-            
+            const operations = this.convertContentToOperations(
+                accumulatedContent,
+                intent,
+            );
+
             return {
                 success: true,
                 data: {
                     operations: operations,
-                    operationSummary: `Generated ${accumulatedContent.length} characters of content`
-                }
+                    operationSummary: `Generated ${accumulatedContent.length} characters of content`,
+                },
             };
-            
         } catch (error) {
             console.error("[TRANSLATOR] Streaming failed:", error);
-            
+
             // Fallback: generate simple content and stream it
             const fallbackContent = `Generated content for: ${intent}\n\nThis is AI-generated content based on your request.`;
-            
+
             // Stream the fallback content
-            const words = fallbackContent.split(' ');
+            const words = fallbackContent.split(" ");
             let accumulatedContent = "";
-            
+
             for (let i = 0; i < words.length; i += 3) {
-                const chunk = words.slice(i, i + 3).join(' ') + (i + 3 < words.length ? ' ' : '');
+                const chunk =
+                    words.slice(i, i + 3).join(" ") +
+                    (i + 3 < words.length ? " " : "");
                 accumulatedContent += chunk;
                 onChunk(chunk);
-                await new Promise(resolve => setTimeout(resolve, 150));
+                await new Promise((resolve) => setTimeout(resolve, 150));
             }
-            
-            const operations = this.convertContentToOperations(accumulatedContent, intent);
-            
+
+            const operations = this.convertContentToOperations(
+                accumulatedContent,
+                intent,
+            );
+
             return {
                 success: true,
                 data: {
                     operations: operations,
-                    operationSummary: `Generated fallback content (${accumulatedContent.length} characters)`
-                }
+                    operationSummary: `Generated fallback content (${accumulatedContent.length} characters)`,
+                },
             };
         }
     }
@@ -211,12 +226,12 @@ export class MarkdownAgent<T extends object> {
         if (currentMarkdown) {
             contextPrompt = `\n\nCurrent document content:\n${currentMarkdown}\n\n`;
         }
-        
+
         return [
             {
                 role: "user" as const,
-                content: `You are a helpful assistant that generates markdown content based on user requests.${contextPrompt}User request: ${intent}\n\nPlease generate the requested content directly as markdown text. Do not include any explanations or metadata, just the content that should be added to the document:`
-            }
+                content: `You are a helpful assistant that generates markdown content based on user requests.${contextPrompt}User request: ${intent}\n\nPlease generate the requested content directly as markdown text. Do not include any explanations or metadata, just the content that should be added to the document:`,
+            },
         ];
     }
 
@@ -232,15 +247,15 @@ export class MarkdownAgent<T extends object> {
                         content: [
                             {
                                 type: "text",
-                                text: content
-                            }
-                        ]
-                    }
+                                text: content,
+                            },
+                        ],
+                    },
                 ],
-                description: `Generated content for: ${intent}`
-            }
+                description: `Generated content for: ${intent}`,
+            },
         ];
-        
+
         return operations;
     }
 }

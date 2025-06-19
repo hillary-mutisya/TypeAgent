@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
 import { ToolbarManager } from "./toolbar-manager";
 import { PanelManager } from "./panel-manager";
 import { NotificationManager } from "./notification-manager";

@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
 import { CrepeFeature } from "@milkdown/crepe";
 import { editorViewCtx } from "@milkdown/core";
 import { executeAgentCommand } from "./core/ai-agent-manager";
@@ -32,11 +35,12 @@ export const EDITOR_CONFIG = {
 export const COLLABORATION_CONFIG = {
     DEFAULT_WEBSOCKET_URL: (() => {
         // Dynamically determine WebSocket URL based on current page location
-        if (typeof window !== 'undefined') {
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        if (typeof window !== "undefined") {
+            const protocol =
+                window.location.protocol === "https:" ? "wss:" : "ws:";
             const host = window.location.hostname;
             const port = window.location.port;
-            return `${protocol}//${host}${port ? ':' + port : ''}`;
+            return `${protocol}//${host}${port ? ":" + port : ""}`;
         }
         // Fallback for server-side or when window is not available
         return "ws://localhost:3000";

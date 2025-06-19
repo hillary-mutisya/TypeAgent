@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
 import { DocumentManager } from "../core/document-manager";
 import { getElementById } from "../utils";
 import { editorViewCtx } from "@milkdown/core";
@@ -22,7 +25,7 @@ export class ToolbarManager {
     private setupOpenButton(): void {
         const openBtn = getElementById("open-btn");
         const fileInput = getElementById("file-input") as HTMLInputElement;
-        
+
         if (openBtn && fileInput) {
             openBtn.addEventListener("click", () => {
                 fileInput.click();
@@ -51,10 +54,9 @@ export class ToolbarManager {
             if (!this.documentManager) {
                 throw new Error("DocumentManager not initialized");
             }
-            
+
             // Use the document manager's improved file loading
             await this.documentManager.loadFileFromDisk(file);
-            
         } catch (error) {
             console.error("Failed to open file:", error);
             this.showNotification("❌ Failed to open file", "error");
@@ -66,10 +68,10 @@ export class ToolbarManager {
             if (!this.documentManager) {
                 throw new Error("DocumentManager not initialized");
             }
-            
+
             // Get content directly from the live editor (not server) to ensure we export what user sees
             let content = "";
-            
+
             // Try to get content from the editor manager first (most current)
             const editorManager = this.documentManager.getEditorManager();
             if (editorManager) {
@@ -77,20 +79,24 @@ export class ToolbarManager {
                 if (editor) {
                     content = await this.getEditorMarkdownContent(editor);
                 } else {
-                    console.warn( "[EXPORT] No editor available, falling back to server");
+                    console.warn(
+                        "[EXPORT] No editor available, falling back to server",
+                    );
                     content = await this.documentManager.getDocumentContent();
                 }
             } else {
-                console.warn( "[EXPORT] No editor manager available, falling back to server");
+                console.warn(
+                    "[EXPORT] No editor manager available, falling back to server",
+                );
                 content = await this.documentManager.getDocumentContent();
             }
-            
+
             const blob = new Blob([content], { type: "text/markdown" });
             const url = URL.createObjectURL(blob);
-            
+
             const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
             const filename = `markdown-export-${timestamp}.md`;
-            
+
             const a = document.createElement("a");
             a.href = url;
             a.download = filename;
@@ -98,7 +104,7 @@ export class ToolbarManager {
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            
+
             this.showNotification(`📥 Exported: ${filename}`, "success");
         } catch (error) {
             console.error("Failed to export file:", error);
@@ -114,15 +120,18 @@ export class ToolbarManager {
             try {
                 editor.action((ctx: any) => {
                     const view = ctx.get(editorViewCtx);
-                    
+
                     // Get the entire document as markdown
                     // Using textContent as fallback, but ideally we'd use a proper markdown serializer
                     const content = view.state.doc.textContent || "";
-                    
+
                     resolve(content);
                 });
             } catch (error) {
-                console.error( "[EXPORT-API] Failed to get editor content:", error);
+                console.error(
+                    "[EXPORT-API] Failed to get editor content:",
+                    error,
+                );
                 resolve("");
             }
         });
@@ -145,9 +154,9 @@ export class ToolbarManager {
             z-index: 1000;
             animation: slideIn 0.3s ease;
         `;
-        
+
         document.body.appendChild(notification);
-        
+
         // Remove after 3 seconds
         setTimeout(() => {
             notification.style.animation = "slideOut 0.3s ease";
@@ -182,22 +191,28 @@ export class ToolbarManager {
             // Copy to clipboard
             await navigator.clipboard.writeText(shareUrl);
 
-            this.showNotification(`🔗 Link copied: /document/${documentName}`, "success");
+            this.showNotification(
+                `🔗 Link copied: /document/${documentName}`,
+                "success",
+            );
         } catch (error) {
             console.error("Failed to share document:", error);
-            
+
             // Fallback: show the URL in a prompt if clipboard fails
             try {
                 const response = await fetch("/api/current-document");
                 const docInfo = await response.json();
                 const documentName = docInfo.currentDocument || "live";
                 const shareUrl = `${window.location.origin}/document/${documentName}`;
-                
+
                 // Show URL in prompt as fallback
                 prompt("Copy this shareable URL:", shareUrl);
                 this.showNotification("🔗 Share URL generated", "success");
             } catch (fallbackError) {
-                this.showNotification("❌ Failed to generate share link", "error");
+                this.showNotification(
+                    "❌ Failed to generate share link",
+                    "error",
+                );
             }
         }
     }

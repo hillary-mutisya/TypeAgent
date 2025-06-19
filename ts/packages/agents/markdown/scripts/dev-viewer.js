@@ -81,7 +81,9 @@ if (hmr) {
         console.log(`🚀 Starting AI-Enhanced Markdown Editor with HMR...`);
         console.log(`📄 File: ${filePath}`);
     } else {
-        console.log(`🚀 Starting AI-Enhanced Markdown Editor with HMR (Memory-only mode)...`);
+        console.log(
+            `🚀 Starting AI-Enhanced Markdown Editor with HMR (Memory-only mode)...`,
+        );
         console.log(`📄 Mode: Memory-only with default content`);
     }
     console.log(`🔗 Backend: http://localhost:${backendPort}`);
@@ -172,15 +174,17 @@ async function startWithHMR() {
         console.log("\n🎉 Development servers started successfully!");
         console.log(`📝 Backend API: http://localhost:${backendPort}`);
         console.log(`⚡ Frontend (HMR): http://localhost:${frontendPort}`);
-        
+
         if (filePath) {
             console.log(`📄 Viewing: ${path.basename(filePath)}`);
             console.log(`🔄 File changes will be reflected automatically`);
         } else {
             console.log(`📄 Mode: Memory-only with default content`);
-            console.log(`💾 Changes won't persist to disk (use File > Save to save)`);
+            console.log(
+                `💾 Changes won't persist to disk (use File > Save to save)`,
+            );
         }
-        
+
         console.log(
             `🔥 Hot Module Replacement enabled - changes will update instantly!`,
         );
@@ -254,15 +258,19 @@ function startWithoutHMR() {
                 console.log(
                     `📝 Open http://localhost:${backendPort} in your browser`,
                 );
-                
+
                 if (filePath) {
                     console.log(`📄 Viewing: ${path.basename(filePath)}`);
-                    console.log(`🔄 File changes will be reflected automatically`);
+                    console.log(
+                        `🔄 File changes will be reflected automatically`,
+                    );
                 } else {
                     console.log(`📄 Mode: Memory-only with default content`);
-                    console.log(`💾 Changes won't persist to disk (use File > Save to save)`);
+                    console.log(
+                        `💾 Changes won't persist to disk (use File > Save to save)`,
+                    );
                 }
-                
+
                 console.log(`⚡ Press Ctrl+C to stop the server`);
                 console.log(
                     `💡 Use --hmr flag for Hot Module Replacement during development`,

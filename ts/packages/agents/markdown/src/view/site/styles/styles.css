@@ -20,7 +20,9 @@ body {
   flex-direction: column;
   background-color: var(--page-background);
   color: var(--page-text);
-  transition: background-color 0.3s ease, color 0.3s ease;
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
 }
 
 #toolbar {
@@ -30,7 +32,9 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  transition: background-color 0.3s ease, border-color 0.3s ease;
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease;
 }
 
 .toolbar-section {
@@ -743,18 +747,24 @@ body {
 /* Yjs Cursor Styling */
 .ProseMirror-yjs-cursor {
   position: relative;
-  margin-left: -1px; margin-right: -1px;
-  border-left-width: 1px; border-left-style: solid; /* Color set by JS */
-  word-break: normal; pointer-events: none;
+  margin-left: -1px;
+  margin-right: -1px;
+  border-left-width: 1px;
+  border-left-style: solid; /* Color set by JS */
+  word-break: normal;
+  pointer-events: none;
 }
-.ProseMirror-yjs-cursor > div { /* Username tooltip */
+.ProseMirror-yjs-cursor > div {
+  /* Username tooltip */
   position: absolute;
   top: -1.2em; /* Adjust vertical position */
   left: -2px; /* Adjust horizontal position */
   font-size: 0.75rem; /* Smaller font for tooltip */
   font-family: inherit;
-  font-style: normal; font-weight: 500;
-  line-height: normal; user-select: none;
+  font-style: normal;
+  font-weight: 500;
+  line-height: normal;
+  user-select: none;
   color: white; /* Text color inside tooltip */
   padding: 2px 6px; /* Padding inside tooltip */
   border-radius: 4px;

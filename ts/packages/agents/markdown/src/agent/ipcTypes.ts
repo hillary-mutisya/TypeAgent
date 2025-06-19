@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
 // IPC Message Types for TypeAgent Communication
 
 // Agent ← View: UI command requests
@@ -49,7 +52,7 @@ export interface LLMOperationsMessage {
 }
 
 export interface OperationsAppliedMessage {
-    type: "operationsApplied"; 
+    type: "operationsApplied";
     success: boolean;
     operationCount?: number;
     error?: string;

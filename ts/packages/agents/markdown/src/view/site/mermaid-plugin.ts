@@ -327,13 +327,13 @@ const mermaidRenderer = $prose(() => {
                         textarea.value = code;
 
                         // Fix paste functionality
-                        textarea.addEventListener('paste', (e) => {
+                        textarea.addEventListener("paste", (e) => {
                             e.stopPropagation();
                             // Allow default paste behavior
                         });
 
                         // Prevent ProseMirror from interfering with input
-                        textarea.addEventListener('input', (e) => {
+                        textarea.addEventListener("input", (e) => {
                             e.stopPropagation();
                         });
 

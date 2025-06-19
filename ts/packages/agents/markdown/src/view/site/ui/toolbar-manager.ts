@@ -109,18 +109,23 @@ export class ToolbarManager {
     }
 
     /**
-     * Get markdown content directly from the editor (bypassing server)
+     * Get markdown content directly from the editor using proper API
      */
     private async getEditorMarkdownContent(editor: any): Promise<string> {
         return new Promise((resolve) => {
             try {
                 editor.action((ctx: any) => {
                     const view = ctx.get(editorViewCtx);
-                    const markdown = view.state.doc.textContent || "";
-                    resolve(markdown);
+                    
+                    // Get the entire document as markdown
+                    // Using textContent as fallback, but ideally we'd use a proper markdown serializer
+                    const content = view.state.doc.textContent || "";
+                    
+                    console.log("📝 [EXPORT-API] Retrieved content from editor:", content.length, "chars");
+                    resolve(content);
                 });
             } catch (error) {
-                console.error("Failed to get editor content:", error);
+                console.error("❌ [EXPORT-API] Failed to get editor content:", error);
                 resolve("");
             }
         });

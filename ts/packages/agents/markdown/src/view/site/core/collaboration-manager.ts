@@ -8,6 +8,9 @@ export class CollaborationManager {
     private yjsDoc: Doc | null = null;
     private websocketProvider: WebsocketProvider | null = null;
     private config: CollaborationConfig | null = null;
+    private hasShownSyncNotificationForDocument: boolean = false;
+    private disconnectedTime: number = 0;
+    private static readonly SYNC_NOTIFICATION_COOLDOWN = 300000; // 5 minutes in milliseconds
 
     public async reconnectToDocument(newDocumentId: string): Promise<void> {
         console.log(`🔄 [COLLAB] Reconnecting to document: "${newDocumentId}"`);
@@ -183,14 +186,30 @@ export class CollaborationManager {
                 console.log("📄 [WEBSOCKET] Document synchronized");
                 console.log(`📡 [WEBSOCKET] Y.js document content length: ${this.yjsDoc?.getText('content').length || 0} chars`);
 
-                statusElement.textContent = "📄 Document synchronized";
-                statusElement.className = "collaboration-status connected";
-                statusElement.style.display = "block";
-                setTimeout(() => {
-                    statusElement.style.display = "none";
-                }, 3000);
+                // Show sync notification only once per document or after long disconnection
+                const now = Date.now();
+                const shouldShowNotification = !this.hasShownSyncNotificationForDocument || 
+                    (this.disconnectedTime > 0 && (now - this.disconnectedTime) > CollaborationManager.SYNC_NOTIFICATION_COOLDOWN);
+
+                if (shouldShowNotification) {
+                    statusElement.textContent = "📄 Document synchronized";
+                    statusElement.className = "collaboration-status connected";
+                    statusElement.style.display = "block";
+                    setTimeout(() => {
+                        statusElement.style.display = "none";
+                    }, 3000);
+
+                    this.hasShownSyncNotificationForDocument = true;
+                    // this.lastSyncNotificationTime = now; // Moved to NotificationManager
+                    this.disconnectedTime = 0; // Reset disconnection time
+                    
+                    console.log("📄 [SYNC-NOTIFICATION] Shown document sync notification");
+                } else {
+                    console.log("📄 [SYNC-NOTIFICATION] Skipped sync notification (already shown for this document)");
+                }
             } else {
                 console.log("⚠️ [WEBSOCKET] Document sync lost");
+                this.disconnectedTime = Date.now(); // Record when we became disconnected
             }
         });
 

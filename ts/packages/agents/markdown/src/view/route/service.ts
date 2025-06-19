@@ -443,6 +443,112 @@ app.post("/document", express.json(), (req: Request, res: Response) => {
     }
 });
 
+// Add auto-save endpoint
+app.post("/autosave", express.json(), (req: Request, res: Response) => {
+    try {
+        const { content, filePath: requestFilePath, documentId } = req.body;
+        
+        if (!content && content !== "") {
+            res.status(400).json({ error: "Content is required" });
+            return;
+        }
+
+        console.log(`💾 [AUTO-SAVE] Received auto-save request for document: ${documentId}, path: ${requestFilePath}`);
+        console.log(`💾 [AUTO-SAVE] Content length: ${content.length} chars`);
+
+        // Use the provided file path or fall back to current filePath
+        const targetFilePath = requestFilePath || filePath;
+        const targetDocumentId = documentId || (filePath ? path.basename(filePath, ".md") : "default");
+
+        if (!targetFilePath) {
+            // Memory-only mode: save to authoritative Y.js document
+            console.log(`💾 [AUTO-SAVE] Memory-only mode - saving to Y.js doc: ${targetDocumentId}`);
+            
+            const ydoc = getAuthoritativeDocument(targetDocumentId);
+            const ytext = ydoc.getText("content");
+            
+            // Replace entire content atomically
+            ytext.delete(0, ytext.length);
+            ytext.insert(0, content);
+            
+            console.log(`💾 [AUTO-SAVE] Saved content to authoritative Y.js doc: ${content.length} chars`);
+            
+            // Notify clients via SSE
+            clients.forEach((client) => {
+                try {
+                    client.write(`data: ${JSON.stringify({
+                        type: "autoSave",
+                        documentId: targetDocumentId,
+                        contentLength: content.length,
+                        timestamp: Date.now()
+                    })}\n\n`);
+                } catch (error) {
+                    console.error("❌ [SSE] Failed to send auto-save event to client:", error);
+                }
+            });
+            
+            res.json({ success: true, message: "Auto-saved to memory", documentId: targetDocumentId });
+            return;
+        }
+
+        // File mode: save to both authoritative document and file
+        const ydoc = getAuthoritativeDocument(targetDocumentId);
+        const ytext = ydoc.getText("content");
+        
+        // Update authoritative document first
+        ytext.delete(0, ytext.length);
+        ytext.insert(0, content);
+        
+        // Then save to file
+        fs.writeFileSync(targetFilePath, content, "utf-8");
+        
+        console.log(`💾 [AUTO-SAVE] Saved content to both Y.js doc and file: ${content.length} chars`);
+        
+        // Notify clients via SSE
+        clients.forEach((client) => {
+            try {
+                client.write(`data: ${JSON.stringify({
+                    type: "autoSave",
+                    filePath: targetFilePath,
+                    documentId: targetDocumentId,
+                    contentLength: content.length,
+                    timestamp: Date.now()
+                })}\n\n`);
+            } catch (error) {
+                console.error("❌ [SSE] Failed to send auto-save event to client:", error);
+            }
+        });
+
+        res.json({ 
+            success: true, 
+            message: "Auto-saved successfully",
+            filePath: targetFilePath,
+            documentId: targetDocumentId
+        });
+        
+    } catch (error) {
+        console.error("❌ [AUTO-SAVE] Auto-save failed:", error);
+        
+        // Notify clients of auto-save error
+        clients.forEach((client) => {
+            try {
+                client.write(`data: ${JSON.stringify({
+                    type: "autoSaveError",
+                    error: error instanceof Error ? error.message : "Unknown error",
+                    timestamp: Date.now()
+                })}\n\n`);
+            } catch (sseError) {
+                console.error("❌ [SSE] Failed to send auto-save error to client:", sseError);
+            }
+        });
+        
+        res.status(500).json({
+            error: "Auto-save failed",
+            details: error instanceof Error ? error.message : error,
+        });
+    }
+});
+
 // Add collaboration info endpoint
 app.get("/collaboration/info", (req: Request, res: Response) => {
     const stats = collaborationManager.getStats();
@@ -1589,6 +1695,22 @@ function setupWSConnection(conn: any, req: any, roomName: string): void {
     }
     
     send(ydoc, conn, syncMessage);
+    
+    // Send document synchronized notification via SSE after initial sync
+    setTimeout(() => {
+        clients.forEach((client) => {
+            try {
+                client.write(`data: ${JSON.stringify({
+                    type: "documentSynced",
+                    documentId: roomName,
+                    timestamp: Date.now()
+                })}\n\n`);
+            } catch (error) {
+                console.error("❌ [SSE] Failed to send sync notification:", error);
+            }
+        });
+        console.log(`📡 [SYNC-NOTIFICATION] Sent documentSynced event for room: ${roomName}`);
+    }, 100); // Small delay to ensure sync is complete
     
     // Send existing awareness states to new client if any exist
     const awarenessStatesMap = awareness.getStates();

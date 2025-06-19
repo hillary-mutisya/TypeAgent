@@ -18,6 +18,7 @@ export class AIAgentManager {
     private editor: Editor | null = null;
     private notificationManager: any = null;
     private aiPresenceIndicator: HTMLElement | null = null;
+    // private aiCursorPosition: number = -1; // Currently unused
     private isTestMode: boolean = false; // Track test mode to prevent duplicate content
 
     public setEditor(editor: Editor): void {
@@ -35,10 +36,14 @@ export class AIAgentManager {
         try {
             console.log(`🤖 Executing agent command: ${command}`, params);
 
+            // Show AI cursor at target position immediately
+            this.showAICursor(params.position || 0);
+
             // Always use streaming for better UX
             await this.executeStreamingAgentCommand(command, params);
         } catch (error) {
             console.error(`❌ Agent command failed:`, error);
+            this.hideAICursor();
             this.showNotification(
                 `Failed to execute ${command} command. Please try again.`,
                 "error",
@@ -229,6 +234,7 @@ export class AIAgentManager {
 
             case "complete":
                 this.showAIPresence(false);
+                this.hideAICursor(); // Ensure AI cursor is hidden when complete
                 this.isTestMode = false; // Reset test mode flag
                 console.log("✅ Streaming command completed");
                 break;
@@ -237,6 +243,7 @@ export class AIAgentManager {
                 console.log(`[ERROR] ${(data as any).error}`);
                 this.showNotification((data as any).error, "error");
                 this.showAIPresence(false);
+                this.hideAICursor(); // Hide cursor on error
                 this.isTestMode = false; // Reset test mode flag on error
                 errorOccurred = true;
                 break;
@@ -436,6 +443,115 @@ export class AIAgentManager {
             this.notificationManager.showNotification(message, type);
         } else {
             console.log(`[${type.toUpperCase()}] ${message}`);
+        }
+    }
+
+    /**
+     * Show AI cursor at specific position in the document
+     */
+    private showAICursor(position: number): void {
+        if (!this.editor) return;
+
+        // this.aiCursorPosition = position;
+        console.log(`🤖 [AI-CURSOR] Showing AI cursor at position ${position}`);
+
+        try {
+            this.editor.action((ctx: any) => {
+                const view = ctx.get(editorViewCtx);
+                
+                // Create AI cursor decoration at the specified position
+                const validPosition = Math.min(position, view.state.doc.content.size);
+                
+                // Add AI cursor styling (you can customize this CSS)
+                const cursorElement = document.createElement('span');
+                cursorElement.className = 'ai-cursor-indicator';
+                cursorElement.innerHTML = '🤖';
+                cursorElement.style.cssText = `
+                    position: absolute;
+                    color: #3b82f6;
+                    font-size: 16px;
+                    animation: ai-cursor-blink 1s infinite;
+                    z-index: 1000;
+                    pointer-events: none;
+                `;
+
+                // Add blinking animation if not already added
+                if (!document.querySelector('#ai-cursor-styles')) {
+                    const styles = document.createElement('style');
+                    styles.id = 'ai-cursor-styles';
+                    styles.textContent = `
+                        @keyframes ai-cursor-blink {
+                            0%, 50% { opacity: 1; }
+                            51%, 100% { opacity: 0.3; }
+                        }
+                        .ai-cursor-indicator {
+                            transition: all 0.2s ease;
+                        }
+                    `;
+                    document.head.appendChild(styles);
+                }
+
+                // Position the cursor element
+                this.positionAICursorElement(cursorElement, view, validPosition);
+                
+                // Store reference for cleanup
+                this.aiPresenceIndicator = cursorElement;
+            });
+        } catch (error) {
+            console.error('❌ [AI-CURSOR] Failed to show AI cursor:', error);
+        }
+    }
+
+    /**
+     * Update AI cursor position as content is being streamed
+     */
+    /* Currently unused - commenting out to avoid TS errors
+    private updateAICursor(newPosition: number): void {
+        if (!this.editor || !this.aiPresenceIndicator) return;
+        // this.aiCursorPosition = newPosition;
+        console.log(`🤖 [AI-CURSOR] Updating AI cursor to position ${newPosition}`);
+
+        try {
+            this.editor.action((ctx: any) => {
+                const view = ctx.get(editorViewCtx);
+                const validPosition = Math.min(newPosition, view.state.doc.content.size);
+                this.positionAICursorElement(this.aiPresenceIndicator!, view, validPosition);
+            });
+        } catch (error) {
+            console.error('❌ [AI-CURSOR] Failed to update AI cursor:', error);
+        }
+    }
+    */
+
+    /**
+     * Position the AI cursor element in the editor
+     */
+    private positionAICursorElement(element: HTMLElement, view: any, position: number): void {
+        try {
+            const coords = view.coordsAtPos(position);
+            const editorRect = view.dom.getBoundingClientRect();
+            
+            element.style.left = `${coords.left - editorRect.left}px`;
+            element.style.top = `${coords.top - editorRect.top}px`;
+            
+            // Append to editor if not already there
+            if (!element.parentNode) {
+                view.dom.appendChild(element);
+            }
+        } catch (error) {
+            console.warn('⚠️ [AI-CURSOR] Could not position cursor element:', error);
+        }
+    }
+
+    /**
+     * Hide AI cursor
+     */
+    private hideAICursor(): void {
+        if (this.aiPresenceIndicator) {
+            console.log(`🤖 [AI-CURSOR] Hiding AI cursor`);
+            this.aiPresenceIndicator.remove();
+            this.aiPresenceIndicator = null;
+            // this.aiCursorPosition = -1;
         }
     }
 }

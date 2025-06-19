@@ -83,7 +83,8 @@ body {
   color: #fff;
 }
 
-/* Theme Menu Styles */
+/* Theme Menu Styles - REMOVED */
+/*
 .theme-menu {
   position: absolute;
   top: 100%;
@@ -135,7 +136,6 @@ body {
   flex-shrink: 0;
 }
 
-/* Theme Preview Colors */
 .light-preview {
   background: linear-gradient(135deg, #ffffff 50%, #f8f9fa 50%);
 }
@@ -159,6 +159,7 @@ body {
 .material-preview {
   background: linear-gradient(135deg, #263238 50%, #37474f 50%);
 }
+*/
 
 /* Theme Specific Styles */
 .theme-dark {
@@ -204,7 +205,8 @@ body {
   --border-color: #444;
 }
 
-/* Dark theme styles for menu and icons */
+/* Dark theme styles for menu and icons - THEME MENU REMOVED */
+/*
 .theme-dark .theme-menu,
 .dark-theme .theme-menu {
   background: #2d2d2d;
@@ -227,6 +229,7 @@ body {
   background: rgba(59, 130, 246, 0.2);
   color: #60a5fa;
 }
+*/
 
 .theme-dark .icon-button,
 .dark-theme .icon-button {
@@ -239,6 +242,7 @@ body {
   color: #fff;
 }
 
+/* REMOVED - Theme option styles
 .dark-theme .theme-option {
   color: #ccc;
 }
@@ -251,6 +255,7 @@ body {
   background: rgba(59, 130, 246, 0.2);
   color: #60a5fa;
 }
+*/
 
 #editor-container {
   flex: 1;

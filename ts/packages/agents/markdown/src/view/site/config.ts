@@ -11,6 +11,7 @@ export const EDITOR_CONFIG = {
         AI_INTEGRATION: true,
         MERMAID_SUPPORT: true,
         HISTORY: true,
+        AUTO_SAVE: true,
     },
 
     TIMING: {
@@ -20,19 +21,11 @@ export const EDITOR_CONFIG = {
         COLLABORATION_STATUS_HIDE_DELAY: 3000,
         PANEL_RESTORE_DELAY: 500,
         MARKDOWN_UPDATE_DELAY: 100,
+        AUTO_SAVE_INTERVAL: 30000, // 30 seconds
     },
 
     STORAGE_KEYS: {
-        THEME: "markdown-editor-theme",
-    },
-
-    THEMES: {
-        LIGHT: "light",
-        DARK: "dark",
-        NORD: "nord",
-        DRACULA: "dracula",
-        GITHUB: "github",
-        MATERIAL: "material",
+        // Reserved for future use
     },
 } as const;
 
@@ -58,6 +51,7 @@ export const AI_CONFIG = {
         STREAM: "/agent/stream",
         DOCUMENT: "/document",
         COLLABORATION_INFO: "/collaboration/info",
+        AUTOSAVE: "/autosave",
     },
 
     COMMANDS: {

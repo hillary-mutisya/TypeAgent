@@ -1,17 +1,14 @@
 import { ToolbarManager } from "./toolbar-manager";
-import { ThemeManager } from "./theme-manager";
 import { PanelManager } from "./panel-manager";
 import { NotificationManager } from "./notification-manager";
 
 export class UIManager {
     private toolbarManager: ToolbarManager;
-    private themeManager: ThemeManager;
     private panelManager: PanelManager;
     private notificationManager: NotificationManager;
 
     constructor() {
         this.toolbarManager = new ToolbarManager();
-        this.themeManager = new ThemeManager();
         this.panelManager = new PanelManager();
         this.notificationManager = new NotificationManager();
     }
@@ -19,7 +16,6 @@ export class UIManager {
     public async initialize(): Promise<void> {
         // Initialize all UI components
         await this.toolbarManager.initialize();
-        await this.themeManager.initialize();
         await this.panelManager.initialize();
         await this.notificationManager.initialize();
 

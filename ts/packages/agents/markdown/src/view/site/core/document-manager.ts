@@ -1,12 +1,16 @@
 import type { Editor } from "@milkdown/core";
 import { editorViewCtx, parserCtx } from "@milkdown/core";
 import type { SaveStatus } from "../types";
-import { AI_CONFIG, DEFAULT_MARKDOWN_CONTENT } from "../config";
+import { AI_CONFIG, DEFAULT_MARKDOWN_CONTENT, EDITOR_CONFIG } from "../config";
 
 export class DocumentManager {
     private notificationManager: any = null;
     private editorManager: any = null;
     private eventSource: EventSource | null = null;
+    private autoSaveTimer: NodeJS.Timeout | null = null;
+    private isPrimaryClient = false;
+    private lastAutoSaveContent = "";
+    private currentDocumentId = "default";
 
     public setNotificationManager(notificationManager: any): void {
         this.notificationManager = notificationManager;
@@ -27,6 +31,101 @@ export class DocumentManager {
     public async initialize(): Promise<void> {
         // Set up SSE connection for document change notifications
         this.setupSSEConnection();
+        
+        // Initialize auto-save if enabled
+        if (EDITOR_CONFIG.FEATURES.AUTO_SAVE) {
+            this.startAutoSave();
+        }
+    }
+
+    /**
+     * Start auto-save timer for primary client
+     */
+    private startAutoSave(): void {
+        if (this.autoSaveTimer) {
+            clearInterval(this.autoSaveTimer);
+        }
+        
+        console.log("💾 [AUTO-SAVE] Starting auto-save timer...");
+        
+        this.autoSaveTimer = setInterval(async () => {
+            if (this.isPrimaryClient && EDITOR_CONFIG.FEATURES.AUTO_SAVE) {
+                await this.performAutoSave();
+            }
+        }, EDITOR_CONFIG.TIMING.AUTO_SAVE_INTERVAL);
+    }
+
+    /**
+     * Perform auto-save if content has changed
+     */
+    private async performAutoSave(): Promise<void> {
+        try {
+            if (!this.editorManager) {
+                console.log("💾 [AUTO-SAVE] Skipping - no editor manager");
+                return;
+            }
+
+            const editor = this.editorManager.getEditor();
+            if (!editor) {
+                console.log("💾 [AUTO-SAVE] Skipping - no editor");
+                return;
+            }
+
+            // Get current content using editor API
+            const currentContent = await this.getMarkdownContent(editor);
+            
+            // Only save if content has changed
+            if (currentContent === this.lastAutoSaveContent) {
+                console.log("💾 [AUTO-SAVE] Skipping - content unchanged");
+                return;
+            }
+
+            console.log(`💾 [AUTO-SAVE] Content changed, auto-saving... (${currentContent.length} chars)`);
+
+            // Get current document path from server
+            const docInfo = await this.getCurrentDocumentInfo();
+            
+            // Send auto-save request
+            const response = await fetch(AI_CONFIG.ENDPOINTS.AUTOSAVE, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ 
+                    content: currentContent,
+                    filePath: docInfo.fullPath,
+                    documentId: this.currentDocumentId
+                }),
+            });
+
+            if (response.ok) {
+                this.lastAutoSaveContent = currentContent;
+                console.log("✅ [AUTO-SAVE] Successfully saved document");
+            } else {
+                console.error("❌ [AUTO-SAVE] Failed to save:", response.statusText);
+            }
+
+        } catch (error) {
+            console.error("❌ [AUTO-SAVE] Error during auto-save:", error);
+        }
+    }
+
+    /**
+     * Get current document info from server
+     */
+    private async getCurrentDocumentInfo(): Promise<{ currentDocument: string; fullPath: string | null }> {
+        try {
+            const response = await fetch("/api/current-document");
+            if (response.ok) {
+                return await response.json();
+            }
+        } catch (error) {
+            console.warn("Failed to get current document info:", error);
+        }
+        
+        // Fallback
+        return { 
+            currentDocument: this.currentDocumentId, 
+            fullPath: null
+        };
     }
 
     private setupSSEConnection(): void {
@@ -70,6 +169,13 @@ export class DocumentManager {
         switch (data.type) {
             case 'documentChanged':
                 console.log(`🔄 [SSE] Document changed to: ${data.newDocumentId}`);
+                this.currentDocumentId = data.newDocumentId;
+                
+                // Reset sync notification state for new document
+                if (this.notificationManager) {
+                    this.notificationManager.resetDocumentSyncState(data.newDocumentId);
+                }
+                
                 await this.handleDocumentChangeFromBackend(data.newDocumentId, data.newDocumentName);
                 break;
                 
@@ -97,6 +203,9 @@ export class DocumentManager {
                                     "📡 Document updated (WebSocket reconnecting...)",
                                     "info"
                                 );
+                                
+                                // Mark as disconnected for sync notification tracking
+                                this.notificationManager.markDocumentDisconnected(data.documentName || this.currentDocumentId);
                             }
                         } catch (error) {
                             console.error(`❌ [SSE-FALLBACK] Failed to refresh content:`, error);
@@ -108,7 +217,14 @@ export class DocumentManager {
                     console.log(`⚠️ [SSE] No editor manager available for WebSocket status check`);
                 }
                 break;
-                
+
+            case 'documentSynced':
+                console.log(`📡 [SSE] Document synchronized: ${data.documentId}`);
+                if (this.notificationManager) {
+                    this.notificationManager.showDocumentSyncNotification(data.documentId || this.currentDocumentId);
+                }
+                break;
+
             case 'autoSave':
                 console.log(`💾 [SSE] Auto-save completed for: ${data.filePath}`);
                 // Show brief save notification
@@ -157,6 +273,10 @@ export class DocumentManager {
                 
                 if (data.clientRole === 'primary' && data.operations && Array.isArray(data.operations) && this.editorManager) {
                     try {
+                        // Mark this client as primary for auto-save
+                        this.isPrimaryClient = true;
+                        console.log("🎯 [SSE] Marked as PRIMARY CLIENT for auto-save");
+                        
                         // Apply operations through editor API for proper markdown parsing
                         const editor = this.editorManager.getEditor();
                         if (editor) {
@@ -183,7 +303,9 @@ export class DocumentManager {
                         }
                     }
                 } else if (data.clientRole !== 'primary') {
-                    console.log(`ℹ️ [SSE] Ignoring operations - not the primary client (role: ${data.clientRole || 'unknown'})`);
+                    // Mark as secondary client
+                    this.isPrimaryClient = false;
+                    console.log(`ℹ️ [SSE] Marked as SECONDARY CLIENT - not primary client (role: ${data.clientRole || 'unknown'})`);
                 } else {
                     console.warn(`⚠️ [SSE] Invalid LLM operations received:`, data);
                 }
@@ -249,6 +371,11 @@ export class DocumentManager {
         if (this.eventSource) {
             this.eventSource.close();
             this.eventSource = null;
+        }
+        
+        if (this.autoSaveTimer) {
+            clearInterval(this.autoSaveTimer);
+            this.autoSaveTimer = null;
         }
     }
 

@@ -3,10 +3,6 @@
 
 import express, { Express, Request, Response } from "express";
 import rateLimit from "express-rate-limit";
-import MarkdownIt from "markdown-it";
-import { GeoJSONPlugin } from "./plugins/geoJson.js";
-import { MermaidPlugin } from "./plugins/mermaid.js";
-import { LatexPlugin } from "./plugins/latex.js";
 import { CollaborationManager } from "./collaborationManager.js";
 import { fileURLToPath } from "url";
 import path from "path";
@@ -117,15 +113,6 @@ app.post("/api/switch-document", express.json(), (req: Request, res: Response) =
         });
     }
 });
-
-// Initialize Markdown It
-const md = new MarkdownIt();
-md.use(GeoJSONPlugin);
-md.use(MermaidPlugin);
-md.use(LatexPlugin);
-md.use(GeoJSONPlugin);
-md.use(MermaidPlugin);
-md.use(LatexPlugin);
 
 let clients: any[] = [];
 let filePath: string | null;
@@ -294,56 +281,6 @@ function handleStreamingChunkFromAgent(streamId: string, chunk: string, isComple
 
 // Initialize collaboration manager
 collaborationManager = new CollaborationManager();
-
-app.get("/preview", (req: Request, res: Response) => {
-    if (!filePath) {
-        // Return rendered default content when no file is loaded
-        const defaultContent = `# Welcome to AI-Enhanced Markdown Editor
-
-Start editing your markdown document with AI assistance!
-
-## Features
-
-- **WYSIWYG Editing** with Milkdown Crepe
-- **AI-Powered Tools** integrated with TypeAgent
-- **Real-time Preview** with full markdown support
-- **Mermaid Diagrams** with visual editing
-- **Math Equations** with LaTeX support
-- **GeoJSON Maps** for location data
-
-## AI Commands
-
-Try these AI-powered commands:
-
-- Type \`/\` to open the block edit menu with AI tools
-- Use **Continue Writing** to let AI continue writing
-- Use **Generate Diagram** to create Mermaid diagrams
-- Use **Augment Document** to improve the document
-- Test versions available for testing without API calls
-
-## Example Diagram
-
-\`\`\`mermaid
-graph TD
-    A[Start Editing] --> B{Need AI Help?}
-    B -->|Yes| C[Use / Commands]
-    B -->|No| D[Continue Writing]
-    C --> E[AI Generates Content]
-    E --> F[Review & Edit]
-    F --> G[Save Document]
-    D --> G
-\`\`\`
-
-Start typing to see the editor in action!
-`;
-        const htmlContent = md.render(defaultContent);
-        res.send(htmlContent);
-    } else {
-        const fileContent = fs.readFileSync(filePath, "utf-8");
-        const htmlContent = md.render(fileContent);
-        res.send(htmlContent);
-    }
-});
 
 // Get document as markdown text
 app.get("/document", (req: Request, res: Response) => {

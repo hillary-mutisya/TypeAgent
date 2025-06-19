@@ -19,24 +19,25 @@ export default defineConfig({
         },
     },
     server: {
-        port: 5173,
+        port: parseInt(process.env.VITE_FRONTEND_PORT) || 5173,
         host: true,
         proxy: {
             // Proxy API requests to the backend during development
+            // Backend port can be overridden via VITE_BACKEND_PORT env var
             "/document": {
-                target: "http://localhost:3010",
+                target: `http://localhost:${process.env.VITE_BACKEND_PORT || 3000}`,
                 changeOrigin: true,
             },
             "/preview": {
-                target: "http://localhost:3010",
+                target: `http://localhost:${process.env.VITE_BACKEND_PORT || 3000}`,
                 changeOrigin: true,
             },
             "/events": {
-                target: "http://localhost:3010",
+                target: `http://localhost:${process.env.VITE_BACKEND_PORT || 3000}`,
                 changeOrigin: true,
             },
             "/agent": {
-                target: "http://localhost:3010",
+                target: `http://localhost:${process.env.VITE_BACKEND_PORT || 3000}`,
                 changeOrigin: true,
             },
         },

@@ -58,22 +58,47 @@ async function handleUICommand(
     console.log(`🖥️ [AGENT] Processing UI command: ${command}`);
     
     try {
-        // Build action from UI command
-        const action: MarkdownAction = {
-            actionName: "updateDocument",
-            parameters: {
-                originalRequest: parameters.originalRequest,
-            }
-        };
+        // Check if streaming is enabled for this command
+        const enableStreaming = parameters.enableStreaming && parameters.streamId;
+        const streamId = parameters.streamId;
         
-        const result = await handleMarkdownAction(action, context);
-        
-        return {
-            success: true,
-            operations: ((result as any).data)?.operations || [],
-            message: ((result as any).data)?.operationSummary || "Command completed successfully",
-            type: "success"
-        };
+        if (enableStreaming) {
+            console.log(`🌊 [AGENT] Processing streaming command: ${command} (stream: ${streamId})`);
+            
+            // Build action from UI command
+            const action: MarkdownAction = {
+                actionName: "streamingUpdateDocument",
+                parameters: {
+                    originalRequest: parameters.originalRequest,
+                }
+            };
+            
+            const result = await handleStreamingMarkdownAction(action, context, streamId);
+            
+            return {
+                success: true,
+                operations: ((result as any).data)?.operations || [],
+                message: ((result as any).data)?.operationSummary || "Streaming command completed successfully",
+                type: "success"
+            };
+        } else {
+            // Non-streaming command - use existing flow
+            const action: MarkdownAction = {
+                actionName: "updateDocument",
+                parameters: {
+                    originalRequest: parameters.originalRequest,
+                }
+            };
+            
+            const result = await handleMarkdownAction(action, context);
+            
+            return {
+                success: true,
+                operations: ((result as any).data)?.operations || [],
+                message: ((result as any).data)?.operationSummary || "Command completed successfully",
+                type: "success"
+            };
+        }
         
     } catch (error) {
         console.error(`❌ [AGENT] UI command failed:`, error);
@@ -290,6 +315,129 @@ async function updateMarkdownContext(
     }
 }
 
+/**
+ * Handle streaming markdown actions that send content chunks to view process
+ */
+async function handleStreamingMarkdownAction(
+    action: MarkdownAction,
+    actionContext: ActionContext<MarkdownActionContext>,
+    streamId: string
+): Promise<ActionResult> {
+    console.log(`🌊 [AGENT] Starting streaming action: ${action.actionName} (stream: ${streamId})`);
+    
+    const agent = await createMarkdownAgent("GPT_4o");
+    const storage = actionContext.sessionContext.sessionStorage;
+    
+    // Get current document content
+    const filePath = `${actionContext.sessionContext.agentContext.currentFileName}`;
+    let markdownContent = "";
+    
+    if (actionContext.sessionContext.agentContext.viewProcess) {
+        try {
+            markdownContent = await getDocumentContentFromView(
+                actionContext.sessionContext.agentContext.viewProcess
+            );
+            console.log("🔍 [STREAMING] Got content from view process:", markdownContent?.length, "chars");
+        } catch (error) {
+            console.warn("⚠️ [STREAMING] Failed to get content from view, falling back to storage:", error);
+            if (await storage?.exists(filePath)) {
+                markdownContent = await storage?.read(filePath, "utf8") || "";
+            }
+        }
+    } else {
+        if (await storage?.exists(filePath)) {
+            markdownContent = await storage?.read(filePath, "utf8") || "";
+        }
+    }
+    
+    try {
+        // Call agent with streaming callback
+        const originalRequest = 'originalRequest' in action.parameters ? action.parameters.originalRequest : "";
+        
+        const response = await agent.updateDocumentWithStreaming(
+            markdownContent,
+            originalRequest,
+            (chunk: string) => {
+                // Send chunk to view process for streaming to client
+                sendStreamingChunkToView(streamId, chunk, actionContext);
+            }
+        );
+        
+        if (response.success) {
+            const updateResult = response.data;
+            
+            // Send completion signal with final operations
+            if (updateResult) {
+                sendStreamingCompleteToView(streamId, updateResult.operations || [], actionContext);
+                
+                return createActionResult(
+                    updateResult.operationSummary || "Streaming content generated successfully"
+                );
+            } else {
+                sendStreamingCompleteToView(streamId, [], actionContext);
+                return createActionResult("Streaming content generated successfully");
+            }
+        } else {
+            // Send error completion
+            sendStreamingCompleteToView(streamId, [], actionContext);
+            
+            throw new Error("Streaming failed: Unknown error");
+        }
+        
+    } catch (error) {
+        console.error(`❌ [STREAMING] Streaming action failed:`, error);
+        
+        // Send error completion
+        sendStreamingCompleteToView(streamId, [], actionContext);
+        
+        throw error;
+    }
+}
+
+/**
+ * Send streaming content chunk to view process
+ */
+function sendStreamingChunkToView(
+    streamId: string, 
+    chunk: string, 
+    actionContext: ActionContext<MarkdownActionContext>
+): void {
+    const viewProcess = actionContext.sessionContext.agentContext.viewProcess;
+    if (viewProcess) {
+        viewProcess.send({
+            type: "streamingContent",
+            streamId: streamId,
+            chunk: chunk,
+            timestamp: Date.now()
+        });
+        console.log(`🌊 [AGENT] Sent chunk to view (${chunk.length} chars): ${chunk.substring(0, 50)}...`);
+    } else {
+        console.warn(`⚠️ [AGENT] No view process available for streaming chunk`);
+    }
+}
+
+/**
+ * Send streaming completion to view process
+ */
+function sendStreamingCompleteToView(
+    streamId: string, 
+    operations: any[], 
+    actionContext: ActionContext<MarkdownActionContext>
+): void {
+    const viewProcess = actionContext.sessionContext.agentContext.viewProcess;
+    if (viewProcess) {
+        viewProcess.send({
+            type: "streamingComplete",
+            streamId: streamId,
+            operations: operations,
+            timestamp: Date.now()
+        });
+        console.log(`🏁 [AGENT] Sent streaming completion with ${operations.length} operations`);
+    } else {
+        console.warn(`⚠️ [AGENT] No view process available for streaming completion`);
+    }
+}
+
 async function getFullMarkdownFilePath(fileName: string, storage: Storage) {
     const paths = await storage?.list("", { fullPath: true });
     const candidates = paths?.filter((item) => item.endsWith(fileName!));
@@ -437,9 +585,10 @@ async function handleMarkdownAction(
                         result = createActionResult("Updated document");
                     }
                 } else {
-                    console.error(response.message);
+                    const errorMessage = (response as any).message || "Unknown error occurred";
+                    console.error("Translation failed:", errorMessage);
                     result = createActionResult(
-                        "Failed to update document: " + response.message,
+                        "Failed to update document: " + errorMessage,
                     );
                 }
             }
@@ -537,9 +686,10 @@ async function handleMarkdownAction(
                         result = createActionResult("Updated document");
                     }
                 } else {
-                    console.error(response.message);
+                    const errorMessage = (response as any).message || "Unknown error occurred";
+                    console.error("Translation failed:", errorMessage);
                     result = createActionResult(
-                        "Failed to update document: " + response.message,
+                        "Failed to update document: " + errorMessage,
                     );
                 }
             }

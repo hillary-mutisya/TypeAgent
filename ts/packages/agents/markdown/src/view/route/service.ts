@@ -137,6 +137,13 @@ const AUTO_SAVE_DELAY = 2000; // 2 seconds after last change
 let commandCounter = 0;
 const pendingCommands = new Map<string, any>();
 
+// Streaming state for LLM responses
+const activeStreamingSessions = new Map<string, {
+    response: Response;
+    position: number;
+    command: string;
+}>();
+
 // Utility function to safely write to response stream
 function safeWriteToResponse(res: Response, data: string): boolean {
     try {
@@ -191,6 +198,104 @@ async function sendUICommandToAgent(
         
         console.log(`📤 [VIEW] Sent UI command to agent: ${command} (${requestId})`);
     });
+}
+
+/**
+ * Send UI command to agent with streaming support
+ */
+async function sendUICommandToAgentWithStreaming(
+    command: string, 
+    parameters: any,
+    streamId: string
+): Promise<any> {
+    return new Promise((resolve, reject) => {
+        const requestId = `ui_cmd_${++commandCounter}`;
+        const timeout = setTimeout(() => {
+            pendingCommands.delete(requestId);
+            activeStreamingSessions.delete(streamId);
+            reject(new Error("Agent command timeout"));
+        }, 60000); // 60 second timeout for streaming LLM operations
+        
+        // Store resolver for this request
+        pendingCommands.set(requestId, { resolve, reject, timeout, streamId });
+        
+        // Send command to agent process with streaming flag
+        process.send?.({
+            type: "uiCommand",
+            requestId: requestId,
+            command: command,
+            parameters: {
+                originalRequest: parameters.originalRequest,
+                context: parameters.context,
+                streamId: streamId,
+                enableStreaming: true
+            },
+            timestamp: Date.now()
+        });
+        
+        console.log(`📤 [VIEW] Sent streaming UI command to agent: ${command} (${requestId}, stream: ${streamId})`);
+    });
+}
+
+/**
+ * Determine if a command should use streaming
+ */
+function shouldCommandStream(originalRequest: string): boolean {
+    if (!originalRequest) return false;
+    
+    const request = originalRequest.toLowerCase().trim();
+    
+    // Stream these commands for better UX
+    const streamingCommands = [
+        '/continue',
+        '/augment'
+    ];
+    
+    // Don't stream these commands (need complete response)
+    const nonStreamingCommands = [
+        '/diagram',
+        '/test:diagram'
+    ];
+    
+    // Check non-streaming first (takes precedence)
+    if (nonStreamingCommands.some(cmd => request.startsWith(cmd))) {
+        return false;
+    }
+    
+    // Check streaming commands
+    return streamingCommands.some(cmd => request.startsWith(cmd));
+}
+
+/**
+ * Handle streaming content chunk from agent
+ */
+function handleStreamingChunkFromAgent(streamId: string, chunk: string, isComplete: boolean = false): void {
+    const session = activeStreamingSessions.get(streamId);
+    if (!session) {
+        console.warn(`⚠️ [STREAM] No active session found for stream ID: ${streamId}`);
+        return;
+    }
+    
+    const { response, position } = session;
+    
+    if (isComplete) {
+        console.log(`🏁 [STREAM] Streaming complete for session: ${streamId}`);
+        // Don't send completion here - let the main handler do it
+        return;
+    }
+    
+    if (chunk) {
+        console.log(`🌊 [STREAM] Forwarding chunk to client (${chunk.length} chars): ${chunk.substring(0, 50)}...`);
+        
+        // Forward chunk to client (similar to streamTestResponse)
+        safeWriteToResponse(response,
+            `data: ${JSON.stringify({
+                type: "content",
+                chunk: chunk,
+                position: position,
+            })}\n\n`
+        );
+    }
 }
 
 // Auto-save functions
@@ -776,43 +881,88 @@ async function streamRealAgentResponse(
     console.log("🔄 [VIEW] Routing LLM request to agent process:", action);
 
     try {
-        // Send typing indicator
-        if (!safeWriteToResponse(res,
-            `data: ${JSON.stringify({ type: "typing", message: "AI is processing..." })}\n\n`
-        )) {
-            return; // Response stream closed
-        }
-
-        // Route to agent process via IPC with timeout handling
-        const result = await sendUICommandToAgent(action, parameters);
+        // Determine if this command should stream
+        const shouldStream = shouldCommandStream(parameters.originalRequest);
         
-        if (result.success) {
-            // Send success notification
-            safeWriteToResponse(res,
-                `data: ${JSON.stringify({ 
-                    type: "notification", 
-                    message: result.message,
-                    notificationType: "success"
-                })}\n\n`
-            );
+        if (shouldStream) {
+            // Set up streaming session
+            const streamId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            activeStreamingSessions.set(streamId, {
+                response: res,
+                position: parameters.context?.position || 0,
+                command: parameters.originalRequest
+            });
             
-            // Operations are already applied to Yjs by agent
-            // Just notify frontend that changes are available
-            safeWriteToResponse(res,
-                `data: ${JSON.stringify({ 
-                    type: "operationsApplied",
-                    operationCount: result.operations?.length || 0
-                })}\n\n`
-            );
+            console.log(`🌊 [STREAM] Starting streaming session: ${streamId} for command: ${parameters.originalRequest}`);
+            
+            // Send typing indicator
+            if (!safeWriteToResponse(res,
+                `data: ${JSON.stringify({ type: "typing", message: "AI is generating content..." })}\n\n`
+            )) {
+                return; // Response stream closed
+            }
+            
+            // Route to agent process with streaming flag
+            const result = await sendUICommandToAgentWithStreaming(action, parameters, streamId);
+            
+            // Clean up streaming session
+            activeStreamingSessions.delete(streamId);
+            
+            if (result.success) {
+                // Send completion event
+                safeWriteToResponse(res,
+                    `data: ${JSON.stringify({ type: "complete" })}\n\n`
+                );
+            } else {
+                // Send error notification
+                safeWriteToResponse(res,
+                    `data: ${JSON.stringify({ 
+                        type: "notification", 
+                        message: result.message || "AI command failed",
+                        notificationType: "error"
+                    })}\n\n`
+                );
+            }
         } else {
-            // Send error notification for failed commands
-            safeWriteToResponse(res,
-                `data: ${JSON.stringify({ 
-                    type: "notification", 
-                    message: result.message || "AI command failed",
-                    notificationType: "error"
-                })}\n\n`
-            );
+            // Non-streaming command - use existing flow
+            // Send typing indicator
+            if (!safeWriteToResponse(res,
+                `data: ${JSON.stringify({ type: "typing", message: "AI is processing..." })}\n\n`
+            )) {
+                return; // Response stream closed
+            }
+
+            // Route to agent process via IPC with timeout handling
+            const result = await sendUICommandToAgent(action, parameters);
+            
+            if (result.success) {
+                // Send success notification
+                safeWriteToResponse(res,
+                    `data: ${JSON.stringify({ 
+                        type: "notification", 
+                        message: result.message,
+                        notificationType: "success"
+                    })}\n\n`
+                );
+                
+                // Operations are already applied to Yjs by agent
+                // Just notify frontend that changes are available
+                safeWriteToResponse(res,
+                    `data: ${JSON.stringify({ 
+                        type: "operationsApplied",
+                        operationCount: result.operations?.length || 0
+                    })}\n\n`
+                );
+            } else {
+                // Send error notification for failed commands
+                safeWriteToResponse(res,
+                    `data: ${JSON.stringify({ 
+                        type: "notification", 
+                        message: result.message || "AI command failed",
+                        notificationType: "error"
+                    })}\n\n`
+                );
+            }
         }
         
     } catch (error) {
@@ -1290,24 +1440,59 @@ Start typing to see the editor in action!
             );
         });
     } else if (message.type === "applyLLMOperations") {
-        // Enhanced operation application in view process
+        // TEMPORARY: Send operations to ALL clients via SSE for easier testing
         try {
-            applyLLMOperationsToCollaboration(message.operations);
+            console.log(`📤 [VIEW] Forwarding ${message.operations?.length || 0} operations to ALL clients via SSE`);
+            
+            if (clients.length === 0) {
+                console.warn(`⚠️ [SSE] No clients connected to receive operations`);
+                process.send?.({
+                    type: "operationsApplied",
+                    success: false,
+                    error: "No clients connected",
+                    method: "sse-forwarded"
+                });
+                return;
+            }
+            
+            // TEMPORARY: Send operations to ALL connected clients
+            const operationsEvent = {
+                type: "llmOperations",
+                operations: message.operations,
+                timestamp: message.timestamp || Date.now(),
+                source: "agent",
+                clientRole: "all" // Mark that all clients should apply
+            };
+            
+            let successCount = 0;
+            clients.forEach((client, index) => {
+                try {
+                    client.write(`data: ${JSON.stringify(operationsEvent)}\n\n`);
+                    successCount++;
+                    console.log(`📡 [SSE] Sent ${message.operations?.length || 0} operations to client ${index + 1}/${clients.length}`);
+                } catch (error) {
+                    console.error(`❌ [SSE] Failed to send operations to client ${index + 1}:`, error);
+                }
+            });
             
             // Send success confirmation back to agent
             process.send?.({
                 type: "operationsApplied",
-                success: true,
-                operationCount: message.operations.length
+                success: successCount > 0,
+                operationCount: message.operations?.length || 0,
+                method: "sse-forwarded",
+                clientsNotified: successCount
             });
             
-            console.log("✅ [VIEW] Applied LLM operations successfully");
+            console.log(`✅ [VIEW] Operations forwarded to ${successCount}/${clients.length} clients successfully`);
+            
         } catch (error) {
-            console.error("❌ [VIEW] Failed to apply LLM operations:", error);
+            console.error("❌ [VIEW] Failed to forward operations via SSE:", error);
             process.send?.({
-                type: "operationsApplied", 
+                type: "operationsApplied",
                 success: false,
-                error: (error as Error).message
+                error: error instanceof Error ? error.message : "Unknown error",
+                method: "sse-forwarded"
             });
         }
     } else if (message.type === "getDocumentContent") {
@@ -1360,6 +1545,25 @@ Start typing to see the editor in action!
             pendingCommands.delete(message.requestId);
             pending.resolve(message.result);
             console.log(`📨 [VIEW] Received result for ${message.requestId}`);
+        }
+    } else if (message.type === "streamingContent") {
+        // Handle streaming content chunk from agent
+        console.log(`🌊 [VIEW] Received streaming content: streamId=${message.streamId}, chunk length=${message.chunk?.length || 0}`);
+        handleStreamingChunkFromAgent(message.streamId, message.chunk, message.isComplete);
+    } else if (message.type === "streamingComplete") {
+        // Handle streaming completion from agent
+        console.log(`🏁 [VIEW] Received streaming completion: streamId=${message.streamId}`);
+        
+        const session = activeStreamingSessions.get(message.streamId);
+        if (session) {
+            // Apply final operations to Y.js if provided
+            if (message.operations && message.operations.length > 0) {
+                console.log(`📝 [VIEW] Applying ${message.operations.length} final operations from streaming`);
+                applyLLMOperationsToCollaboration(message.operations);
+            }
+            
+            // Mark session as complete but don't remove yet - let the main handler do cleanup
+            handleStreamingChunkFromAgent(message.streamId, "", true);
         }
     } else if (message.type == "initCollaboration") {
         // Handle collaboration initialization from action handler

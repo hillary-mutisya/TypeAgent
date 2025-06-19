@@ -35,14 +35,18 @@ export interface AgentCommandParams {
 }
 
 export interface StreamEvent {
-    type: "start" | "typing" | "content" | "operation" | "complete" | "error" | "notification" | "operationsApplied";
+    type: "start" | "typing" | "content" | "operation" | "complete" | "error" | "notification" | "operationsApplied" | "llmOperations" | "operationsBeingApplied";
     message?: string;
     chunk?: string;
     position?: number;
     operation?: DocumentOperation;
+    operations?: DocumentOperation[];
     error?: string;
     notificationType?: string;
     operationCount?: number;
+    source?: string;
+    clientRole?: string;
+    timestamp?: number;
 }
 
 export interface ContentItem {

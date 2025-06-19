@@ -1,5 +1,5 @@
 import type { Editor } from "@milkdown/core";
-import { editorViewCtx } from "@milkdown/core";
+import { editorViewCtx, parserCtx } from "@milkdown/core";
 import type { SaveStatus } from "../types";
 import { AI_CONFIG, DEFAULT_MARKDOWN_CONTENT } from "../config";
 
@@ -126,6 +126,77 @@ export class DocumentManager {
                     this.notificationManager.showNotification(
                         `❌ Auto-save failed: ${data.error}`,
                         "error"
+                    );
+                }
+                break;
+
+            case 'llmOperations':
+                // TEMPORARY: Handle LLM operations sent to ALL clients via SSE
+                console.log(`🎯 [SSE] Received ${data.operations?.length || 0} LLM operations from ${data.source} (role: ${data.clientRole || 'unknown'})`);
+                
+                // LOG DETAILED OPERATION OBJECTS
+                if (data.operations && Array.isArray(data.operations)) {
+                    console.log(`📋 [SSE-DEBUG] Detailed operation objects:`);
+                    data.operations.forEach((operation: any, index: number) => {
+                        console.log(`📋 [SSE-DEBUG] Operation ${index + 1}:`, {
+                            type: operation.type,
+                            position: operation.position,
+                            from: operation.from,
+                            to: operation.to,
+                            content: operation.content,
+                            description: operation.description,
+                            fullOperation: operation
+                        });
+                        
+                        // Log content structure in detail
+                        if (operation.content) {
+                            console.log(`📋 [SSE-DEBUG] Operation ${index + 1} content structure:`, JSON.stringify(operation.content, null, 2));
+                        }
+                    });
+                }
+                
+                if ((data.clientRole === 'primary' || data.clientRole === 'all') && data.operations && Array.isArray(data.operations) && this.editorManager) {
+                    try {
+                        // Apply operations through editor API for proper markdown parsing
+                        const editor = this.editorManager.getEditor();
+                        if (editor) {
+                            console.log(`📝 [SSE-DEBUG] About to apply ${data.operations.length} operations through editor API`);
+                            await this.applyOperationsThroughEditor(editor, data.operations);
+                            console.log(`✅ [SSE] Applied ${data.operations.length} operations via editor API (role: ${data.clientRole})`);
+                            
+                            if (this.notificationManager) {
+                                this.notificationManager.showNotification(
+                                    `✨ AI updated document with ${data.operations.length} changes`,
+                                    "success"
+                                );
+                            }
+                        } else {
+                            console.warn(`⚠️ [SSE] No editor available to apply operations`);
+                        }
+                    } catch (error) {
+                        console.error(`❌ [SSE] Failed to apply LLM operations:`, error);
+                        if (this.notificationManager) {
+                            this.notificationManager.showNotification(
+                                `❌ Failed to apply AI changes`,
+                                "error"
+                            );
+                        }
+                    }
+                } else if (data.clientRole && data.clientRole !== 'primary' && data.clientRole !== 'all') {
+                    console.log(`ℹ️ [SSE] Ignoring operations - client role "${data.clientRole}" not authorized`);
+                } else {
+                    console.warn(`⚠️ [SSE] Invalid LLM operations received:`, data);
+                }
+                break;
+
+            case 'operationsBeingApplied':
+                // NEW: Handle notification that operations are being applied by primary client
+                console.log(`📢 [SSE] Operations being applied by primary client - ${data.operationCount} changes incoming`);
+                
+                if (this.notificationManager) {
+                    this.notificationManager.showNotification(
+                        `🔄 AI is updating document (${data.operationCount} changes)...`,
+                        "info"
                     );
                 }
                 break;
@@ -453,5 +524,183 @@ export class DocumentManager {
             console.warn("Could not check for unsaved changes:", error);
             return false; // Assume no changes if we can't check
         }
+    }
+
+    /**
+     * Apply operations through the editor API for proper markdown parsing and DOM updates
+     */
+    private async applyOperationsThroughEditor(editor: any, operations: any[]): Promise<void> {
+        console.log(`📝 [EDITOR-API] Applying ${operations.length} operations through editor`);
+        
+        // LOG EACH OPERATION BEFORE PROCESSING
+        operations.forEach((operation: any, index: number) => {
+            console.log(`📝 [EDITOR-API-DEBUG] Processing operation ${index + 1}/${operations.length}:`, {
+                type: operation.type,
+                position: operation.position,
+                from: operation.from,
+                to: operation.to,
+                content: operation.content,
+                description: operation.description
+            });
+        });
+        
+        await editor.action((ctx: any) => {
+            const view = ctx.get(editorViewCtx);
+            const parser = ctx.get(parserCtx);
+            let tr = view.state.tr;
+
+            console.log(`📝 [EDITOR-API-DEBUG] Current document size: ${view.state.doc.content.size} chars`);
+
+            for (const operation of operations) {
+                console.log(`📝 [EDITOR-API] Applying operation: ${operation.type} at position ${operation.position || 0}`);
+                
+                try {
+                    switch (operation.type) {
+                        case "insert": {
+                            // Convert operation content to markdown text
+                            const markdownText = this.operationContentToMarkdown(operation.content);
+                            console.log(`📝 [EDITOR-API-DEBUG] Converted content to markdown: "${markdownText}"`);
+                            
+                            const position = Math.min(operation.position || 0, view.state.doc.content.size);
+                            console.log(`📝 [EDITOR-API-DEBUG] Calculated position: ${position} (requested: ${operation.position || 0}, max: ${view.state.doc.content.size})`);
+                            
+                            // Parse markdown to ProseMirror nodes
+                            const doc = parser(markdownText);
+                            if (doc && doc.content) {
+                                console.log(`📝 [EDITOR-API-DEBUG] Parsed markdown to ProseMirror nodes:`, doc.content.toString());
+                                tr = tr.insert(position, doc.content);
+                                console.log(`✅ [EDITOR-API] Inserted "${markdownText}" at position ${position}`);
+                            } else {
+                                console.warn(`⚠️ [EDITOR-API] Failed to parse markdown: "${markdownText}"`);
+                            }
+                            break;
+                        }
+                        case "replace": {
+                            const markdownText = this.operationContentToMarkdown(operation.content);
+                            console.log(`📝 [EDITOR-API-DEBUG] Replace operation - markdown: "${markdownText}"`);
+                            
+                            const fromPos = Math.min(operation.from || 0, view.state.doc.content.size);
+                            const toPos = Math.min(operation.to || fromPos + 1, view.state.doc.content.size);
+                            console.log(`📝 [EDITOR-API-DEBUG] Replace positions: from ${fromPos} to ${toPos}`);
+                            
+                            // Parse markdown to ProseMirror nodes
+                            const doc = parser(markdownText);
+                            if (doc && doc.content) {
+                                tr = tr.replaceWith(fromPos, toPos, doc.content);
+                                console.log(`✅ [EDITOR-API] Replaced content from ${fromPos} to ${toPos} with "${markdownText}"`);
+                            }
+                            break;
+                        }
+                        case "delete": {
+                            const fromPos = Math.min(operation.from || 0, view.state.doc.content.size);
+                            const toPos = Math.min(operation.to || fromPos + 1, view.state.doc.content.size);
+                            console.log(`📝 [EDITOR-API-DEBUG] Delete operation: from ${fromPos} to ${toPos}`);
+                            
+                            tr = tr.delete(fromPos, toPos);
+                            console.log(`✅ [EDITOR-API] Deleted content from ${fromPos} to ${toPos}`);
+                            break;
+                        }
+                        default:
+                            console.warn(`❌ [EDITOR-API] Unknown operation type: ${operation.type}`);
+                            break;
+                    }
+                } catch (operationError) {
+                    console.error(`❌ [EDITOR-API] Failed to apply operation ${operation.type}:`, operationError);
+                }
+            }
+
+            // Dispatch all changes in a single transaction
+            if (tr.docChanged) {
+                console.log(`📝 [EDITOR-API-DEBUG] Dispatching transaction with ${operations.length} operations`);
+                view.dispatch(tr);
+                console.log(`✅ [EDITOR-API] Applied ${operations.length} operations successfully`);
+                console.log(`📝 [EDITOR-API-DEBUG] New document size: ${view.state.doc.content.size} chars`);
+            } else {
+                console.log(`ℹ️ [EDITOR-API] No document changes to apply`);
+            }
+        });
+    }
+
+    /**
+     * Convert operation content array to markdown text
+     */
+    private operationContentToMarkdown(content: any[]): string {
+        console.log(`🔄 [CONTENT-CONVERT] Converting content to markdown:`, content);
+        
+        if (!Array.isArray(content)) {
+            const result = String(content || "");
+            console.log(`🔄 [CONTENT-CONVERT] Non-array content converted to: "${result}"`);
+            return result;
+        }
+
+        const result = content.map((item: any, index: number) => {
+            console.log(`🔄 [CONTENT-CONVERT] Processing item ${index + 1}:`, item);
+            
+            if (typeof item === "string") {
+                console.log(`🔄 [CONTENT-CONVERT] Item ${index + 1} is string: "${item}"`);
+                return item;
+            }
+            
+            if (item && typeof item === "object") {
+                // Handle different content types
+                switch (item.type) {
+                    case "heading":
+                        const level = item.level || 1;
+                        const headingText = this.extractTextFromContent(item.content);
+                        const result = "#".repeat(level) + " " + headingText;
+                        console.log(`🔄 [CONTENT-CONVERT] Heading (level ${level}): "${result}"`);
+                        return result;
+                        
+                    case "paragraph":
+                        const paragraphText = this.extractTextFromContent(item.content || item.text);
+                        
+                        console.log(`🔄 [CONTENT-CONVERT] Paragraph: "${paragraphText}"`);
+                        return paragraphText;
+                        
+                    case "text":
+                        const textResult = item.text || "";
+                        console.log(`🔄 [CONTENT-CONVERT] Text: "${textResult}"`);
+                        return textResult;
+                        
+                    default:
+                        // Fallback: extract any text content
+                        const fallbackResult = this.extractTextFromContent(item.content) || item.text || "";
+                        console.log(`🔄 [CONTENT-CONVERT] Fallback for type "${item.type}": "${fallbackResult}"`);
+                        return fallbackResult;
+                }
+            }
+            
+            const stringResult = String(item || "");
+            console.log(`🔄 [CONTENT-CONVERT] Item ${index + 1} stringified: "${stringResult}"`);
+            return stringResult;
+        }).join("\n");
+
+        console.log(`🔄 [CONTENT-CONVERT] Final markdown result: "${result}"`);
+        return result;
+    }
+
+    /**
+     * Extract plain text from nested content structures
+     */
+    private extractTextFromContent(content: any): string {
+        if (!content) return "";
+        
+        if (typeof content === "string") {
+            return content;
+        }
+        
+        if (Array.isArray(content)) {
+            return content.map(item => this.extractTextFromContent(item)).join("");
+        }
+        
+        if (content.text) {
+            return content.text;
+        }
+        
+        if (content.content) {
+            return this.extractTextFromContent(content.content);
+        }
+        
+        return "";
     }
 }

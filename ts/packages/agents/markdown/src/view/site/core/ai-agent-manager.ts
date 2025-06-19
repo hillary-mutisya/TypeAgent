@@ -182,6 +182,51 @@ export class AIAgentManager {
                 }
                 break;
 
+            case "llmOperations":
+                // TEMPORARY: Handle operations sent to ALL clients via SSE
+                console.log(`🎯 [LLM-OPS] Received ${(data as any).operations?.length || 0} operations via SSE (role: ${(data as any).clientRole || 'unknown'})`);
+                
+                // LOG DETAILED OPERATION OBJECTS
+                if ((data as any).operations && Array.isArray((data as any).operations)) {
+                    console.log(`📋 [LLM-OPS-DEBUG] Detailed operation objects:`);
+                    (data as any).operations.forEach((operation: any, index: number) => {
+                        console.log(`📋 [LLM-OPS-DEBUG] Operation ${index + 1}:`, {
+                            type: operation.type,
+                            position: operation.position,
+                            from: operation.from,
+                            to: operation.to,
+                            content: operation.content,
+                            description: operation.description,
+                            fullOperation: operation
+                        });
+                        
+                        // Log content structure in detail
+                        if (operation.content) {
+                            console.log(`📋 [LLM-OPS-DEBUG] Operation ${index + 1} content structure:`, JSON.stringify(operation.content, null, 2));
+                        }
+                    });
+                }
+                
+                if (((data as any).clientRole === 'primary' || (data as any).clientRole === 'all') && (data as any).operations && Array.isArray((data as any).operations)) {
+                    // Apply operations through editor API (ensures proper markdown parsing)
+                    console.log(`📝 [LLM-OPS-DEBUG] About to apply ${(data as any).operations.length} operations through applyAgentOperations`);
+                    this.applyAgentOperations((data as any).operations);
+                    operationsReceived = true;
+                    
+                    console.log(`✅ [LLM-OPS] Applied ${(data as any).operations.length} operations via editor API (role: ${(data as any).clientRole})`);
+                } else if ((data as any).clientRole && (data as any).clientRole !== 'primary' && (data as any).clientRole !== 'all') {
+                    console.log(`ℹ️ [LLM-OPS] Ignoring operations - client role "${(data as any).clientRole}" not authorized`);
+                } else {
+                    console.warn(`⚠️ [LLM-OPS] No valid operations in SSE event:`, data);
+                }
+                break;
+
+            case "operationsBeingApplied":
+                // NEW: Handle notification that operations are being applied by primary client
+                console.log(`📢 [LLM-OPS] Operations being applied by primary client - ${(data as any).operationCount} changes incoming`);
+                this.updateAIPresenceMessage(`AI is applying ${(data as any).operationCount} changes...`);
+                break;
+
             case "complete":
                 this.showAIPresence(false);
                 this.isTestMode = false; // Reset test mode flag

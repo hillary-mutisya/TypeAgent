@@ -178,7 +178,7 @@ export class MarkdownAgent<T extends object> {
             };
             
         } catch (error) {
-            console.error("❌ [TRANSLATOR] Streaming failed:", error);
+            console.error("[TRANSLATOR] Streaming failed:", error);
             
             // Fallback: generate simple content and stream it
             const fallbackContent = `Generated content for: ${intent}\n\nThis is AI-generated content based on your request.`;

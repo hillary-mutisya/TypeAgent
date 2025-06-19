@@ -94,7 +94,7 @@ export class CollaborationManager {
                     console.warn(`[COLLAB] Unknown operation type: ${operation.type}`);
             }
         } catch (error) {
-            console.error(`❌ [COLLAB] Failed to apply operation ${operation.type}:`, error);
+            console.error(`[COLLAB] Failed to apply operation ${operation.type}:`, error);
         }
     }
 

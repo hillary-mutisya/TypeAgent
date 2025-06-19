@@ -77,11 +77,11 @@ export class ToolbarManager {
                 if (editor) {
                     content = await this.getEditorMarkdownContent(editor);
                 } else {
-                    console.warn("⚠️ [EXPORT] No editor available, falling back to server");
+                    console.warn( "[EXPORT] No editor available, falling back to server");
                     content = await this.documentManager.getDocumentContent();
                 }
             } else {
-                console.warn("⚠️ [EXPORT] No editor manager available, falling back to server");
+                console.warn( "[EXPORT] No editor manager available, falling back to server");
                 content = await this.documentManager.getDocumentContent();
             }
             
@@ -122,7 +122,7 @@ export class ToolbarManager {
                     resolve(content);
                 });
             } catch (error) {
-                console.error("❌ [EXPORT-API] Failed to get editor content:", error);
+                console.error( "[EXPORT-API] Failed to get editor content:", error);
                 resolve("");
             }
         });

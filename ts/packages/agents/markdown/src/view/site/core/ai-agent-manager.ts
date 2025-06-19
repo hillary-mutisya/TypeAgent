@@ -42,7 +42,7 @@ export class AIAgentManager {
             // Always use streaming for better UX
             await this.executeStreamingAgentCommand(command, params);
         } catch (error) {
-            console.error(`❌ Agent command failed:`, error);
+            console.error(`Agent command failed:`, error);
             this.hideAICursor();
             this.showNotification(
                 `Failed to execute ${command} command. Please try again.`,
@@ -90,17 +90,17 @@ export class AIAgentManager {
 
             // Only show success message if we actually received operations and no errors occurred
             if (operationsReceived && !errorOccurred) {
-                console.log("✅ Streaming command completed successfully");
+                console.log( "Streaming command completed successfully");
                 this.showNotification(
-                    `✅ ${command} completed successfully!`,
+                    `${command} completed successfully!`,
                     "success",
                 );
             } else if (errorOccurred) {
                 // Error message already shown in stream handler, just log
-                console.log("❌ Streaming command failed");
+                console.error("Streaming command failed");
             } else {
                 // No operations but no explicit error - agent might be unavailable
-                console.log("⚠️ Streaming command completed but no content generated");
+                console.log("Streaming command completed but no content generated");
             }
         } finally {
             // Hide AI presence cursor
@@ -153,7 +153,7 @@ export class AIAgentManager {
 
         switch (data.type) {
             case "start":
-                console.log("🎬 Stream started:", data.message);
+                console.log("Stream started:", data.message);
                 break;
 
             case "typing":
@@ -179,7 +179,7 @@ export class AIAgentManager {
             case "operationsApplied":
                 // Operations already applied by agent, just track completion
                 const operationCount = (data as any).operationCount || 0;
-                console.log(`✅ Agent applied ${operationCount} operations`);
+                console.log(`Agent applied ${operationCount} operations`);
                 
                 // Only count as operations received if we actually got some operations
                 if (operationCount > 0) {
@@ -189,13 +189,13 @@ export class AIAgentManager {
 
             case "llmOperations":
                 // PRODUCTION: Handle operations sent to PRIMARY client only via SSE
-                console.log(`🎯 [LLM-OPS] Received ${(data as any).operations?.length || 0} operations via SSE (role: ${(data as any).clientRole || 'unknown'})`);
+                console.log(`[LLM-OPS] Received ${(data as any).operations?.length || 0} operations via SSE (role: ${(data as any).clientRole || 'unknown'})`);
                 
                 // LOG DETAILED OPERATION OBJECTS
                 if ((data as any).operations && Array.isArray((data as any).operations)) {
-                    console.log(`📋 [LLM-OPS-DEBUG] Detailed operation objects:`);
+                    console.log(`[LLM-OPS-DEBUG] Detailed operation objects:`);
                     (data as any).operations.forEach((operation: any, index: number) => {
-                        console.log(`📋 [LLM-OPS-DEBUG] Operation ${index + 1}:`, {
+                        console.log(`[LLM-OPS-DEBUG] Operation ${index + 1}:`, {
                             type: operation.type,
                             position: operation.position,
                             from: operation.from,
@@ -207,28 +207,28 @@ export class AIAgentManager {
                         
                         // Log content structure in detail
                         if (operation.content) {
-                            console.log(`📋 [LLM-OPS-DEBUG] Operation ${index + 1} content structure:`, JSON.stringify(operation.content, null, 2));
+                            console.log(`[LLM-OPS-DEBUG] Operation ${index + 1} content structure:`, JSON.stringify(operation.content, null, 2));
                         }
                     });
                 }
                 
                 if ((data as any).clientRole === 'primary' && (data as any).operations && Array.isArray((data as any).operations)) {
                     // Apply operations through editor API (ensures proper markdown parsing)
-                    console.log(`📝 [LLM-OPS-DEBUG] About to apply ${(data as any).operations.length} operations through applyAgentOperations`);
+                    console.log(`[LLM-OPS-DEBUG] About to apply ${(data as any).operations.length} operations through applyAgentOperations`);
                     this.applyAgentOperations((data as any).operations);
                     operationsReceived = true;
                     
-                    console.log(`✅ [LLM-OPS] PRIMARY CLIENT applied ${(data as any).operations.length} operations via editor API`);
+                    console.log(`[LLM-OPS] PRIMARY CLIENT applied ${(data as any).operations.length} operations via editor API`);
                 } else if ((data as any).clientRole !== 'primary') {
-                    console.log(`ℹ️ [LLM-OPS] Ignoring operations - not the primary client (role: ${(data as any).clientRole || 'unknown'})`);
+                    console.log(`[LLM-OPS] Ignoring operations - not the primary client (role: ${(data as any).clientRole || 'unknown'})`);
                 } else {
-                    console.warn(`⚠️ [LLM-OPS] No valid operations in SSE event:`, data);
+                    console.warn(`[LLM-OPS] No valid operations in SSE event:`, data);
                 }
                 break;
 
             case "operationsBeingApplied":
                 // Handle notification that operations are being applied by primary client
-                console.log(`📢 [LLM-OPS] Operations being applied by primary client - ${(data as any).operationCount} changes incoming`);
+                console.log(`[LLM-OPS] Operations being applied by primary client - ${(data as any).operationCount} changes incoming`);
                 this.updateAIPresenceMessage(`AI is applying ${(data as any).operationCount} changes...`);
                 break;
 
@@ -236,7 +236,7 @@ export class AIAgentManager {
                 this.showAIPresence(false);
                 this.hideAICursor(); // Ensure AI cursor is hidden when complete
                 this.isTestMode = false; // Reset test mode flag
-                console.log("✅ Streaming command completed");
+                console.log( "Streaming command completed");
                 break;
 
             case "error":
@@ -253,7 +253,7 @@ export class AIAgentManager {
                 // Skip content events for test mode commands to prevent duplicate content
                 // Test mode sends both content chunks AND operations, but we only want operations
                 if (this.isTestMode) {
-                    console.log("🚫 Skipping content chunk in test mode to prevent duplicate:", 
+                    console.log("Skipping content chunk in test mode to prevent duplicate:", 
                         data.chunk?.substring(0, 50) + "...");
                     break;
                 }
@@ -323,7 +323,7 @@ export class AIAgentManager {
             return;
         }
 
-        console.log("📝 Applying operations from agent:", operations);
+        console.log("Applying operations from agent:", operations);
 
         this.editor.action((ctx) => {
             const view = ctx.get(editorViewCtx);
@@ -498,30 +498,10 @@ export class AIAgentManager {
                 this.aiPresenceIndicator = cursorElement;
             });
         } catch (error) {
-            console.error('❌ [AI-CURSOR] Failed to show AI cursor:', error);
+            console.error(' [AI-CURSOR] Failed to show AI cursor:', error);
         }
     }
 
-    /**
-     * Update AI cursor position as content is being streamed
-     */
-    /* Currently unused - commenting out to avoid TS errors
-    private updateAICursor(newPosition: number): void {
-        if (!this.editor || !this.aiPresenceIndicator) return;
-        // this.aiCursorPosition = newPosition;
-        console.log(`🤖 [AI-CURSOR] Updating AI cursor to position ${newPosition}`);
-
-        try {
-            this.editor.action((ctx: any) => {
-                const view = ctx.get(editorViewCtx);
-                const validPosition = Math.min(newPosition, view.state.doc.content.size);
-                this.positionAICursorElement(this.aiPresenceIndicator!, view, validPosition);
-            });
-        } catch (error) {
-            console.error('❌ [AI-CURSOR] Failed to update AI cursor:', error);
-        }
-    }
-    */
 
     /**
      * Position the AI cursor element in the editor
@@ -539,7 +519,7 @@ export class AIAgentManager {
                 view.dom.appendChild(element);
             }
         } catch (error) {
-            console.warn('⚠️ [AI-CURSOR] Could not position cursor element:', error);
+            console.warn(' [AI-CURSOR] Could not position cursor element:', error);
         }
     }
 

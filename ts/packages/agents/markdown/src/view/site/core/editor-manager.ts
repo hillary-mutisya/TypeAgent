@@ -35,7 +35,7 @@ export class EditorManager {
     }
 
     public async initialize(container: HTMLElement): Promise<Editor> {
-        console.log("📝 Initializing Editor Manager...");
+        console.log("Initializing Editor Manager...");
 
         // Load initial content
         const initialContent = await this.documentManager.loadInitialContent();
@@ -47,7 +47,7 @@ export class EditorManager {
             initialContent,
         );
 
-        console.log("✅ Editor Manager initialized successfully");
+        console.log("Editor Manager initialized successfully");
         return editor;
     }
 
@@ -124,7 +124,7 @@ export class EditorManager {
                 .bindDoc(this.state.yjsDoc!)
                 .setAwareness(this.state.websocketProvider!.awareness)
                 .connect();
-            console.log("🔄 Collaboration connected (no auto-save conflicts)");
+            console.log("Collaboration connected (no auto-save conflicts)");
         });
     }
 
@@ -180,7 +180,7 @@ export class EditorManager {
     }
 
     public async switchToDocument(documentId: string, newContent?: string): Promise<void> {
-        console.log(`📝 [EDITOR] Switching to document: "${documentId}"`);
+        console.log(`[EDITOR] Switching to document: "${documentId}"`);
         
         if (!this.state.editor) {
             throw new Error("Editor not initialized");
@@ -205,7 +205,7 @@ export class EditorManager {
             await this.setContent(newContent);
         }
         
-        console.log(`✅ [EDITOR] Switched to document: "${documentId}"`);
+        console.log(`[EDITOR] Switched to document: "${documentId}"`);
     }
 
     public destroy(): void {

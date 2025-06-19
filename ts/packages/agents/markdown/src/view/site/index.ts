@@ -29,7 +29,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     try {
         await initializeApplication();
     } catch (error) {
-        console.error("❌ Failed to initialize application:", error);
+        console.error("Failed to initialize application:", error);
         showError("Failed to initialize editor. Please refresh the page.");
     }
 });
@@ -78,19 +78,19 @@ async function initializeApplication(): Promise<void> {
     // Export for global access (for debugging and compatibility)
     setupGlobalAccess(editor);
 
-    console.log("✅ Application initialized successfully");
+    console.log("[APP] Application initialized successfully");
 }
 
 async function switchToDocument(documentName: string): Promise<void> {
     try {
         if (documentManager) {
             await documentManager.switchToDocument(documentName);
-            console.log(`✅ [APP] Successfully switched to document: ${documentName}`);
+            console.log(`[APP] Successfully switched to document: ${documentName}`);
         } else {
             throw new Error("DocumentManager not initialized");
         }
     } catch (error) {
-        console.error("❌ [APP] Failed to switch document:", error);
+        console.error("[APP] Failed to switch document:", error);
         showError(`Failed to load document: ${documentName}`);
     }
 }

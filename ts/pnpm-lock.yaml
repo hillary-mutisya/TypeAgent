@@ -1414,6 +1414,9 @@ importers:
       common-utils:
         specifier: workspace:*
         version: link:../../commonUtils
+      debug:
+        specifier: ^4.3.4
+        version: 4.4.1(supports-color@8.1.1)
       express:
         specifier: ^4.21.2
         version: 4.21.2

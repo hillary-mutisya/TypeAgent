@@ -149,10 +149,10 @@ function safeWriteToResponse(res: Response, data: string): boolean {
             res.write(data);
             return true;
         }
-        console.warn("⚠️ Attempted to write to closed/ended response stream");
+        console.warn("Attempted to write to closed/ended response stream");
         return false;
     } catch (error) {
-        console.error("❌ Error writing to response stream:", error);
+        console.error(  " Error writing to response stream:", error);
         return false;
     }
 }
@@ -164,7 +164,7 @@ function safeEndResponse(res: Response): void {
             res.end();
         }
     } catch (error) {
-        console.error("❌ Error ending response stream:", error);
+        console.error( "Error ending response stream:", error);
     }
 }
 
@@ -266,20 +266,20 @@ function shouldCommandStream(originalRequest: string): boolean {
 function handleStreamingChunkFromAgent(streamId: string, chunk: string, isComplete: boolean = false): void {
     const session = activeStreamingSessions.get(streamId);
     if (!session) {
-        console.warn(`⚠️ [STREAM] No active session found for stream ID: ${streamId}`);
+        console.warn(`[STREAM] No active session found for stream ID: ${streamId}`);
         return;
     }
     
     const { response, position } = session;
     
     if (isComplete) {
-        console.log(`🏁 [STREAM] Streaming complete for session: ${streamId}`);
+        debug(`[STREAM] Streaming complete for session: ${streamId}`);
         // Don't send completion here - let the main handler do it
         return;
     }
     
     if (chunk) {
-        console.log(`🌊 [STREAM] Forwarding chunk to client`);
+        debug(`[STREAM] Forwarding chunk to client`);
         
         // Forward chunk to client (similar to streamTestResponse)
         safeWriteToResponse(response,
@@ -348,7 +348,7 @@ Start typing to see the editor in action!
 // Get document as markdown text
 app.get("/document", (req: Request, res: Response) => {
     if (!filePath) {
-        console.log("[NO-FILE-MODE]  No file provided when resolving the /document call")
+        debug("[NO-FILE-MODE]  No file provided when resolving the /document call")
         // Memory-only mode: get content from authoritative Y.js document
         const documentId = "default"; // Use consistent document ID
         
@@ -362,7 +362,7 @@ app.get("/document", (req: Request, res: Response) => {
     }
 
     try {
-        console.log( "[FILE_MODE] File provided when resolving the /document call "+ filePath )
+        debug( "[FILE_MODE] File provided when resolving the /document call "+ filePath )
 
         // File mode: get content from authoritative document (which should be synced with file)
         const documentId = path.basename(filePath, ".md");
@@ -448,7 +448,7 @@ app.post("/autosave", express.json(), (req: Request, res: Response) => {
             return;
         }
 
-        console.log(`💾 [AUTO-SAVE] Received auto-save request for document: ${documentId}`);
+        debug(`[AUTO-SAVE] Received auto-save request for document: ${documentId}`);
         debug(`Auto-save request received for document: ${documentId}, path: ${requestFilePath}, content: ${content.length} chars`);
 
         // Use the provided file path or fall back to current filePath
@@ -478,7 +478,7 @@ app.post("/autosave", express.json(), (req: Request, res: Response) => {
                         timestamp: Date.now()
                     })}\n\n`);
                 } catch (error) {
-                    console.error("❌ [SSE] Failed to send auto-save event to client:", error);
+                    console.error( "[SSE] Failed to send auto-save event to client:", error);
                 }
             });
             
@@ -510,7 +510,7 @@ app.post("/autosave", express.json(), (req: Request, res: Response) => {
                     timestamp: Date.now()
                 })}\n\n`);
             } catch (error) {
-                console.error("❌ [SSE] Failed to send auto-save event to client:", error);
+                console.error( "[SSE] Failed to send auto-save event to client:", error);
             }
         });
 
@@ -522,7 +522,7 @@ app.post("/autosave", express.json(), (req: Request, res: Response) => {
         });
         
     } catch (error) {
-        console.error("❌ [AUTO-SAVE] Auto-save failed:", error);
+        console.error( "[AUTO-SAVE] Auto-save failed:", error);
         
         // Notify clients of auto-save error
         clients.forEach((client) => {
@@ -533,7 +533,7 @@ app.post("/autosave", express.json(), (req: Request, res: Response) => {
                     timestamp: Date.now()
                 })}\n\n`);
             } catch (sseError) {
-                console.error("❌ [SSE] Failed to send auto-save error to client:", sseError);
+                console.error( "[SSE] Failed to send auto-save error to client:", sseError);
             }
         });
         
@@ -549,7 +549,7 @@ app.get("/collaboration/info", (req: Request, res: Response) => {
     const stats = collaborationManager.getStats();
     const currentDocument = filePath ? path.basename(filePath, ".md") : "default";
     
-    console.log(`📊 [COLLAB-INFO] Returning collaboration info - currentDocument: "${currentDocument}", filePath: ${filePath}`);
+    debug(`[COLLAB-INFO] Returning collaboration info - currentDocument: "${currentDocument}", filePath: ${filePath}`);
     
     res.json({
         ...stats,
@@ -664,11 +664,11 @@ app.post("/agent/stream", express.json(), (req: Request, res: Response) => {
 
     // Add error handler for response stream
     res.on('error', (error) => {
-        console.error('❌ [STREAM] Response stream error:', error);
+        console.error(' [STREAM] Response stream error:', error);
     });
 
     res.on('close', () => {
-        console.log('🔌 [STREAM] Client disconnected');
+        debug('[STREAM] Client disconnected');
     });
 
     try {
@@ -676,7 +676,7 @@ app.post("/agent/stream", express.json(), (req: Request, res: Response) => {
 
         // Start streaming response with proper error handling
         streamAgentResponse(action, parameters, res).catch((error) => {
-            console.error('❌ [STREAM] Stream error caught:', error);
+            console.error('[STREAM] Stream error caught:', error);
             
             // Only try to write if stream is still open
             if (safeWriteToResponse(res,
@@ -694,7 +694,7 @@ app.post("/agent/stream", express.json(), (req: Request, res: Response) => {
             safeEndResponse(res);
         });
     } catch (error) {
-        console.error('❌ [STREAM] Immediate error in /agent/stream:', error);
+        console.error('[STREAM] Immediate error in /agent/stream:', error);
         
         safeWriteToResponse(res,
             `data: ${JSON.stringify({ 
@@ -736,7 +736,7 @@ async function streamAgentResponse(
         safeWriteToResponse(res, `data: ${JSON.stringify({ type: "complete" })}\n\n`);
         safeEndResponse(res);
     } catch (error) {
-        console.error("❌ [STREAM] Error in streamAgentResponse:", error);
+        console.error( "[STREAM] Error in streamAgentResponse:", error);
         
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         
@@ -760,7 +760,7 @@ async function streamTestResponse(
     context: any,
     res: Response,
 ): Promise<void> {
-    console.log("🧪 Streaming test response for:", originalRequest);
+    debug("🧪 Streaming test response for:", originalRequest);
 
     let content = "";
     let description = "";
@@ -921,7 +921,7 @@ async function streamRealAgentResponse(
     parameters: any,
     res: Response,
 ): Promise<void> {
-    console.log("🔄 [VIEW] Routing LLM request to agent process:", action);
+    debug("[VIEW] Routing LLM request to agent process:", action);
 
     try {
         // Determine if this command should stream
@@ -936,7 +936,7 @@ async function streamRealAgentResponse(
                 command: parameters.originalRequest
             });
             
-            console.log(`🌊 [STREAM] Starting streaming session: ${streamId} for command: ${parameters.originalRequest}`);
+            debug(`[STREAM] Starting streaming session: ${streamId} for command: ${parameters.originalRequest}`);
             
             // Send typing indicator
             if (!safeWriteToResponse(res,
@@ -1009,7 +1009,7 @@ async function streamRealAgentResponse(
         }
         
     } catch (error) {
-        console.error("❌ [VIEW] Failed to route to agent:", error);
+        console.error( "[VIEW] Failed to route to agent:", error);
         
         // Determine if this is a timeout error or other error
         const isTimeout = error instanceof Error && error.message.includes("timeout");
@@ -1028,7 +1028,7 @@ async function streamRealAgentResponse(
         
         // If it's a timeout, provide a clear offline notification but don't generate content
         if (isTimeout && parameters.originalRequest) {
-            console.log("🔄 [VIEW] Agent timeout, providing offline notification only");
+            debug(" [VIEW] Agent timeout, providing offline notification only");
             
             safeWriteToResponse(res,
                 `data: ${JSON.stringify({ 
@@ -1098,7 +1098,7 @@ async function forwardToMarkdownAgent(
     parameters: any,
 ): Promise<any> {
     try {
-        console.log("🔄 [VIEW] Forwarding LLM request to agent process:", action);
+        debug("[VIEW] Forwarding LLM request to agent process:", action);
 
         // Route to agent process instead of creating duplicate LLM service
         const result = await sendUICommandToAgent(action, parameters);
@@ -1114,7 +1114,7 @@ async function forwardToMarkdownAgent(
         }
         
     } catch (error) {
-        console.error("❌ [VIEW] Failed to route to agent:", error);
+        console.error( "[VIEW] Failed to route to agent:", error);
 
         // Fallback to test response for development
         if (parameters.originalRequest?.includes("/test:")) {
@@ -1129,7 +1129,7 @@ async function forwardToMarkdownAgent(
 }
 
 function generateTestResponse(originalRequest: string, context: any): any {
-    console.log("🧪 Generating test response for:", originalRequest);
+    debug("Generating test response for:", originalRequest);
 
     if (originalRequest.includes("/test:continue")) {
         return {
@@ -1223,7 +1223,7 @@ function renderFileToClients(filePath: string) {
         try {
             client.write(`data: ${JSON.stringify(event)}\n\n`);
         } catch (error) {
-            console.error("❌ [SSE] Failed to send event to client:", error);
+            console.error( "[SSE] Failed to send event to client:", error);
         }
     });
 }
@@ -1282,7 +1282,7 @@ process.on("message", (message: any) => {
         } else {
             // No file mode - initialize with default content using authoritative document
             filePath = null;
-            console.log("🔄 Running in memory-only mode (no file)");
+            debug("Running in memory-only mode (no file)");
             
             const documentId = "default";
             
@@ -1344,7 +1344,7 @@ Start typing to see the editor in action!
         }
     } else if (message.type == "applyOperations") {
         // Send operations to frontend
-        console.log("🔍 [PHASE1] View received IPC operations from agent:", message.operations?.length);
+        debug("View received IPC operations from agent:", message.operations?.length);
         clients.forEach((client) => {
             client.write(
                 `data: ${JSON.stringify({
@@ -1356,10 +1356,10 @@ Start typing to see the editor in action!
     } else if (message.type === "applyLLMOperations") {
         // PRODUCTION: Send operations to PRIMARY client only via SSE to prevent duplicates
         try {
-            console.log(`📤 [VIEW] Forwarding ${message.operations?.length || 0} operations to primary client via SSE`);
+            debug(`[VIEW] Forwarding ${message.operations?.length || 0} operations to primary client via SSE`);
             
             if (clients.length === 0) {
-                console.warn(`⚠️ [SSE] No clients connected to receive operations`);
+                console.warn(`[SSE] No clients connected to receive operations`);
                 process.send?.({
                     type: "operationsApplied",
                     success: false,
@@ -1381,7 +1381,7 @@ Start typing to see the editor in action!
             
             try {
                 primaryClient.write(`data: ${JSON.stringify(operationsEvent)}\n\n`);
-                console.log(`📡 [SSE] Sent ${message.operations?.length || 0} operations to PRIMARY client (${clients.indexOf(primaryClient)} of ${clients.length} clients)`);
+                debug(`[SSE] Sent ${message.operations?.length || 0} operations to PRIMARY client (${clients.indexOf(primaryClient)} of ${clients.length} clients)`);
                 
                 // Notify other clients that operations are being applied (optional)
                 if (clients.length > 1) {
@@ -1395,15 +1395,15 @@ Start typing to see the editor in action!
                     clients.slice(1).forEach((client, index) => {
                         try {
                             client.write(`data: ${JSON.stringify(notificationEvent)}\n\n`);
-                            console.log(`📢 [SSE] Notified secondary client ${index + 1} of pending operations`);
+                            debug(`[SSE] Notified secondary client ${index + 1} of pending operations`);
                         } catch (error) {
-                            console.error(`❌ [SSE] Failed to notify secondary client ${index + 1}:`, error);
+                            console.error(`[SSE] Failed to notify secondary client ${index + 1}:`, error);
                         }
                     });
                 }
                 
             } catch (error) {
-                console.error("❌ [SSE] Failed to send operations to primary client:", error);
+                console.error( "[SSE] Failed to send operations to primary client:", error);
                 throw error;
             }
             
@@ -1416,10 +1416,10 @@ Start typing to see the editor in action!
                 clientsNotified: clients.length
             });
             
-            console.log(`✅ [VIEW] Operations forwarded to primary client successfully`);
+            debug(`[VIEW] Operations forwarded to primary client successfully`);
             
         } catch (error) {
-            console.error("❌ [VIEW] Failed to forward operations via SSE:", error);
+            console.error( "[VIEW] Failed to forward operations via SSE:", error);
             process.send?.({
                 type: "operationsApplied",
                 success: false,
@@ -1439,7 +1439,7 @@ Start typing to see the editor in action!
                 documentId = path.basename(filePath, ".md");
             }
             
-            console.log("Using documentID "+ documentId)
+            debug("Using documentID "+ documentId)
 
             // Get content from authoritative Y.js document (single source of truth)
             const ydoc = getAuthoritativeDocument(documentId);
@@ -1454,9 +1454,9 @@ Start typing to see the editor in action!
                 timestamp: Date.now()
             });
             
-            console.log("📤 [VIEW] Sent document content to agent process");
+            debug("[SENT] [VIEW] Sent document content to agent process");
         } catch (error) {
-            console.error("❌ [VIEW] Failed to get document content:", error);
+            console.error( "[VIEW] Failed to get document content:", error);
             process.send?.({
                 type: "documentContent",
                 content: "",
@@ -1470,22 +1470,22 @@ Start typing to see the editor in action!
             clearTimeout(pending.timeout);
             pendingCommands.delete(message.requestId);
             pending.resolve(message.result);
-            console.log(`📨 [VIEW] Received result for ${message.requestId}`);
+            debug(`[VIEW] Received result for ${message.requestId}`);
         }
     } else if (message.type === "streamingContent") {
         // Handle streaming content chunk from agent
-        console.log(`🌊 [VIEW] Received streaming content: streamId=${message.streamId}, chunk length=${message.chunk?.length || 0}`);
+        debug(`[VIEW] Received streaming content: streamId=${message.streamId}, chunk length=${message.chunk?.length || 0}`);
         handleStreamingChunkFromAgent(message.streamId, message.chunk, message.isComplete);
     } else if (message.type === "streamingComplete") {
         // Handle streaming completion from agent
-        console.log(`🏁 [VIEW] Received streaming completion: streamId=${message.streamId}`);
+        debug(`[VIEW] Received streaming completion: streamId=${message.streamId}`);
         
         const session = activeStreamingSessions.get(message.streamId);
         if (session) {
             // NOTE: Operations are now sent via SSE to clients, not applied directly to Y.js
             if (message.operations && message.operations.length > 0) {
-                console.log(`📝 [VIEW] Streaming completed with ${message.operations.length} final operations`);
-                console.log(`📝 [VIEW] Operations will be sent to clients via SSE, not applied directly to Y.js`);
+                debug(`[VIEW] Streaming completed with ${message.operations.length} final operations`);
+                debug(`[VIEW] Operations will be sent to clients via SSE, not applied directly to Y.js`);
             }
             
             // Mark session as complete but don't remove yet - let the main handler do cleanup
@@ -1493,8 +1493,8 @@ Start typing to see the editor in action!
         }
     } else if (message.type == "initCollaboration") {
         // Handle collaboration initialization from action handler
-        console.log(
-            "🔄 Collaboration initialized from action handler:",
+        debug(
+            "Collaboration initialized from action handler:",
             message.config,
         );
     }
@@ -1506,13 +1506,13 @@ process.on("disconnect", () => {
 
 // Add global error handlers to prevent crashes
 process.on('uncaughtException', (error) => {
-    console.error('❌ [CRITICAL] Uncaught exception:', error);
+    console.error('[CRITICAL] Uncaught exception:', error);
     // Don't exit immediately, log and continue
     console.error('Service continuing despite error...');
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('❌ [CRITICAL] Unhandled promise rejection at:', promise, 'reason:', reason);
+    console.error('[CRITICAL] Unhandled promise rejection at:', promise, 'reason:', reason);
     // Don't exit immediately, log and continue  
     console.error('Service continuing despite rejection...');
 });
@@ -1588,7 +1588,7 @@ function setupWSConnection(conn: any, req: any, roomName: string): void {
                 conn.send(message);
                 debug(`Sent WebSocket message to client: ${message.length} bytes`);
             } catch (error) {
-                console.error(`❌ Failed to send message to client:`, error);
+                console.error(`Failed to send message to client:`, error);
                 closeConnection(doc, conn);
             }
         } else {
@@ -1644,15 +1644,15 @@ function setupWSConnection(conn: any, req: any, roomName: string): void {
                         const awarenessUpdate = decoding.readVarUint8Array(decoder);
                         awarenessProtocol.applyAwarenessUpdate(awareness, awarenessUpdate, conn);
                     } catch (awarenessError) {
-                        console.warn('❌ Error processing awareness message:', awarenessError);
+                        console.warn('Error processing awareness message:', awarenessError);
                     }
                     break;
                 default:
-                    console.warn(`❌ Unknown message type: ${messageType}`);
+                    console.warn(`Unknown message type: ${messageType}`);
                     break;
             }
         } catch (err) {
-            console.error('❌ Failed to process WebSocket message:', err);
+            console.error('Failed to process WebSocket message:', err);
         }
     };
     
@@ -1681,7 +1681,7 @@ function setupWSConnection(conn: any, req: any, roomName: string): void {
                     timestamp: Date.now()
                 })}\n\n`);
             } catch (error) {
-                console.error("❌ [SSE] Failed to send sync notification:", error);
+                console.error( "[SSE] Failed to send sync notification:", error);
             }
         });
     }, 100); // Small delay to ensure sync is complete
@@ -1752,7 +1752,7 @@ function setupWSConnection(conn: any, req: any, roomName: string): void {
                 }
             }
         } catch (awarenessError) {
-            console.error('❌ Error handling awareness change:', awarenessError);
+            console.error('Error handling awareness change:', awarenessError);
         }
     };
     awareness.on('change', awarenessChangeHandler);
@@ -1767,12 +1767,12 @@ function setupWSConnection(conn: any, req: any, roomName: string): void {
             
             debug(`Client disconnected from room: ${roomName}, code: ${code}, reason: ${reason}`);
         } catch (cleanupError) {
-            console.error('❌ Error during connection cleanup:', cleanupError);
+            console.error('Error during connection cleanup:', cleanupError);
         }
     });
     
     conn.on('error', (error: any) => {
-        console.error(`❌ WebSocket error in room "${roomName}":`, error);
+        console.error(`WebSocket error in room "${roomName}":`, error);
         closeConnection(ydoc, conn);
     });
     
@@ -1822,7 +1822,7 @@ function createYjsWSServer(server: http.Server): WebSocketServer {
                 wss.emit('connection', ws, request, roomName);
             });
         } catch (error) {
-            console.error('❌ Error handling WebSocket upgrade:', error);
+            console.error('Error handling WebSocket upgrade:', error);
             socket.destroy();
         }
     });
@@ -1839,21 +1839,21 @@ const server = http.createServer(app);
 
 // Add Y.js WebSocket server for real-time collaboration
 createYjsWSServer(server);
-console.log(`📡 Y.js WebSocket server integrated`);
+debug(`[SIGNAL] Y.js WebSocket server integrated`);
 
 // Add global error handlers to prevent crashes
 process.on('uncaughtException', (error) => {
-    console.error('❌ [CRITICAL] Uncaught exception:', error);
+    console.error('Uncaught exception:', error);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('❌ [CRITICAL] Unhandled promise rejection:', reason);
+    console.error('Unhandled promise rejection:', reason);
 });
 
 // Start the HTTP server (which includes WebSocket support)
 server.listen(port, () => {
-    console.log(`✅ Express server with WebSocket support listening on port ${port}`);
-    console.log(`📡 Y.js collaboration available at ws://localhost:${port}/<room-name>`);
+    debug(`Express server with WebSocket support listening on port ${port}`);
+    debug(`Y.js collaboration available at ws://localhost:${port}/<room-name>`);
     
     // Send success signal to parent process AFTER server is ready to accept WebSocket connections
     process.send?.("Success");

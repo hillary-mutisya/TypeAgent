@@ -46,7 +46,7 @@ export class DocumentManager {
             clearInterval(this.autoSaveTimer);
         }
         
-        console.log("💾 [AUTO-SAVE] Starting auto-save timer...");
+        console.log("[AUTO-SAVE] Starting auto-save timer...");
         
         this.autoSaveTimer = setInterval(async () => {
             if (this.isPrimaryClient && EDITOR_CONFIG.FEATURES.AUTO_SAVE) {
@@ -61,13 +61,13 @@ export class DocumentManager {
     private async performAutoSave(): Promise<void> {
         try {
             if (!this.editorManager) {
-                console.log("💾 [AUTO-SAVE] Skipping - no editor manager");
+                console.log("[AUTO-SAVE] Skipping - no editor manager");
                 return;
             }
 
             const editor = this.editorManager.getEditor();
             if (!editor) {
-                console.log("💾 [AUTO-SAVE] Skipping - no editor");
+                console.log("[AUTO-SAVE] Skipping - no editor");
                 return;
             }
 
@@ -76,11 +76,11 @@ export class DocumentManager {
             
             // Only save if content has changed
             if (currentContent === this.lastAutoSaveContent) {
-                console.log("💾 [AUTO-SAVE] Skipping - content unchanged");
+                console.log("[AUTO-SAVE] Skipping - content unchanged");
                 return;
             }
 
-            console.log(`💾 [AUTO-SAVE] Content changed, auto-saving...`);
+            console.log(`[AUTO-SAVE] Content changed, auto-saving...`);
 
             // Get current document path from server
             const docInfo = await this.getCurrentDocumentInfo();
@@ -98,13 +98,13 @@ export class DocumentManager {
 
             if (response.ok) {
                 this.lastAutoSaveContent = currentContent;
-                console.log("✅ [AUTO-SAVE] Successfully saved document");
+                console.log( "[AUTO-SAVE] Successfully saved document");
             } else {
-                console.error("❌ [AUTO-SAVE] Failed to save:", response.statusText);
+                console.error( "[AUTO-SAVE] Failed to save:", response.statusText);
             }
 
         } catch (error) {
-            console.error("❌ [AUTO-SAVE] Error during auto-save:", error);
+            console.error( "[AUTO-SAVE] Error during auto-save:", error);
         }
     }
 
@@ -133,7 +133,7 @@ export class DocumentManager {
             this.eventSource = new EventSource('/events');
             
             this.eventSource.onopen = () => {
-                console.log('📡 [SSE] Connected to server events');
+                console.log('[SSE] Connected to server events');
             };
             
             this.eventSource.onmessage = (event) => {
@@ -141,34 +141,34 @@ export class DocumentManager {
                     const data = JSON.parse(event.data);
                     this.handleSSEEvent(data);
                 } catch (error) {
-                    console.error('❌ [SSE] Failed to parse event data:', error);
-                    console.error('❌ [SSE] Raw event data:', event.data?.substring(0, 100) + '...');
+                    console.error('[SSE] Failed to parse event data:', error);
+                    console.error('[SSE] Raw event data:', event.data?.substring(0, 100) + '...');
                     // Don't crash on parse errors - just log and continue
                 }
             };
             
             this.eventSource.onerror = (error) => {
-                console.error('❌ [SSE] Connection error:', error);
+                console.error('[SSE] Connection error:', error);
                 // Reconnect after a delay
                 setTimeout(() => {
                     if (this.eventSource?.readyState === EventSource.CLOSED) {
-                        console.log('🔄 [SSE] Reconnecting...');
+                        console.log('[SSE] Reconnecting...');
                         this.setupSSEConnection();
                     }
                 }, 5000);
             };
             
         } catch (error) {
-            console.error('❌ [SSE] Failed to setup connection:', error);
+            console.error('[SSE] Failed to setup connection:', error);
         }
     }
 
     private async handleSSEEvent(data: any): Promise<void> {
-        console.log('📡 [SSE] Received event:', data.type, data);
+        console.log('[SSE] Received event:', data.type, data);
         
         switch (data.type) {
             case 'documentChanged':
-                console.log(`🔄 [SSE] Document changed to: ${data.newDocumentId}`);
+                console.log(`[SSE] Document changed to: ${data.newDocumentId}`);
                 this.currentDocumentId = data.newDocumentId;
                 
                 // Reset sync notification state for new document
@@ -180,27 +180,27 @@ export class DocumentManager {
                 break;
                 
             case 'documentUpdated':
-                console.log(`📄 [SSE] Document updated: ${data.documentName}`);
-                console.log(`📄 [SSE] Document updated timestamp: ${data.timestamp}`);
+                console.log(`[SSE] Document updated: ${data.documentName}`);
+                console.log(`[SSE] Document updated timestamp: ${data.timestamp}`);
                 
                 // Document content was updated - WebSocket should handle the sync
                 // But let's add a fallback check in case WebSocket fails
                 if (this.editorManager) {
-                    console.log(`🔍 [SSE-FALLBACK] Checking WebSocket connection status...`);
+                    console.log(`[SSE-FALLBACK] Checking WebSocket connection status...`);
                     const collaborationManager = this.getCollaborationManager();
                     
                     if (collaborationManager && !collaborationManager.isConnected()) {
-                        console.log(`⚠️ [SSE-FALLBACK] WebSocket disconnected, triggering content refresh from SSE event`);
+                        console.log(`[SSE-FALLBACK] WebSocket disconnected, triggering content refresh from SSE event`);
                         
                         // Fallback: manually refresh content from server
                         try {
                             await this.getDocumentContent();
                             // Note: We don't set content directly to avoid conflicts, just log for debugging
-                            console.log(`📡 [SSE-FALLBACK] Server content available for sync`);
+                            console.log(`[SSE-FALLBACK] Server content available for sync`);
                             
                             if (this.notificationManager) {
                                 this.notificationManager.showNotification(
-                                    "📡 Document updated (WebSocket reconnecting...)",
+                                    "Document updated (WebSocket reconnecting...)",
                                     "info"
                                 );
                                 
@@ -208,39 +208,39 @@ export class DocumentManager {
                                 this.notificationManager.markDocumentDisconnected(data.documentName || this.currentDocumentId);
                             }
                         } catch (error) {
-                            console.error(`❌ [SSE-FALLBACK] Failed to refresh content:`, error);
+                            console.error(`[SSE-FALLBACK] Failed to refresh content:`, error);
                         }
                     } else {
-                        console.log(`✅ [SSE] WebSocket connected - no fallback needed`);
+                        console.log(` [SSE] WebSocket connected - no fallback needed`);
                     }
                 } else {
-                    console.log(`⚠️ [SSE] No editor manager available for WebSocket status check`);
+                    console.log(`[SSE] No editor manager available for WebSocket status check`);
                 }
                 break;
 
             case 'documentSynced':
-                console.log(`📡 [SSE] Document synchronized: ${data.documentId}`);
+                console.log(`[SSE] Document synchronized: ${data.documentId}`);
                 if (this.notificationManager) {
                     this.notificationManager.showDocumentSyncNotification(data.documentId || this.currentDocumentId);
                 }
                 break;
 
             case 'autoSave':
-                console.log(`💾 [SSE] Auto-save completed for: ${data.filePath}`);
+                console.log(`[SSE] Auto-save completed for: ${data.filePath}`);
                 // Show brief save notification
                 if (this.notificationManager) {
                     this.notificationManager.showNotification(
-                        `💾 Auto-saved: ${data.filePath}`,
+                        `Auto-saved: ${data.filePath}`,
                         "info"
                     );
                 }
                 break;
                 
             case 'autoSaveError':
-                console.error(`❌ [SSE] Auto-save error: ${data.error}`);
+                console.error(`[SSE] Auto-save error: ${data.error}`);
                 if (this.notificationManager) {
                     this.notificationManager.showNotification(
-                        `❌ Auto-save failed: ${data.error}`,
+                        `Auto-save failed: ${data.error}`,
                         "error"
                     );
                 }
@@ -253,25 +253,25 @@ export class DocumentManager {
                     try {
                         // Mark this client as primary for auto-save
                         this.isPrimaryClient = true;
-                        console.log("🎯 [SSE] Marked as PRIMARY CLIENT for auto-save");
+                        console.log("[SSE] Marked as PRIMARY CLIENT for auto-save");
                         
                         // Apply operations through editor API for proper markdown parsing
                         const editor = this.editorManager.getEditor();
                         if (editor) {
                             await this.applyOperationsThroughEditor(editor, data.operations);
-                            console.log(`✅ [SSE] Applied ${data.operations.length} operations via editor API`);
+                            console.log(` [SSE] Applied ${data.operations.length} operations via editor API`);
                             
                             if (this.notificationManager) {
                                 this.notificationManager.showNotification(
-                                    `✨ AI updated document with ${data.operations.length} changes`,
+                                    `✨  AI updated document with ${data.operations.length} changes`,
                                     "success"
                                 );
                             }
                         } else {
-                            console.warn(`⚠️ [SSE] No editor available to apply operations`);
+                            console.warn(` [SSE] No editor available to apply operations`);
                         }
                     } catch (error) {
-                        console.error(`❌ [SSE] Failed to apply LLM operations:`, error);
+                        console.error(`[ERROR] [SSE] Failed to apply LLM operations:`, error);
                         if (this.notificationManager) {
                             this.notificationManager.showNotification(
                                 `❌ Failed to apply AI changes`,
@@ -282,19 +282,19 @@ export class DocumentManager {
                 } else if (data.clientRole !== 'primary') {
                     // Mark as secondary client
                     this.isPrimaryClient = false;
-                    console.log(`ℹ️ [SSE] Marked as SECONDARY CLIENT`);
+                    console.log(`[SSE] Marked as SECONDARY CLIENT`);
                 } else {
-                    console.warn(`⚠️ [SSE] Invalid LLM operations received:`, data);
+                    console.warn(`[SSE] Invalid LLM operations received:`, data);
                 }
                 break;
 
             case 'operationsBeingApplied':
                 // Handle notification that operations are being applied by primary client
-                console.log(`📢 [SSE] Operations being applied by primary client - ${data.operationCount} changes incoming`);
+                console.log(`[SSE] Operations being applied by primary client - ${data.operationCount} changes incoming`);
                 
                 if (this.notificationManager) {
                     this.notificationManager.showNotification(
-                        `🔄 AI is updating document (${data.operationCount} changes)...`,
+                        `AI is updating document (${data.operationCount} changes)...`,
                         "info"
                     );
                 }
@@ -302,14 +302,14 @@ export class DocumentManager {
                 
             default:
                 // Log unknown event types for debugging
-                console.log(`📡 [SSE] Unknown event type: ${data.type}`, data);
+                console.log(`[SSE] Unknown event type: ${data.type}`, data);
                 break;
         }
     }
 
     private async handleDocumentChangeFromBackend(documentId: string, documentName: string): Promise<void> {
         try {
-            console.log(`🔄 [DOCUMENT] Backend switched to: ${documentName}, reconnecting frontend...`);
+            console.log(`[DOCUMENT] Backend switched to: ${documentName}, reconnecting frontend...`);
             
             // Get content from server with URL logging
             const documentUrl = AI_CONFIG.ENDPOINTS.DOCUMENT;
@@ -317,7 +317,7 @@ export class DocumentManager {
             const response = await fetch(documentUrl);
             
             const content = response.ok ? await response.text() : "";
-            console.log(`✅ [DOCUMENT] Frontend switched to document: "${documentId}"`);
+            console.log(` [DOCUMENT] Frontend switched to document: "${documentId}"`);
             
             // Switch editor collaboration to new document room
             if (this.editorManager) {
@@ -337,7 +337,7 @@ export class DocumentManager {
             }
             
         } catch (error) {
-            console.error("❌ [DOCUMENT] Failed to handle backend document change:", error);
+            console.error( "[DOCUMENT] Failed to handle backend document change:", error);
         }
     }
 
@@ -374,10 +374,10 @@ export class DocumentManager {
                 throw new Error(`Save failed: ${response.status}`);
             }
 
-            console.log(`✅ [DOCUMENT] Document saved successfully`);
+            console.log(` [DOCUMENT] Document saved successfully`);
             this.showSaveStatus("saved");
         } catch (error) {
-            console.error("❌ [DOCUMENT] Failed to save document:", error);
+            console.error( "[DOCUMENT] Failed to save document:", error);
             this.showSaveStatus("error");
             throw error;
         }
@@ -429,7 +429,7 @@ export class DocumentManager {
                 return this.getDefaultContent();
             }
         } catch (error) {
-            console.error("❌ [DOCUMENT] Failed to load initial content:", error);
+            console.error( "[DOCUMENT] Failed to load initial content:", error);
             return this.getDefaultContent();
         }
     }
@@ -469,7 +469,7 @@ export class DocumentManager {
             }
             throw new Error(`Failed to fetch document content: ${response.status} ${response.statusText}`);
         } catch (error) {
-            console.error("❌ [DOCUMENT] Failed to get document content:", error);
+            console.error( "[DOCUMENT] Failed to get document content:", error);
             throw error;
         }
     }
@@ -488,11 +488,11 @@ export class DocumentManager {
                 throw new Error(`Failed to set document content: ${response.status} ${response.statusText}`);
             }
             
-            console.log(`✅ [DOCUMENT] Document content updated successfully`);
+            console.log(` [DOCUMENT] Document content updated successfully`);
             // Don't reload the whole page, just notify the editor will update via collaboration
-            console.log("📄 [DOCUMENT] Content set - WebSocket collaboration will sync changes");
+            console.log("[FILE] [DOCUMENT] Content set - WebSocket collaboration will sync changes");
         } catch (error) {
-            console.error("❌ [DOCUMENT] Failed to set document content:", error);
+            console.error( "[DOCUMENT] Failed to set document content:", error);
             throw error;
         }
     }
@@ -540,7 +540,7 @@ export class DocumentManager {
             console.error("Failed to load file:", error);
             if (this.notificationManager) {
                 this.notificationManager.showNotification(
-                    "❌ Failed to load file",
+                    "❌  Failed to load file",
                     "error"
                 );
             }
@@ -564,13 +564,13 @@ export class DocumentManager {
             }
 
             const result = await response.json();
-            console.log(`📄 [DOCUMENT] Server switched to: ${documentName}`);
+            console.log(`[DOCUMENT] Server switched to: ${documentName}`);
             
             // Switch editor collaboration to new document room
             if (this.editorManager) {
                 const documentId = documentName; // Document ID is same as document name (without .md)
                 await this.editorManager.switchToDocument(documentId, result.content);
-                console.log(`✅ [DOCUMENT] Editor switched to document: "${documentId}"`);
+                console.log(` [DOCUMENT] Editor switched to document: "${documentId}"`);
             }
             
             // Update page title and URL
@@ -579,7 +579,7 @@ export class DocumentManager {
             window.history.pushState({ documentName }, document.title, newUrl);
             
         } catch (error) {
-            console.error("❌ [DOCUMENT] Failed to switch document:", error);
+            console.error( "[DOCUMENT] Failed to switch document:", error);
             throw error;
         }
     }
@@ -608,7 +608,7 @@ export class DocumentManager {
      * Apply operations through the editor API for proper markdown parsing and DOM updates
      */
     private async applyOperationsThroughEditor(editor: any, operations: any[]): Promise<void> {
-        console.log(`📝 [EDITOR-API] Applying ${operations.length} operations through editor`);
+        console.log(`[WRITE] [EDITOR-API] Applying ${operations.length} operations through editor`);
         
         await editor.action((ctx: any) => {
             const view = ctx.get(editorViewCtx);
@@ -616,7 +616,7 @@ export class DocumentManager {
             let tr = view.state.tr;
 
             for (const operation of operations) {
-                console.log(`📝 [EDITOR-API] Applying operation: ${operation.type} at position ${operation.position || 0}`);
+                console.log(`[EDITOR-API] Applying operation: ${operation.type} at position ${operation.position || 0}`);
                 
                 try {
                     switch (operation.type) {
@@ -630,9 +630,9 @@ export class DocumentManager {
                             const doc = parser(markdownText);
                             if (doc && doc.content) {
                                 tr = tr.insert(position, doc.content);
-                                console.log(`✅ [EDITOR-API] Inserted "${markdownText}" at position ${position}`);
+                                console.log(` [EDITOR-API] Inserted "${markdownText}" at position ${position}`);
                             } else {
-                                console.warn(`⚠️ [EDITOR-API] Failed to parse markdown: "${markdownText}"`);
+                                console.warn(` [EDITOR-API] Failed to parse markdown: "${markdownText}"`);
                             }
                             break;
                         }
@@ -646,7 +646,7 @@ export class DocumentManager {
                             const doc = parser(markdownText);
                             if (doc && doc.content) {
                                 tr = tr.replaceWith(fromPos, toPos, doc.content);
-                                console.log(`✅ [EDITOR-API] Replaced content from ${fromPos} to ${toPos} with "${markdownText}"`);
+                                console.log(` [EDITOR-API] Replaced content from ${fromPos} to ${toPos} with "${markdownText}"`);
                             }
                             break;
                         }
@@ -655,24 +655,24 @@ export class DocumentManager {
                             const toPos = Math.min(operation.to || fromPos + 1, view.state.doc.content.size);
                             
                             tr = tr.delete(fromPos, toPos);
-                            console.log(`✅ [EDITOR-API] Deleted content from ${fromPos} to ${toPos}`);
+                            console.log(` [EDITOR-API] Deleted content from ${fromPos} to ${toPos}`);
                             break;
                         }
                         default:
-                            console.warn(`❌ [EDITOR-API] Unknown operation type: ${operation.type}`);
+                            console.warn(`[ERROR] [EDITOR-API] Unknown operation type: ${operation.type}`);
                             break;
                     }
                 } catch (operationError) {
-                    console.error(`❌ [EDITOR-API] Failed to apply operation ${operation.type}:`, operationError);
+                    console.error(`[ERROR] [EDITOR-API] Failed to apply operation ${operation.type}:`, operationError);
                 }
             }
 
             // Dispatch all changes in a single transaction
             if (tr.docChanged) {
                 view.dispatch(tr);
-                console.log(`✅ [EDITOR-API] Applied ${operations.length} operations successfully`);
+                console.log(` [EDITOR-API] Applied ${operations.length} operations successfully`);
             } else {
-                console.log(`ℹ️ [EDITOR-API] No document changes to apply`);
+                console.log(` [EDITOR-API] No document changes to apply`);
             }
         });
     }

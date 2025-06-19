@@ -18,8 +18,6 @@ import { ChildProcess, fork } from "child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { CollaborationContext } from "./collaborationTypes.js";
-import { AIAgentCollaborator } from "./AIAgentCollaborator.js";
-import { AsyncResearchHandler } from "./AsyncResearchHandler.js";
 import { UICommandResult } from "./ipcTypes.js";
 import registerDebug from "debug";
 
@@ -47,10 +45,7 @@ type MarkdownActionContext = {
     currentFileName?: string | undefined;
     viewProcess?: ChildProcess | undefined;
     localHostPort: number;
-    // collaborationProvider?: TypeAgentYjsProvider | undefined; // Commented out per Flow 1 consolidation
     collaborationContext?: CollaborationContext | undefined;
-    aiCollaborator?: AIAgentCollaborator | undefined;
-    researchHandler?: AsyncResearchHandler | undefined;
 };
 
 async function handleUICommand(
@@ -58,7 +53,7 @@ async function handleUICommand(
     parameters: any,
     context: ActionContext<MarkdownActionContext>,
 ): Promise<UICommandResult> {
-    debug(`🖥️ [AGENT] Processing UI command: ${command}`);
+    debug(`[AGENT] Processing UI command: ${command}`);
     
     try {
         // Check if streaming is enabled for this command
@@ -104,7 +99,7 @@ async function handleUICommand(
         }
         
     } catch (error) {
-        console.error(`❌ [AGENT] UI command failed:`, error);
+        console.error(`[AGENT] UI command failed:`, error);
         return {
             success: false,
             error: (error as Error).message,
@@ -127,22 +122,16 @@ async function streamPartialMarkdownAction(
 
     debug(`Streaming ${name}: delta="${delta}"`);
 
-    // NOTE: Collaboration provider removed per Flow 1 consolidation
-    // const collaborationProvider = context.sessionContext.agentContext.collaborationProvider;
-    
     switch (name) {
         case "parameters.generatedContent":
-            // Stream text content in real-time
             handleStreamingContent(delta, context);
             break;
             
         case "parameters.progressStatus":
-            // Show progress updates for research operations
             handleProgressUpdate(delta, context);
             break;
             
         case "parameters.validationResults":
-            // Show validation feedback
             handleValidationFeedback(delta, context);
             break;
     }
@@ -151,10 +140,8 @@ async function streamPartialMarkdownAction(
 function handleStreamingContent(
     delta: string | undefined,
     context: ActionContext<MarkdownActionContext>,
-    // collaborationProvider?: TypeAgentYjsProvider // Commented out per Flow 1 consolidation
 ): void {
     if (delta === undefined) {
-        // Streaming completed - finalize
         context.actionIO.appendDisplay("");
         debug("Streaming completed");
         return;
@@ -174,7 +161,6 @@ function handleStreamingContent(
             speak: false, // Don't speak markdown content
         }, "inline");
 
-
     }
 }
 
@@ -185,7 +171,7 @@ function handleProgressUpdate(
     if (delta) {
         context.actionIO.appendDisplay({
             type: "text",
-            content: `🔄 ${delta}`,
+            content: `[UPDATE] ${delta}`,
             kind: "status"
         }, "temporary");
     }
@@ -198,7 +184,7 @@ function handleValidationFeedback(
     if (delta) {
         context.actionIO.appendDisplay({
             type: "text",
-            content: `✓ ${delta}`,
+            content: `[COMPLETE] ${delta}`,
             kind: "info"
         }, "block");
     }
@@ -257,15 +243,9 @@ async function updateMarkdownContext(
             await storage?.write(fileName, "");
         }
 
-        context.agentContext.aiCollaborator = new AIAgentCollaborator();
-        context.agentContext.researchHandler = new AsyncResearchHandler(
-            context.agentContext.aiCollaborator,
-        );
-
         debug(
             `Agent context updated for: ${fileName}, port: ${context.agentContext.localHostPort}`,
         );
-        debug("AI collaborator initialized and ready");
 
         if (!context.agentContext.viewProcess) {
             const fullPath = await getFullMarkdownFilePath(fileName, storage!);
@@ -279,15 +259,6 @@ async function updateMarkdownContext(
         }
     } else {
         
-        if (context.agentContext.aiCollaborator) {
-            context.agentContext.aiCollaborator = undefined;
-        }
-
-        if (context.agentContext.researchHandler) {
-            context.agentContext.researchHandler.cleanup();
-            context.agentContext.researchHandler = undefined;
-        }
-
         if (context.agentContext.viewProcess) {
             context.agentContext.viewProcess.kill();
             context.agentContext.viewProcess = undefined;
@@ -303,7 +274,7 @@ async function handleStreamingMarkdownAction(
     actionContext: ActionContext<MarkdownActionContext>,
     streamId: string
 ): Promise<ActionResult> {
-    console.log(`🌊 [AGENT] Starting streaming action: ${action.actionName} (stream: ${streamId})`);
+    debug(`[AGENT] Starting streaming action: ${action.actionName} (stream: ${streamId})`);
     
     const agent = await createMarkdownAgent("GPT_4o");
     const storage = actionContext.sessionContext.sessionStorage;
@@ -319,7 +290,7 @@ async function handleStreamingMarkdownAction(
             );
             debug(`Got content from view process for streaming: ${markdownContent?.length || 0} chars`);
         } catch (error) {
-            console.warn("⚠️ [STREAMING] Failed to get content from view, falling back to storage:", error);
+            console.warn("[STREAMING] Failed to get content from view, falling back to storage:", error);
             if (await storage?.exists(filePath)) {
                 markdownContent = await storage?.read(filePath, "utf8") || "";
             }
@@ -365,7 +336,7 @@ async function handleStreamingMarkdownAction(
         }
         
     } catch (error) {
-        console.error(`❌ [STREAMING] Streaming action failed:`, error);
+        console.error(`[STREAMING] Streaming action failed:`, error);
         
         // Send error completion
         sendStreamingCompleteToView(streamId, [], actionContext);
@@ -390,9 +361,8 @@ function sendStreamingChunkToView(
             chunk: chunk,
             timestamp: Date.now()
         });
-        debug(`Sent streaming chunk to view: ${chunk.length} chars`);
     } else {
-        console.warn(`⚠️ [AGENT] No view process available for streaming chunk`);
+        console.warn(`[AGENT] No view process available for streaming chunk`);
     }
 }
 
@@ -412,9 +382,8 @@ function sendStreamingCompleteToView(
             operations: operations,
             timestamp: Date.now()
         });
-        console.log(`🏁 [AGENT] Sent streaming completion with ${operations.length} operations`);
     } else {
-        console.warn(`⚠️ [AGENT] No view process available for streaming completion`);
+        console.warn(`[AGENT] No view process available for streaming completion`);
     }
 }
 
@@ -475,11 +444,10 @@ async function handleMarkdownAction(
             break;
         }
         case "updateDocument": {
-            console.log("🔍 [PHASE1] Starting updateDocument action in agent process");
+            debug("Starting updateDocument action in agent process");
             result = createActionResult("Updating document ...");
 
             const filePath = `${actionContext.sessionContext.agentContext.currentFileName}`;
-            console.log(filePath)
             
             let markdownContent = "";
             
@@ -491,97 +459,77 @@ async function handleMarkdownAction(
                     debug(`Got content from view process: ${markdownContent?.length || 0} chars`);
                     debug(`Content preview: ${markdownContent?.substring(0, 200)}...`);
                 } catch (error) {
-                    console.warn("⚠️ Failed to get content from view, falling back to storage:", error);
+                    console.warn("Failed to get content from view, falling back to storage:", error);
                     // Fallback to storage only if view process fails
                     if (await storage?.exists(filePath)) {
                         markdownContent = await storage?.read(filePath, "utf8") || "";
-                        debug("🔍 Fallback: Read content from storage:", markdownContent?.length, "chars");
+                        debug("Fallback: Read content from storage:", markdownContent?.length, "chars");
                     }
                 }
             } else {
                 // Fallback if no view process
                 if (await storage?.exists(filePath)) {
                     markdownContent = await storage?.read(filePath, "utf8") || "";
-                    debug("🔍 No view process, read content from storage:", markdownContent?.length, "chars");
+                    debug("No view process, read content from storage:", markdownContent?.length, "chars");
                 }
             }
 
-            const researchHandler =
-                actionContext.sessionContext.agentContext.researchHandler;
+            // Handle synchronous requests through the agent
+            const response = await agent.updateDocument(
+                markdownContent,
+                action.parameters.originalRequest,
+            );
 
-            // Check if this is an AI command that should be handled asynchronously
-            const request = action.parameters.originalRequest;
-            const position = 0; // Default position for now - can be enhanced later
+            if (response.success) {
+                const updateResult = response.data;
 
-            if (researchHandler && isAsyncAICommand(request)) {
-                // Handle async AI requests through the research handler
-                const requestId = await handleAsyncAIRequest(
-                    researchHandler,
-                    request,
-                    position,
-                );
-                result = createActionResult(
-                    `AI request queued (${requestId}). Working asynchronously...`,
-                );
-            } else {
-                // Handle synchronous requests through the agent
-                const response = await agent.updateDocument(
-                    markdownContent,
-                    action.parameters.originalRequest,
-                );
-
-                if (response.success) {
-                    const updateResult = response.data;
-
-                    // Apply operations to the document
-                    if (
-                        updateResult.operations &&
-                        updateResult.operations.length > 0
-                    ) {
-                        // Send operations to view process for application
-                        if (actionContext.sessionContext.agentContext.viewProcess) {
-                            debug("🔍 Agent sending operations to view process for Yjs application");
-                            
-                            const success = await sendOperationsToView(
-                                actionContext.sessionContext.agentContext.viewProcess,
-                                updateResult.operations
-                            );
-                            
-                            if (!success) {
-                                throw new Error("Failed to apply operations in view process");
-                            }
-                            
-                            debug("✅ Operations applied successfully via view process");
-                        } else {
-                            console.warn("⚠️ No view process available, operations not applied");
-                        }
-                    }
-
-                    if (updateResult.operationSummary) {
-                        result = createActionResult(
-                            updateResult.operationSummary,
+                // Apply operations to the document
+                if (
+                    updateResult.operations &&
+                    updateResult.operations.length > 0
+                ) {
+                    // Send operations to view process for application
+                    if (actionContext.sessionContext.agentContext.viewProcess) {
+                        debug("Agent sending operations to view process for Yjs application");
+                        
+                        const success = await sendOperationsToView(
+                            actionContext.sessionContext.agentContext.viewProcess,
+                            updateResult.operations
                         );
+                        
+                        if (!success) {
+                            throw new Error("Failed to apply operations in view process");
+                        }
+                        
+                        debug("Operations applied successfully via view process");
                     } else {
-                        result = createActionResult("Updated document");
+                        console.warn("No view process available, operations not applied");
                     }
-                } else {
-                    const errorMessage = (response as any).message || "Unknown error occurred";
-                    console.error("Translation failed:", errorMessage);
-                    result = createActionResult(
-                        "Failed to update document: " + errorMessage,
-                    );
                 }
+
+                if (updateResult.operationSummary) {
+                    result = createActionResult(
+                        updateResult.operationSummary,
+                    );
+                } else {
+                    result = createActionResult("Updated document");
+                }
+            } else {
+                const errorMessage = (response as any).message || "Unknown error occurred";
+                console.error("Translation failed:", errorMessage);
+                result = createActionResult(
+                    "Failed to update document: " + errorMessage,
+                );
             }
             break;
         }
         case "streamingUpdateDocument": {
             // Handle streaming AI commands - now unified with regular updateDocument flow
-            console.log("🔍 [PHASE1] Starting streamingUpdateDocument action - using standard translator flow");
+            debug("Starting streamingUpdateDocument action - using standard translator flow");
             result = createActionResult("Updating document ...");
 
             const filePath = `${actionContext.sessionContext.agentContext.currentFileName}`;
-            console.log(filePath)
-            
+          
             let markdownContent = "";
             
             if (actionContext.sessionContext.agentContext.viewProcess) {
@@ -592,86 +540,67 @@ async function handleMarkdownAction(
                     debug(`Got content from view process: ${markdownContent?.length || 0} chars`);
                     debug(`Content preview: ${markdownContent?.substring(0, 200)}...`);
                 } catch (error) {
-                    console.warn("⚠️ Failed to get content from view, falling back to storage:", error);
+                    console.warn("Failed to get content from view, falling back to storage:", error);
                     // Fallback to storage only if view process fails
                     if (await storage?.exists(filePath)) {
                         markdownContent = await storage?.read(filePath, "utf8") || "";
-                        debug("🔍 Fallback: Read content from storage:", markdownContent?.length, "chars");
+                        debug("Fallback: Read content from storage:", markdownContent?.length, "chars");
                     }
                 }
             } else {
                 // Fallback if no view process
                 if (await storage?.exists(filePath)) {
                     markdownContent = await storage?.read(filePath, "utf8") || "";
-                    debug("🔍 No view process, read content from storage:", markdownContent?.length, "chars");
+                    debug("No view process, read content from storage:", markdownContent?.length, "chars");
                 }
             }
 
-            const researchHandler =
-                actionContext.sessionContext.agentContext.researchHandler;
+            // Handle streaming requests through the standard agent (same as updateDocument)
+            const response = await agent.updateDocument(
+                markdownContent,
+                action.parameters.originalRequest,
+            );
 
-            // Check if this is an AI command that should be handled asynchronously
-            const request = action.parameters.originalRequest;
-            const position = 0; // Default position for now - can be enhanced later
+            if (response.success) {
+                const updateResult = response.data;
 
-            if (researchHandler && isAsyncAICommand(request)) {
-                // Handle async AI requests through the research handler
-                const requestId = await handleAsyncAIRequest(
-                    researchHandler,
-                    request,
-                    position,
-                );
-                result = createActionResult(
-                    `AI request queued (${requestId}). Working asynchronously...`,
-                );
-            } else {
-                // Handle streaming requests through the standard agent (same as updateDocument)
-                const response = await agent.updateDocument(
-                    markdownContent,
-                    action.parameters.originalRequest,
-                );
-
-                if (response.success) {
-                    const updateResult = response.data;
-
-                    // Apply operations to the document
-                    if (
-                        updateResult.operations &&
-                        updateResult.operations.length > 0
-                    ) {
-                        // Send operations to view process for application
-                        if (actionContext.sessionContext.agentContext.viewProcess) {
-                            debug("🔍 Agent sending operations to view process for Yjs application");
-                            
-                            const success = await sendOperationsToView(
-                                actionContext.sessionContext.agentContext.viewProcess,
-                                updateResult.operations
-                            );
-                            
-                            if (!success) {
-                                throw new Error("Failed to apply operations in view process");
-                            }
-                            
-                            debug("✅ Operations applied successfully via view process");
-                        } else {
-                            console.warn("⚠️ No view process available, operations not applied");
-                        }
-                    }
-
-                    if (updateResult.operationSummary) {
-                        result = createActionResult(
-                            updateResult.operationSummary,
+                // Apply operations to the document
+                if (
+                    updateResult.operations &&
+                    updateResult.operations.length > 0
+                ) {
+                    // Send operations to view process for application
+                    if (actionContext.sessionContext.agentContext.viewProcess) {
+                        debug("Agent sending operations to view process for Yjs application");
+                        
+                        const success = await sendOperationsToView(
+                            actionContext.sessionContext.agentContext.viewProcess,
+                            updateResult.operations
                         );
+                        
+                        if (!success) {
+                            throw new Error("Failed to apply operations in view process");
+                        }
+                        
+                        debug("Operations applied successfully via view process");
                     } else {
-                        result = createActionResult("Updated document");
+                        console.warn("No view process available, operations not applied");
                     }
-                } else {
-                    const errorMessage = (response as any).message || "Unknown error occurred";
-                    console.error("Translation failed:", errorMessage);
-                    result = createActionResult(
-                        "Failed to update document: " + errorMessage,
-                    );
                 }
+
+                if (updateResult.operationSummary) {
+                    result = createActionResult(
+                        updateResult.operationSummary,
+                    );
+                } else {
+                    result = createActionResult("Updated document");
+                }
+            } else {
+                const errorMessage = (response as any).message || "Unknown error occurred";
+                console.error("Translation failed:", errorMessage);
+                result = createActionResult(
+                    "Failed to update document: " + errorMessage,
+                );
             }
             break;
         }
@@ -687,13 +616,12 @@ async function sendOperationsToView(
     operations: DocumentOperation[]
 ): Promise<boolean> {
     if (!viewProcess) {
-        console.error("❌ [AGENT] No view process available");
         return false;
     }
     
     return new Promise((resolve) => {
         const timeout = setTimeout(() => {
-            console.error("❌ [AGENT] View process operation timeout");
+            console.error("[AGENT] View process operation timeout");
             resolve(false);
         }, 5000);
         
@@ -706,7 +634,7 @@ async function sendOperationsToView(
                 if (message.success) {
                     resolve(true);
                 } else {
-                    console.error("❌ [AGENT] View failed to apply operations:", message.error);
+                    console.error("[AGENT] View failed to apply operations:", message.error);
                     resolve(false);
                 }
             }
@@ -721,7 +649,7 @@ async function sendOperationsToView(
             timestamp: Date.now()
         });
         
-        debug(`📤 [AGENT] Sent ${operations.length} operations to view process`);
+        debug(`[AGENT] Sent ${operations.length} operations to view process`);
     });
 }
 
@@ -788,7 +716,7 @@ export async function createViewServiceHost(filePath: string, port: number) {
                 });
 
                 childProcess.on("exit", (code) => {
-                    console.log("Markdown view server exited with code:", code);
+                    debug("Markdown view server exited with code:", code);
                 });
             } catch (e: any) {
                 console.error(e);
@@ -804,64 +732,6 @@ export async function createViewServiceHost(filePath: string, port: number) {
 }
 
 
-/**
- * Check if a request should be handled asynchronously by the AI collaborator
- */
-function isAsyncAICommand(request: string): boolean {
-    // Commands that benefit from async processing
-    const asyncCommands = ["/continue", "/diagram", "/augment", "/research"];
-    return asyncCommands.some((cmd) => request.toLowerCase().startsWith(cmd));
-}
-
-/**
- * Handle async AI requests through the research handler
- */
-async function handleAsyncAIRequest(
-    researchHandler: AsyncResearchHandler,
-    request: string,
-    position: number,
-): Promise<string> {
-    const command = request.toLowerCase().trim();
-
-    if (command.startsWith("/continue")) {
-        const hint = command.replace("/continue", "").trim();
-        return await researchHandler.handleContinueRequest(
-            position,
-            hint || undefined,
-        );
-    } else if (command.startsWith("/diagram")) {
-        const description =
-            command.replace("/diagram", "").trim() || "process diagram";
-        return await researchHandler.handleDiagramRequest(
-            description,
-            "auto",
-            position,
-        );
-    } else if (command.startsWith("/augment")) {
-        const instruction =
-            command.replace("/augment", "").trim() || "improve formatting";
-        return await researchHandler.handleAugmentRequest(
-            instruction,
-            "section",
-            position,
-        );
-    } else if (command.startsWith("/research")) {
-        const query =
-            command.replace("/research", "").trim() || "general research";
-        return await researchHandler.handleResearchRequest(
-            query,
-            {
-                fullContent: "",
-                position,
-                timestamp: Date.now(),
-            },
-            position,
-        );
-    }
-
-    throw new Error(`Unknown async AI command: ${command}`);
-}
-
 // Global process message handler for UI commands
 let currentAgentContext: MarkdownActionContext | null = null;
 
@@ -874,8 +744,8 @@ export function setCurrentAgentContext(context: MarkdownActionContext) {
 if (typeof process !== 'undefined' && process.on) {
     process.on("message", (message: any) => {
         if (message.type === "uiCommand" && currentAgentContext) {
-            debug(`📨 [AGENT] Received UI command: ${message.command}`);
-            
+            debug(`[AGENT] Received UI command: ${message.command}`); 
+ 
             handleUICommandViaIPC(message, currentAgentContext)
                 .then(result => {
                     process.send?.({
@@ -883,7 +753,6 @@ if (typeof process !== 'undefined' && process.on) {
                         requestId: message.requestId,
                         result: result
                     });
-                    console.log(`📤 [AGENT] Sent UI command result: ${result.success}`);
                 })
                 .catch(error => {
                     process.send?.({
@@ -896,7 +765,7 @@ if (typeof process !== 'undefined' && process.on) {
                             type: "error"
                         }
                     });
-                    console.error(`❌ [AGENT] UI command error:`, error);
+                    console.error(`[AGENT] UI command error:`, error);
                 });
         }
     });

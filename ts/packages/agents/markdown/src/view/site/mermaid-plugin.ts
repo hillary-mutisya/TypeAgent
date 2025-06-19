@@ -186,7 +186,7 @@ const mermaidEmptyInputRule = $inputRule(() => {
     return new InputRule(
         /^```mermaid$/,
         (state: any, match: any, start: any, end: any) => {
-            console.log("📝 Empty mermaid input rule triggered", {
+            console.log("Empty mermaid input rule triggered", {
                 match,
                 start,
                 end,

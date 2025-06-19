@@ -17,7 +17,6 @@ import { createMarkdownAgent } from "./translator.js";
 import { ChildProcess, fork } from "child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { CollaborationContext } from "./collaborationTypes.js";
 import { UICommandResult } from "./ipcTypes.js";
 import registerDebug from "debug";
 
@@ -45,7 +44,6 @@ type MarkdownActionContext = {
     currentFileName?: string | undefined;
     viewProcess?: ChildProcess | undefined;
     localHostPort: number;
-    collaborationContext?: CollaborationContext | undefined;
 };
 
 async function handleUICommand(

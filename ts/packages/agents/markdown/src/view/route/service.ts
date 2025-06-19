@@ -191,8 +191,6 @@ async function sendUICommandToAgent(
             },
             timestamp: Date.now()
         });
-        
-        console.log(`📤 [VIEW] Sent UI command to agent: ${command} (${requestId})`);
     });
 }
 
@@ -228,8 +226,6 @@ async function sendUICommandToAgentWithStreaming(
             },
             timestamp: Date.now()
         });
-        
-        console.log(`📤 [VIEW] Sent streaming UI command to agent: ${command} (${requestId}, stream: ${streamId})`);
     });
 }
 
@@ -281,7 +277,7 @@ function handleStreamingChunkFromAgent(streamId: string, chunk: string, isComple
     }
     
     if (chunk) {
-        console.log(`🌊 [STREAM] Forwarding chunk to client (${chunk.length} chars): ${chunk.substring(0, 50)}...`);
+        console.log(`🌊 [STREAM] Forwarding chunk to client`);
         
         // Forward chunk to client (similar to streamTestResponse)
         safeWriteToResponse(response,
@@ -358,8 +354,7 @@ app.get("/document", (req: Request, res: Response) => {
         const ytext = ydoc.getText("content");
         const content = ytext.toString();
         
-        console.log(`📄 [GET /document] Retrieved content from authoritative Y.js doc: ${content.length} chars`);
-        console.log(content)
+        console.log(`📄 [GET /document] Retrieved content from authoritative Y.js doc`);
         res.send(content);
         return;
     }
@@ -373,16 +368,14 @@ app.get("/document", (req: Request, res: Response) => {
         const ytext = ydoc.getText("content");
         const content = ytext.toString();
         
-        console.log(`📄 [GET /document] Retrieved content from authoritative Y.js doc "${documentId}": ${content.length} chars`);
-        console.log(content)
+        console.log(`📄 [GET /document] Retrieved content from authoritative Y.js doc "${documentId}"`);
 
         res.send(content);
     } catch (error) {
         // Fallback to reading from file if authoritative document fails
         try {
             const fileContent = fs.readFileSync(filePath, "utf-8");
-            console.log(`📄 [GET /document] Fallback: read content from file: ${fileContent.length} chars`);
-            console.log(fileContent)
+            console.log(`📄 [GET /document] Fallback: read content from file`);
 
             res.send(fileContent);
         } catch (fileError) {
@@ -409,7 +402,7 @@ app.post("/document", express.json(), (req: Request, res: Response) => {
         ytext.delete(0, ytext.length);
         ytext.insert(0, markdownContent);
         
-        console.log(`💾 [POST /document] Saved content to authoritative Y.js doc: ${markdownContent.length} chars`);
+        console.log(`💾 [POST /document] Saved content to authoritative Y.js doc`);
         res.json({ success: true, message: "Content saved to memory (no file mode)" });
         
         // Notify clients via SSE of the change (WebSocket will auto-sync)
@@ -430,7 +423,7 @@ app.post("/document", express.json(), (req: Request, res: Response) => {
         // Then save to file
         fs.writeFileSync(filePath, markdownContent, "utf-8");
         
-        console.log(`💾 [POST /document] Saved content to both authoritative Y.js doc and file: ${markdownContent.length} chars`);
+        console.log(`💾 [POST /document] Saved content to both authoritative Y.js doc and file`);
         res.json({ success: true });
 
         // Notify clients of the change
@@ -453,8 +446,7 @@ app.post("/autosave", express.json(), (req: Request, res: Response) => {
             return;
         }
 
-        console.log(`💾 [AUTO-SAVE] Received auto-save request for document: ${documentId}, path: ${requestFilePath}`);
-        console.log(`💾 [AUTO-SAVE] Content length: ${content.length} chars`);
+        console.log(`💾 [AUTO-SAVE] Received auto-save request for document: ${documentId}`);
 
         // Use the provided file path or fall back to current filePath
         const targetFilePath = requestFilePath || filePath;
@@ -462,7 +454,7 @@ app.post("/autosave", express.json(), (req: Request, res: Response) => {
 
         if (!targetFilePath) {
             // Memory-only mode: save to authoritative Y.js document
-            console.log(`💾 [AUTO-SAVE] Memory-only mode - saving to Y.js doc: ${targetDocumentId}`);
+            console.log(`💾 [AUTO-SAVE] Memory-only mode - saving to Y.js doc`);
             
             const ydoc = getAuthoritativeDocument(targetDocumentId);
             const ytext = ydoc.getText("content");
@@ -471,7 +463,7 @@ app.post("/autosave", express.json(), (req: Request, res: Response) => {
             ytext.delete(0, ytext.length);
             ytext.insert(0, content);
             
-            console.log(`💾 [AUTO-SAVE] Saved content to authoritative Y.js doc: ${content.length} chars`);
+            console.log(`💾 [AUTO-SAVE] Saved content to authoritative Y.js doc`);
             
             // Notify clients via SSE
             clients.forEach((client) => {
@@ -502,7 +494,7 @@ app.post("/autosave", express.json(), (req: Request, res: Response) => {
         // Then save to file
         fs.writeFileSync(targetFilePath, content, "utf-8");
         
-        console.log(`💾 [AUTO-SAVE] Saved content to both Y.js doc and file: ${content.length} chars`);
+        console.log(`💾 [AUTO-SAVE] Saved content to both Y.js doc and file`);
         
         // Notify clients via SSE
         clients.forEach((client) => {
@@ -1231,8 +1223,6 @@ function renderFileToClients(filePath: string) {
             console.error("❌ [SSE] Failed to send event to client:", error);
         }
     });
-    
-    console.log(`📡 [SSE] Sent documentUpdated event for: ${documentName}`);
 }
 
 // Success signal moved to server.listen() callback to ensure WebSocket server is ready
@@ -1261,19 +1251,12 @@ process.on("message", (message: any) => {
                 ytext.delete(0, ytext.length); // Clear existing content
                 ytext.insert(0, content); // Insert file content
 
-                
-                
-                console.log(`📄 [FILE-LOAD] Loaded ${content.length} chars into authoritative document "${documentId}"`);
-
-                console.log("Loaded content: "+ JSON.stringify(ytext))
             } else {
-                console.log(`📄 [FILE-LOAD] File doesn't exist, authoritative document "${documentId}" remains empty`);
+                // File doesn't exist
             }
 
             // Notify frontend clients if the document has changed
             if (oldFilePath !== filePath) {
-                console.log(`📡 [SSE] Document changed from ${oldFilePath ? path.basename(oldFilePath, ".md") : "none"} to ${documentId}`);
-                
                 // Send SSE notification to all clients to switch rooms
                 clients.forEach((client) => {
                     client.write(`data: ${JSON.stringify({
@@ -1347,9 +1330,9 @@ Start typing to see the editor in action!
             // Only set content if document is empty to avoid overwriting existing content
             if (ytext.length === 0) {
                 ytext.insert(0, defaultContent);
-                console.log(`📄 [MEMORY-ONLY] Initialized authoritative Y.js document "${documentId}" with default content: ${defaultContent.length} chars`);
+                console.log(`📄 [MEMORY-ONLY] Initialized authoritative Y.js document "${documentId}" with default content`);
             } else {
-                console.log(`📄 [MEMORY-ONLY] Authoritative Y.js document "${documentId}" already has content: ${ytext.length} chars`);
+                console.log(`📄 [MEMORY-ONLY] Authoritative Y.js document "${documentId}" already has content`);
             }
             
             // Initial render for clients with default content
@@ -1556,27 +1539,22 @@ const roomAwarenessConnections = new Map<string, Map<any, Set<number>>>();
 function getAuthoritativeDocument(documentId: string): Y.Doc {
     // Always prefer WebSocket document as single source of truth
     if (docs.has(documentId)) {
-        console.log(`📄 [AUTHORITATIVE] Using existing WebSocket Y.js document: ${documentId}`);
         return docs.get(documentId)!;
     }
     
     // Create if doesn't exist
-    console.log(`📄 [AUTHORITATIVE] Creating new Y.js document: ${documentId}`);
     const ydoc = new Y.Doc();
     docs.set(documentId, ydoc);
     awarenessStates.set(documentId, new Awareness(ydoc));
     
     // Ensure CollaborationManager uses same instance
     collaborationManager.useExistingDocument(documentId, ydoc, filePath);
-    console.log(`🔄 [AUTHORITATIVE] CollaborationManager now using authoritative document: ${documentId}`);
     
     return ydoc;
 }
 
 // Helper function to setup a Yjs connection (compatible with y-websocket)
 function setupWSConnection(conn: any, req: any, roomName: string): void {
-    console.log(`📡 [WEBSOCKET] Setting up connection for room: "${roomName}"`);
-    
     // Track this connection
     if (!roomConnections.has(roomName)) {
         roomConnections.set(roomName, new Set());
@@ -1585,9 +1563,6 @@ function setupWSConnection(conn: any, req: any, roomName: string): void {
     
     // Use authoritative document function to ensure single source of truth
     const ydoc = getAuthoritativeDocument(roomName);
-    const ytext = ydoc.getText("content");
-    console.log(`🔍 [WEBSOCKET] Room "${roomName}" authoritative document content length: ${ytext.length} chars`);
-    console.log(`🔍 [WEBSOCKET] Room "${roomName}" has ${roomConnections.get(roomName)!.size} connected clients`);
     
     // Get awareness for this room (should already exist from getAuthoritativeDocument)
     const awareness = awarenessStates.get(roomName)!;
@@ -1599,14 +1574,11 @@ function setupWSConnection(conn: any, req: any, roomName: string): void {
     }
     roomAwarenessConnections.get(roomName)!.set(conn, controlledIds);
     
-    console.log(`📡 Client connected to room: ${roomName}`);
-    
     // Send function for broadcasting to clients
     const send = (doc: Y.Doc, conn: any, message: Uint8Array) => {
         if (conn.readyState === conn.OPEN) {
             try {
                 conn.send(message);
-                console.log(`[WEBSOCKET] Sent message to client (${message.length} bytes)`);
             } catch (error) {
                 console.error(`❌ Failed to send message to client:`, error);
                 closeConnection(doc, conn);
@@ -1633,7 +1605,6 @@ function setupWSConnection(conn: any, req: any, roomName: string): void {
         const connections = roomConnections.get(roomName);
         if (connections) {
             connections.delete(conn);
-            console.log(`🔌 [WEBSOCKET] Client disconnected from room "${roomName}", ${connections.size} clients remaining`);
         }
     };
     
@@ -1646,7 +1617,6 @@ function setupWSConnection(conn: any, req: any, roomName: string): void {
             
             switch (messageType) {
                 case 0: // messageSync
-                    console.log(`📥 [SYNC-MESSAGE] Received sync message from client in room "${roomName}"`);
                     encoding.writeVarUint(encoder, 0); // messageSync
                     syncProtocol.readSyncMessage(decoder, encoder, doc, conn);
                     
@@ -1655,7 +1625,6 @@ function setupWSConnection(conn: any, req: any, roomName: string): void {
                     // contains the type of reply, its length is 1.
                     if (encoding.length(encoder) > 1) {
                         const responseMessage = encoding.toUint8Array(encoder);
-                        console.log(`📤 [SYNC-RESPONSE] Sending sync response to client (${responseMessage.length} bytes)`);
                         send(doc, conn, responseMessage);
                     }
                     break;
@@ -1687,13 +1656,6 @@ function setupWSConnection(conn: any, req: any, roomName: string): void {
     syncProtocol.writeSyncStep1(encoder, ydoc);
     const syncMessage = encoding.toUint8Array(encoder);
     
-    console.log(`📤 [INITIAL-SYNC] Sending sync step 1 to new client in room "${roomName}" (${syncMessage.length} bytes)`);
-    console.log(`📄 [INITIAL-SYNC] Backend document content: ${ydoc.getText("content").length} chars`);
-    const backendContent = ydoc.getText("content").toString();
-    if (backendContent.length > 0 && backendContent.length < 500) {
-        console.log(`📝 [INITIAL-SYNC] Backend content preview: "${backendContent.substring(0, 200)}..."`);
-    }
-    
     send(ydoc, conn, syncMessage);
     
     // Send document synchronized notification via SSE after initial sync
@@ -1709,7 +1671,6 @@ function setupWSConnection(conn: any, req: any, roomName: string): void {
                 console.error("❌ [SSE] Failed to send sync notification:", error);
             }
         });
-        console.log(`📡 [SYNC-NOTIFICATION] Sent documentSynced event for room: ${roomName}`);
     }, 100); // Small delay to ensure sync is complete
     
     // Send existing awareness states to new client if any exist
@@ -1723,8 +1684,6 @@ function setupWSConnection(conn: any, req: any, roomName: string): void {
     
     // Listen for document updates and broadcast to ALL clients (matching y-websocket-server behavior)
     const updateHandler = (update: Uint8Array, origin: any) => {
-        console.log(`🔔 [WEBSOCKET-BROADCAST] Update event in room "${roomName}" (${update.length} bytes), origin:`, origin);
-        
         const connections = roomConnections.get(roomName);
         if (connections) {
             let broadcastCount = 0;
@@ -1741,7 +1700,6 @@ function setupWSConnection(conn: any, req: any, roomName: string): void {
                     broadcastCount++;
                 }
             });
-            console.log(`📡 [WEBSOCKET-BROADCAST] Broadcasted update to ${broadcastCount} clients in room "${roomName}"`);
         }
     };
     ydoc.on('update', updateHandler);
@@ -1790,8 +1748,6 @@ function setupWSConnection(conn: any, req: any, roomName: string): void {
             awareness.off('change', awarenessChangeHandler);
             
             closeConnection(ydoc, conn);
-            
-            console.log(`� Client disconnected from room: ${roomName} (code: ${code}, reason: ${reason})`);
         } catch (cleanupError) {
             console.error('❌ Error during connection cleanup:', cleanupError);
         }
@@ -1806,7 +1762,6 @@ function setupWSConnection(conn: any, req: any, roomName: string): void {
     let pongReceived = true;
     const pingInterval = setInterval(() => {
         if (!pongReceived) {
-            console.warn(`⚠️ Client in room "${roomName}" didn't respond to ping, closing connection`);
             closeConnection(ydoc, conn);
             clearInterval(pingInterval);
         } else if (conn.readyState === conn.OPEN) {
@@ -1814,7 +1769,6 @@ function setupWSConnection(conn: any, req: any, roomName: string): void {
             try {
                 conn.ping();
             } catch (error) {
-                console.warn(`⚠️ Failed to ping client in room "${roomName}":`, error);
                 closeConnection(ydoc, conn);
                 clearInterval(pingInterval);
             }
@@ -1841,8 +1795,6 @@ function createYjsWSServer(server: http.Server): WebSocketServer {
             // Extract room name from URL path
             const url = new URL(request.url || '/', `http://${request.headers.host}`);
             const roomName = url.pathname.substring(1) || 'default-room';
-            
-            console.log(`🔄 WebSocket upgrade request for room: ${roomName}`);
             
             wss.handleUpgrade(request, socket, head, (ws) => {
                 wss.emit('connection', ws, request, roomName);

@@ -80,7 +80,7 @@ export class DocumentManager {
                 return;
             }
 
-            console.log(`💾 [AUTO-SAVE] Content changed, auto-saving... (${currentContent.length} chars)`);
+            console.log(`💾 [AUTO-SAVE] Content changed, auto-saving...`);
 
             // Get current document path from server
             const docInfo = await this.getCurrentDocumentInfo();
@@ -194,9 +194,9 @@ export class DocumentManager {
                         
                         // Fallback: manually refresh content from server
                         try {
-                            const currentContent = await this.getDocumentContent();
+                            await this.getDocumentContent();
                             // Note: We don't set content directly to avoid conflicts, just log for debugging
-                            console.log(`📡 [SSE-FALLBACK] Server has ${currentContent.length} chars available for sync`);
+                            console.log(`📡 [SSE-FALLBACK] Server content available for sync`);
                             
                             if (this.notificationManager) {
                                 this.notificationManager.showNotification(
@@ -248,29 +248,7 @@ export class DocumentManager {
 
             case 'llmOperations':
                 // PRODUCTION: Handle LLM operations sent to PRIMARY client only via SSE
-                console.log(`🎯 [SSE] Received ${data.operations?.length || 0} LLM operations from ${data.source} (role: ${data.clientRole || 'unknown'})`);
-                
-                // LOG DETAILED OPERATION OBJECTS
-                if (data.operations && Array.isArray(data.operations)) {
-                    console.log(`📋 [SSE-DEBUG] Detailed operation objects:`);
-                    data.operations.forEach((operation: any, index: number) => {
-                        console.log(`📋 [SSE-DEBUG] Operation ${index + 1}:`, {
-                            type: operation.type,
-                            position: operation.position,
-                            from: operation.from,
-                            to: operation.to,
-                            content: operation.content,
-                            description: operation.description,
-                            fullOperation: operation
-                        });
-                        
-                        // Log content structure in detail
-                        if (operation.content) {
-                            console.log(`📋 [SSE-DEBUG] Operation ${index + 1} content structure:`, JSON.stringify(operation.content, null, 2));
-                        }
-                    });
-                }
-                
+                // Apply operations through editor API for proper markdown parsing
                 if (data.clientRole === 'primary' && data.operations && Array.isArray(data.operations) && this.editorManager) {
                     try {
                         // Mark this client as primary for auto-save
@@ -280,9 +258,8 @@ export class DocumentManager {
                         // Apply operations through editor API for proper markdown parsing
                         const editor = this.editorManager.getEditor();
                         if (editor) {
-                            console.log(`📝 [SSE-DEBUG] About to apply ${data.operations.length} operations through editor API`);
                             await this.applyOperationsThroughEditor(editor, data.operations);
-                            console.log(`✅ [SSE] PRIMARY CLIENT applied ${data.operations.length} operations via editor API`);
+                            console.log(`✅ [SSE] Applied ${data.operations.length} operations via editor API`);
                             
                             if (this.notificationManager) {
                                 this.notificationManager.showNotification(
@@ -305,7 +282,7 @@ export class DocumentManager {
                 } else if (data.clientRole !== 'primary') {
                     // Mark as secondary client
                     this.isPrimaryClient = false;
-                    console.log(`ℹ️ [SSE] Marked as SECONDARY CLIENT - not primary client (role: ${data.clientRole || 'unknown'})`);
+                    console.log(`ℹ️ [SSE] Marked as SECONDARY CLIENT`);
                 } else {
                     console.warn(`⚠️ [SSE] Invalid LLM operations received:`, data);
                 }
@@ -336,18 +313,15 @@ export class DocumentManager {
             
             // Get content from server with URL logging
             const documentUrl = AI_CONFIG.ENDPOINTS.DOCUMENT;
-            console.log(`📡 [HTTP-REQUEST] GET ${documentUrl} - Fetching document content for: ${documentName}`);
             
             const response = await fetch(documentUrl);
-            console.log(`📡 [HTTP-RESPONSE] GET ${documentUrl} - Status: ${response.status} ${response.statusText}`);
             
             const content = response.ok ? await response.text() : "";
-            console.log(`📡 [HTTP-CONTENT] GET ${documentUrl} - Content length: ${content.length} chars`);
+            console.log(`✅ [DOCUMENT] Frontend switched to document: "${documentId}"`);
             
             // Switch editor collaboration to new document room
             if (this.editorManager) {
                 await this.editorManager.switchToDocument(documentId, content);
-                console.log(`✅ [DOCUMENT] Frontend switched to document: "${documentId}"`);
             }
             
             // Update page title and URL  
@@ -389,21 +363,18 @@ export class DocumentManager {
                 : await this.loadContentFromServer();
 
             const saveUrl = AI_CONFIG.ENDPOINTS.DOCUMENT;
-            console.log(`📡 [HTTP-REQUEST] POST ${saveUrl} - Saving document content (${content.length} chars)`);
-
+            
             const response = await fetch(saveUrl, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ content }),
             });
 
-            console.log(`📡 [HTTP-RESPONSE] POST ${saveUrl} - Status: ${response.status} ${response.statusText}`);
-
             if (!response.ok) {
                 throw new Error(`Save failed: ${response.status}`);
             }
 
-            console.log(`✅ [DOCUMENT] Document saved successfully via POST ${saveUrl}`);
+            console.log(`✅ [DOCUMENT] Document saved successfully`);
             this.showSaveStatus("saved");
         } catch (error) {
             console.error("❌ [DOCUMENT] Failed to save document:", error);
@@ -425,8 +396,6 @@ export class DocumentManager {
             });
             
             if (editorContent) {
-                console.log("📄 [DOCUMENT] Got content from live editor:", editorContent.length, "chars");
-                
                 return editorContent;
             }
         } catch (error) {
@@ -438,7 +407,6 @@ export class DocumentManager {
             const response = await fetch(AI_CONFIG.ENDPOINTS.DOCUMENT);
             if (response.ok) {
                 const serverContent = await response.text();
-                console.log("📄 [DOCUMENT] Fallback to server content:", serverContent.length, "chars");
                 return serverContent;
             }
         } catch (error) {
@@ -451,17 +419,13 @@ export class DocumentManager {
     public async loadInitialContent(): Promise<string> {
         try {
             const documentUrl = AI_CONFIG.ENDPOINTS.DOCUMENT;
-            console.log(`📡 [HTTP-REQUEST] GET ${documentUrl} - Loading initial document content`);
             
             const response = await fetch(documentUrl);
-            console.log(`📡 [HTTP-RESPONSE] GET ${documentUrl} - Status: ${response.status} ${response.statusText}`);
             
             if (response.ok) {
                 const content = await response.text();
-                console.log(`📡 [HTTP-CONTENT] GET ${documentUrl} - Initial content loaded: ${content.length} chars`);
                 return content;
             } else {
-                console.log(`⚠️ [DOCUMENT] GET ${documentUrl} failed, using default content`);
                 return this.getDefaultContent();
             }
         } catch (error) {
@@ -472,14 +436,11 @@ export class DocumentManager {
 
     private async loadContentFromServer(): Promise<string> {
         const documentUrl = AI_CONFIG.ENDPOINTS.DOCUMENT;
-        console.log(`📡 [HTTP-REQUEST] GET ${documentUrl} - Loading content from server`);
         
         const response = await fetch(documentUrl);
-        console.log(`📡 [HTTP-RESPONSE] GET ${documentUrl} - Status: ${response.status} ${response.statusText}`);
         
         if (response.ok) {
             const content = await response.text();
-            console.log(`📡 [HTTP-CONTENT] GET ${documentUrl} - Server content loaded: ${content.length} chars`);
             return content;
         }
         throw new Error(`Failed to load content from server: ${response.status} ${response.statusText}`);
@@ -499,14 +460,11 @@ export class DocumentManager {
     public async getDocumentContent(): Promise<string> {
         try {
             const documentUrl = AI_CONFIG.ENDPOINTS.DOCUMENT;
-            console.log(`📡 [HTTP-REQUEST] GET ${documentUrl} - Getting current document content`);
             
             const response = await fetch(documentUrl);
-            console.log(`📡 [HTTP-RESPONSE] GET ${documentUrl} - Status: ${response.status} ${response.statusText}`);
             
             if (response.ok) {
                 const content = await response.text();
-                console.log(`📡 [HTTP-CONTENT] GET ${documentUrl} - Current content: ${content.length} chars`);
                 return content;
             }
             throw new Error(`Failed to fetch document content: ${response.status} ${response.statusText}`);
@@ -519,7 +477,6 @@ export class DocumentManager {
     public async setDocumentContent(content: string): Promise<void> {
         try {
             const saveUrl = AI_CONFIG.ENDPOINTS.DOCUMENT;
-            console.log(`📡 [HTTP-REQUEST] POST ${saveUrl} - Setting document content (${content.length} chars)`);
             
             const response = await fetch(saveUrl, {
                 method: "POST",
@@ -527,13 +484,11 @@ export class DocumentManager {
                 body: JSON.stringify({ content }),
             });
 
-            console.log(`📡 [HTTP-RESPONSE] POST ${saveUrl} - Status: ${response.status} ${response.statusText}`);
-
             if (!response.ok) {
                 throw new Error(`Failed to set document content: ${response.status} ${response.statusText}`);
             }
             
-            console.log(`✅ [DOCUMENT] Document content updated successfully via POST ${saveUrl}`);
+            console.log(`✅ [DOCUMENT] Document content updated successfully`);
             // Don't reload the whole page, just notify the editor will update via collaboration
             console.log("📄 [DOCUMENT] Content set - WebSocket collaboration will sync changes");
         } catch (error) {
@@ -596,7 +551,6 @@ export class DocumentManager {
     public async switchToDocument(documentName: string): Promise<void> {
         try {
             const switchUrl = "/api/switch-document";
-            console.log(`📡 [HTTP-REQUEST] POST ${switchUrl} - Switching to document: ${documentName}`);
             
             // Call server to switch document
             const response = await fetch(switchUrl, {
@@ -605,15 +559,12 @@ export class DocumentManager {
                 body: JSON.stringify({ documentName }),
             });
 
-            console.log(`📡 [HTTP-RESPONSE] POST ${switchUrl} - Status: ${response.status} ${response.statusText}`);
-
             if (!response.ok) {
                 throw new Error(`Failed to switch document: ${response.status} ${response.statusText}`);
             }
 
             const result = await response.json();
-            console.log(`📡 [HTTP-CONTENT] POST ${switchUrl} - Response:`, result);
-            console.log(`📄 [DOCUMENT] Server switched to: ${documentName}`, result);
+            console.log(`📄 [DOCUMENT] Server switched to: ${documentName}`);
             
             // Switch editor collaboration to new document room
             if (this.editorManager) {
@@ -659,24 +610,10 @@ export class DocumentManager {
     private async applyOperationsThroughEditor(editor: any, operations: any[]): Promise<void> {
         console.log(`📝 [EDITOR-API] Applying ${operations.length} operations through editor`);
         
-        // LOG EACH OPERATION BEFORE PROCESSING
-        operations.forEach((operation: any, index: number) => {
-            console.log(`📝 [EDITOR-API-DEBUG] Processing operation ${index + 1}/${operations.length}:`, {
-                type: operation.type,
-                position: operation.position,
-                from: operation.from,
-                to: operation.to,
-                content: operation.content,
-                description: operation.description
-            });
-        });
-        
         await editor.action((ctx: any) => {
             const view = ctx.get(editorViewCtx);
             const parser = ctx.get(parserCtx);
             let tr = view.state.tr;
-
-            console.log(`📝 [EDITOR-API-DEBUG] Current document size: ${view.state.doc.content.size} chars`);
 
             for (const operation of operations) {
                 console.log(`📝 [EDITOR-API] Applying operation: ${operation.type} at position ${operation.position || 0}`);
@@ -686,15 +623,12 @@ export class DocumentManager {
                         case "insert": {
                             // Convert operation content to markdown text
                             const markdownText = this.operationContentToMarkdown(operation.content);
-                            console.log(`📝 [EDITOR-API-DEBUG] Converted content to markdown: "${markdownText}"`);
                             
                             const position = Math.min(operation.position || 0, view.state.doc.content.size);
-                            console.log(`📝 [EDITOR-API-DEBUG] Calculated position: ${position} (requested: ${operation.position || 0}, max: ${view.state.doc.content.size})`);
                             
                             // Parse markdown to ProseMirror nodes
                             const doc = parser(markdownText);
                             if (doc && doc.content) {
-                                console.log(`📝 [EDITOR-API-DEBUG] Parsed markdown to ProseMirror nodes:`, doc.content.toString());
                                 tr = tr.insert(position, doc.content);
                                 console.log(`✅ [EDITOR-API] Inserted "${markdownText}" at position ${position}`);
                             } else {
@@ -704,11 +638,9 @@ export class DocumentManager {
                         }
                         case "replace": {
                             const markdownText = this.operationContentToMarkdown(operation.content);
-                            console.log(`📝 [EDITOR-API-DEBUG] Replace operation - markdown: "${markdownText}"`);
                             
                             const fromPos = Math.min(operation.from || 0, view.state.doc.content.size);
                             const toPos = Math.min(operation.to || fromPos + 1, view.state.doc.content.size);
-                            console.log(`📝 [EDITOR-API-DEBUG] Replace positions: from ${fromPos} to ${toPos}`);
                             
                             // Parse markdown to ProseMirror nodes
                             const doc = parser(markdownText);
@@ -721,7 +653,6 @@ export class DocumentManager {
                         case "delete": {
                             const fromPos = Math.min(operation.from || 0, view.state.doc.content.size);
                             const toPos = Math.min(operation.to || fromPos + 1, view.state.doc.content.size);
-                            console.log(`📝 [EDITOR-API-DEBUG] Delete operation: from ${fromPos} to ${toPos}`);
                             
                             tr = tr.delete(fromPos, toPos);
                             console.log(`✅ [EDITOR-API] Deleted content from ${fromPos} to ${toPos}`);
@@ -738,10 +669,8 @@ export class DocumentManager {
 
             // Dispatch all changes in a single transaction
             if (tr.docChanged) {
-                console.log(`📝 [EDITOR-API-DEBUG] Dispatching transaction with ${operations.length} operations`);
                 view.dispatch(tr);
                 console.log(`✅ [EDITOR-API] Applied ${operations.length} operations successfully`);
-                console.log(`📝 [EDITOR-API-DEBUG] New document size: ${view.state.doc.content.size} chars`);
             } else {
                 console.log(`ℹ️ [EDITOR-API] No document changes to apply`);
             }
@@ -752,19 +681,13 @@ export class DocumentManager {
      * Convert operation content array to markdown text
      */
     private operationContentToMarkdown(content: any[]): string {
-        console.log(`🔄 [CONTENT-CONVERT] Converting content to markdown:`, content);
-        
         if (!Array.isArray(content)) {
             const result = String(content || "");
-            console.log(`🔄 [CONTENT-CONVERT] Non-array content converted to: "${result}"`);
             return result;
         }
 
-        const result = content.map((item: any, index: number) => {
-            console.log(`🔄 [CONTENT-CONVERT] Processing item ${index + 1}:`, item);
-            
+        const result = content.map((item: any) => {
             if (typeof item === "string") {
-                console.log(`🔄 [CONTENT-CONVERT] Item ${index + 1} is string: "${item}"`);
                 return item;
             }
             
@@ -775,34 +698,27 @@ export class DocumentManager {
                         const level = item.level || 1;
                         const headingText = this.extractTextFromContent(item.content);
                         const result = "#".repeat(level) + " " + headingText;
-                        console.log(`🔄 [CONTENT-CONVERT] Heading (level ${level}): "${result}"`);
                         return result;
                         
                     case "paragraph":
                         const paragraphText = this.extractTextFromContent(item.content || item.text);
-                        
-                        console.log(`🔄 [CONTENT-CONVERT] Paragraph: "${paragraphText}"`);
                         return paragraphText;
                         
                     case "text":
                         const textResult = item.text || "";
-                        console.log(`🔄 [CONTENT-CONVERT] Text: "${textResult}"`);
                         return textResult;
                         
                     default:
                         // Fallback: extract any text content
                         const fallbackResult = this.extractTextFromContent(item.content) || item.text || "";
-                        console.log(`🔄 [CONTENT-CONVERT] Fallback for type "${item.type}": "${fallbackResult}"`);
                         return fallbackResult;
                 }
             }
             
             const stringResult = String(item || "");
-            console.log(`🔄 [CONTENT-CONVERT] Item ${index + 1} stringified: "${stringResult}"`);
             return stringResult;
         }).join("\n");
 
-        console.log(`🔄 [CONTENT-CONVERT] Final markdown result: "${result}"`);
         return result;
     }
 

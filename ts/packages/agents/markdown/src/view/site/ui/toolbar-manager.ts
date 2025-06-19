@@ -76,8 +76,6 @@ export class ToolbarManager {
                 const editor = editorManager.getEditor();
                 if (editor) {
                     content = await this.getEditorMarkdownContent(editor);
-                    console.log("📥 [EXPORT] Got content from live editor:", content.length, "chars");
-                    console.log(content)
                 } else {
                     console.warn("⚠️ [EXPORT] No editor available, falling back to server");
                     content = await this.documentManager.getDocumentContent();
@@ -121,7 +119,6 @@ export class ToolbarManager {
                     // Using textContent as fallback, but ideally we'd use a proper markdown serializer
                     const content = view.state.doc.textContent || "";
                     
-                    console.log("📝 [EXPORT-API] Retrieved content from editor:", content.length, "chars");
                     resolve(content);
                 });
             } catch (error) {

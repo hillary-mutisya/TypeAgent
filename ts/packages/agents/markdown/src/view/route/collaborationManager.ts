@@ -31,7 +31,6 @@ export class CollaborationManager {
     useExistingDocument(documentId: string, ydoc: Y.Doc, filePath: string | null): void {
         this.documents.set(documentId, ydoc);
         this.documentPaths.set(documentId, filePath || "");
-        console.log(`🔄 [COLLAB] Using existing Y.js document: ${documentId} ${filePath ? `(${filePath})` : '(memory-only)'}`);
     }
     getStats(): any {
         return {

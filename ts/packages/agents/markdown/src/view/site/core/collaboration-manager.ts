@@ -23,8 +23,7 @@ export class CollaborationManager {
         }
         
         if (this.yjsDoc) {
-            const oldContent = this.yjsDoc.getText('content').toString();
-            console.log(`📄 [COLLAB] Destroying old Y.js document (had ${oldContent.length} chars)`);
+            console.log(`📄 [COLLAB] Destroying old Y.js document`);
             this.yjsDoc.destroy();
             this.yjsDoc = null;
         }
@@ -126,14 +125,12 @@ export class CollaborationManager {
     private async getCollaborationConfig(): Promise<CollaborationConfig> {
         try {
             const collabInfoUrl = "/collaboration/info";
-            console.log(`📡 [HTTP-REQUEST] GET ${collabInfoUrl} - Getting collaboration configuration`);
             
             const response = await fetch(collabInfoUrl);
-            console.log(`📡 [HTTP-RESPONSE] GET ${collabInfoUrl} - Status: ${response.status} ${response.statusText}`);
             
             if (response.ok) {
                 const collabInfo: CollaborationInfo = await response.json();
-                console.log(`📡 [HTTP-CONTENT] GET ${collabInfoUrl} - Collaboration info:`, collabInfo);
+                console.log(`📡 [COLLAB] Retrieved collaboration info for document: ${collabInfo.currentDocument}`);
 
                 const config = {
                     websocketServerUrl:

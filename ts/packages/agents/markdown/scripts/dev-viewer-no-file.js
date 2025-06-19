@@ -69,8 +69,6 @@ if (filePath) {
     console.log(`File: ${filePath}`);
 } else {
     console.log(`Starting markdown viewer in memory-only mode...`);
-    console.log(`📝 No file specified - using default content`);
-    console.log(`💡 Perfect for collaboration testing and new documents`);
 }
 
 console.log(`Port: ${port}`);
@@ -116,7 +114,6 @@ try {
                 console.log(`🔄 File changes will be reflected automatically`);
             } else {
                 console.log(`📄 Mode: Memory-only with default content`);
-                console.log(`🔄 Perfect for collaboration and testing`);
                 console.log(`💾 Changes won't persist to disk (use File > Save to save)`);
             }
             

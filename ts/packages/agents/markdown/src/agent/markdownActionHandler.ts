@@ -682,7 +682,10 @@ export async function createViewServiceHost(filePath: string, port: number) {
 
     const timeoutPromise = new Promise<undefined>((_resolve, reject) => {
         timeoutHandle = setTimeout(
-            () => reject(new Error("Markdown view service creation timed out")),
+            
+            () =>{
+                console.log("Markdown view service creation timed out")
+                 reject(new Error("Markdown view service creation timed out"))},
             10000,
         );
     });

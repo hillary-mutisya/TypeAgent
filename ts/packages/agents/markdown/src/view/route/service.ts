@@ -1228,8 +1228,6 @@ function renderFileToClients(filePath: string) {
     });
 }
 
-// Success signal moved to server.listen() callback to ensure WebSocket server is ready
-
 process.on("message", (message: any) => {
     if (message.type == "setFile") {
         if (filePath) {
@@ -1840,15 +1838,6 @@ const server = http.createServer(app);
 // Add Y.js WebSocket server for real-time collaboration
 createYjsWSServer(server);
 debug(`[SIGNAL] Y.js WebSocket server integrated`);
-
-// Add global error handlers to prevent crashes
-process.on('uncaughtException', (error) => {
-    console.error('Uncaught exception:', error);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled promise rejection:', reason);
-});
 
 // Start the HTTP server (which includes WebSocket support)
 server.listen(port, () => {

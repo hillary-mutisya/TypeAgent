@@ -188,18 +188,6 @@ export class DocumentManager {
                     console.warn(`⚠️ [SSE] Invalid LLM operations received:`, data);
                 }
                 break;
-
-            case 'operationsBeingApplied':
-                // NEW: Handle notification that operations are being applied by primary client
-                console.log(`📢 [SSE] Operations being applied by primary client - ${data.operationCount} changes incoming`);
-                
-                if (this.notificationManager) {
-                    this.notificationManager.showNotification(
-                        `🔄 AI is updating document (${data.operationCount} changes)...`,
-                        "info"
-                    );
-                }
-                break;
                 
             default:
                 // Log unknown event types for debugging

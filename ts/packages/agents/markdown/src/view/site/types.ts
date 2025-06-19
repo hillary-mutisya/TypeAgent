@@ -35,7 +35,7 @@ export interface AgentCommandParams {
 }
 
 export interface StreamEvent {
-    type: "start" | "typing" | "content" | "operation" | "complete" | "error" | "notification" | "operationsApplied" | "llmOperations" | "operationsBeingApplied";
+    type: "start" | "typing" | "content" | "operation" | "complete" | "error" | "notification" | "operationsApplied" | "llmOperations";
     message?: string;
     chunk?: string;
     position?: number;

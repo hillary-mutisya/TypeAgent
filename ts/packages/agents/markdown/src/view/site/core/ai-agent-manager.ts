@@ -221,12 +221,6 @@ export class AIAgentManager {
                 }
                 break;
 
-            case "operationsBeingApplied":
-                // NEW: Handle notification that operations are being applied by primary client
-                console.log(`📢 [LLM-OPS] Operations being applied by primary client - ${(data as any).operationCount} changes incoming`);
-                this.updateAIPresenceMessage(`AI is applying ${(data as any).operationCount} changes...`);
-                break;
-
             case "complete":
                 this.showAIPresence(false);
                 this.isTestMode = false; // Reset test mode flag

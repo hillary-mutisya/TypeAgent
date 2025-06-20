@@ -4,6 +4,7 @@
 import express, { Express, Request, Response } from "express";
 import rateLimit from "express-rate-limit";
 import { CollaborationManager } from "./collaborationManager.js";
+import { HeadlessEditorManager } from "./headless-editor-manager.js";
 import { fileURLToPath } from "url";
 import path from "path";
 import fs from "fs";
@@ -60,7 +61,7 @@ app.get("/api/current-document", (req: Request, res: Response) => {
 app.post(
     "/api/switch-document",
     express.json(),
-    (req: Request, res: Response) => {
+    async (req: Request, res: Response) => {
         try {
             const { documentName } = req.body;
 
@@ -71,24 +72,17 @@ app.post(
                 return;
             }
 
-            debug("Switch document called with parameter ", documentName)
+            debug("Switch document called with parameter ", documentName);
 
-            // Construct file path
             const sanitizedDocumentName = sanitizeFilename(documentName);
-
             if (!sanitizedDocumentName) {
                 res.status(400).json({ error: "Invalid document name" });
                 return;
             }
 
-            // Construct and normalize file path
-            const documentPath = path.resolve(
-                ROOT_DIR,
-                `${sanitizedDocumentName}.md`,
-            );
+            const documentPath = path.resolve(ROOT_DIR, `${sanitizedDocumentName}.md`);
+            debug("Sanitized document path ", documentPath);
 
-            debug("Sanitized document path ", documentPath)
-            // Verify that the file path is within the safe root directory
             if (!documentPath.startsWith(ROOT_DIR)) {
                 res.status(403).json({
                     error: "Access to the specified path is forbidden.",
@@ -96,29 +90,32 @@ app.post(
                 return;
             }
 
+            // Create new document if it doesn't exist
             if (!fs.existsSync(documentPath)) {
-                // Create new document if it doesn't exist
-                fs.writeFileSync(
-                    documentPath,
-                    `# ${documentName}\n\nThis is a new document.\n`,
-                );
+                // const defaultContent = `# ${documentName}\n\nThis is a new document.\n`;
+                // fs.writeFileSync(documentPath, defaultContent);
             }
 
             filePath = documentPath;
-
-            // Initialize collaboration for new document
             const documentId = sanitizedDocumentName;
-            collaborationManager.initializeDocument(sanitizedDocumentName, documentPath);
 
-            // Load content into collaboration manager
-            const content = fs.readFileSync(documentPath, "utf-8");
-            debug("Raw content: ", content)
-            // collaborationManager.setDocumentContent(documentId, content);
+            // Initialize headless editor for new document
+            if (!headlessEditorManager.isReady()) {
+                await headlessEditorManager.initialize(documentId);
+            } else {
+                await headlessEditorManager.switchDocument(documentId);
+            }
 
+            // Load content through headless editor
+            await headlessEditorManager.loadFromFile(documentPath);
+            const content = await headlessEditorManager.getContent();
+
+            debug(`[HEADLESS] Switched to document: ${documentId}, content: ${content.length} chars`);
+
+            // Also update Y.js document for collaboration fallback
+            collaborationManager.initializeDocument(documentId, documentPath);
             const ydoc = getAuthoritativeDocument(documentId);
             const ytext = ydoc.getText("content");
-
-            // Update document content
             ytext.delete(0, ytext.length);
             ytext.insert(0, content);
 
@@ -129,9 +126,10 @@ app.post(
                 documentPath: documentPath,
             });
         } catch (error) {
+            console.error("[SWITCH-DOCUMENT] Failed to switch document:", error);
             res.status(500).json({
                 error: "Failed to switch document",
-                details: error,
+                details: error instanceof Error ? error.message : error,
             });
         }
     },
@@ -140,6 +138,7 @@ app.post(
 let clients: any[] = [];
 let filePath: string | null;
 let collaborationManager: CollaborationManager;
+let headlessEditorManager: HeadlessEditorManager;
 
 // UI Command routing state
 let commandCounter = 0;
@@ -311,44 +310,42 @@ function handleStreamingChunkFromAgent(
 // Initialize collaboration manager
 collaborationManager = new CollaborationManager();
 
+// Initialize headless editor manager
+headlessEditorManager = new HeadlessEditorManager(`ws://localhost:${port}`);
+
 // Get document as markdown text
-app.get("/document", (req: Request, res: Response) => {
-    if (!filePath) {
-        debug(
-            "[NO-FILE-MODE]  No file provided when resolving the /document call",
-        );
-        // Memory-only mode: get content from authoritative Y.js document
-        const documentId = "default"; // Use consistent document ID
-
-        const ydoc = getAuthoritativeDocument(documentId);
-        const ytext = ydoc.getText("content");
-        const content = ytext.toString();
-
-        debug(
-            `Retrieved content from authoritative Y.js doc: ${documentId}, ${content.length} chars`,
-        );
-        res.send(content);
-        return;
-    }
-
+app.get("/document", async (req: Request, res: Response) => {
     try {
-        debug(
-            "[FILE_MODE] File provided when resolving the /document call " +
-                filePath,
-        );
+        if (headlessEditorManager.isReady()) {
+            // Use headless editor as authoritative source
+            const content = await headlessEditorManager.getContent();
+            debug(`[HEADLESS] Retrieved content: ${content.length} chars`);
+            res.send(content);
+            return;
+        }
 
-        // File mode: get content from authoritative document (which should be synced with file)
+        // Fallback to Y.js document if headless editor not ready
+        if (!filePath) {
+            debug("[NO-FILE-MODE] No file provided, using Y.js fallback");
+            const documentId = "default";
+            const ydoc = getAuthoritativeDocument(documentId);
+            const ytext = ydoc.getText("content");
+            const content = ytext.toString();
+            debug(`Retrieved content from Y.js doc: ${documentId}, ${content.length} chars`);
+            res.send(content);
+            return;
+        }
+
+        debug("[FILE_MODE] File provided, using Y.js fallback: " + filePath);
         const documentId = path.basename(filePath, ".md");
         const ydoc = getAuthoritativeDocument(documentId);
         const ytext = ydoc.getText("content");
         const content = ytext.toString();
-
-        debug(
-            `Retrieved content from authoritative Y.js doc: ${documentId}, ${content.length} chars`,
-        );
-
+        debug(`Retrieved content from Y.js doc: ${documentId}, ${content.length} chars`);
         res.send(content);
+
     } catch (error) {
+        console.error("[DOCUMENT] Failed to get content:", error);
         res.status(500).json({
             error: "Failed to load document",
             details: error,
@@ -357,49 +354,53 @@ app.get("/document", (req: Request, res: Response) => {
 });
 
 // Save document from markdown text
-app.post("/document", express.json(), (req: Request, res: Response) => {
+app.post("/document", express.json(), async (req: Request, res: Response) => {
     const markdownContent = req.body.content || "";
 
-    if (!filePath) {
-        // Memory-only mode: save to authoritative Y.js document
-        const documentId = "default"; // Use consistent document ID
-
-        const ydoc = getAuthoritativeDocument(documentId);
-        const ytext = ydoc.getText("content");
-
-        // Replace entire content atomically
-        ytext.delete(0, ytext.length);
-        ytext.insert(0, markdownContent);
-
-        debug(
-            `Saved content to authoritative Y.js doc: ${markdownContent.length} chars`,
-        );
-        res.json({
-            success: true,
-            message: "Content saved to memory (no file mode)",
-        });
-
-        return;
-    }
-
     try {
-        // File mode: save to both authoritative document and file
+        if (headlessEditorManager.isReady()) {
+            // Use headless editor as authoritative source
+            await headlessEditorManager.setContent(markdownContent);
+            debug(`[HEADLESS] Content set: ${markdownContent.length} chars`);
+
+            // Also save to file if in file mode
+            if (filePath) {
+                await headlessEditorManager.saveToFile(filePath);
+                debug(`[HEADLESS] Saved to file: ${filePath}`);
+            }
+
+            res.json({ success: true, message: "Content saved via headless editor" });
+            return;
+        }
+
+        // Fallback to Y.js document if headless editor not ready
+        if (!filePath) {
+            const documentId = "default";
+            const ydoc = getAuthoritativeDocument(documentId);
+            const ytext = ydoc.getText("content");
+
+            ytext.delete(0, ytext.length);
+            ytext.insert(0, markdownContent);
+
+            debug(`Saved content to Y.js doc: ${markdownContent.length} chars`);
+            res.json({ success: true, message: "Content saved to memory (Y.js fallback)" });
+            return;
+        }
+
+        // File mode fallback
         const documentId = path.basename(filePath, ".md");
         const ydoc = getAuthoritativeDocument(documentId);
         const ytext = ydoc.getText("content");
 
-        // Update authoritative document first
         ytext.delete(0, ytext.length);
         ytext.insert(0, markdownContent);
+        // fs.writeFileSync(filePath, markdownContent, "utf-8");
 
-        // Then save to file
-        fs.writeFileSync(filePath, markdownContent, "utf-8");
-
-        debug(
-            `Saved content to both Y.js doc and file: ${filePath}, ${markdownContent.length} chars`,
-        );
+        debug(`Saved content to Y.js doc and file: ${filePath}, ${markdownContent.length} chars`);
         res.json({ success: true });
+
     } catch (error) {
+        console.error("[DOCUMENT] Failed to save content:", error);
         res.status(500).json({
             error: "Failed to save document",
             details: error,
@@ -1216,7 +1217,7 @@ app.get("/events", (req: Request, res: Response) => {
 // Serve static files AFTER API routes to avoid conflicts
 app.use(express.static(staticPath));
 
-process.on("message", (message: any) => {
+process.on("message", async (message: any) => {
     if (message.type == "setFile") {
         if (message.filePath) {
             // Resolve and validate the file path
@@ -1231,60 +1232,65 @@ process.on("message", (message: any) => {
 
             const oldFilePath = filePath;
             filePath = resolvedFilePath;
-
-            // Initialize collaboration for this document using authoritative document
             const documentId = path.basename(message.filePath, ".md");
 
-            // Get or create the authoritative Y.js document
-            const ydoc = getAuthoritativeDocument(documentId);
+            // Initialize headless editor for this document
+            try {
+                if (!headlessEditorManager.isReady()) {
+                    await headlessEditorManager.initialize(documentId);
+                } else {
+                    await headlessEditorManager.switchDocument(documentId);
+                }
 
-            // Load existing content into the authoritative document
+                // Load content through headless editor
+                if (fs.existsSync(resolvedFilePath)) {
+                    await headlessEditorManager.loadFromFile(resolvedFilePath);
+                    const content = await headlessEditorManager.getContent();
+                    debug(`[HEADLESS] Loaded file: ${documentId}, ${content.length} chars from ${message.filePath}`);
+                } else {
+                    debug(`[HEADLESS] File doesn't exist: ${resolvedFilePath}`);
+                }
+            } catch (error) {
+                console.error(`[HEADLESS] Failed to initialize for file: ${resolvedFilePath}`, error);
+            }
+
+            // Also initialize Y.js collaboration for fallback
+            const ydoc = getAuthoritativeDocument(documentId);
             if (fs.existsSync(resolvedFilePath)) {
                 const content = fs.readFileSync(resolvedFilePath, "utf-8");
-
-                // Set content directly in the authoritative Y.js document
                 const ytext = ydoc.getText("content");
-                ytext.delete(0, ytext.length); // Clear existing content
-                ytext.insert(0, content); // Insert file content
-
-                debug(
-                    `File loaded into authoritative document: ${documentId}, ${content.length} chars from ${message.filePath}`,
-                );
-            } else {
-                debug(
-                    `File doesn't exist, authoritative document ${documentId} remains empty`,
-                );
+                ytext.delete(0, ytext.length);
+                ytext.insert(0, content);
+                debug(`Y.js fallback loaded: ${documentId}, ${content.length} chars`);
             }
 
             // Notify frontend clients if the document has changed
             if (oldFilePath !== filePath) {
-                // Send SSE notification to all clients to switch rooms
                 clients.forEach((client) => {
                     client.write(
                         `data: ${JSON.stringify({
                             type: "documentChanged",
                             newDocumentId: documentId,
-                            newDocumentName: path.basename(
-                                message.filePath,
-                                ".md",
-                            ),
+                            newDocumentName: path.basename(message.filePath, ".md"),
                             timestamp: Date.now(),
                         })}\n\n`,
                     );
                 });
             }
         } else {
-            // No file mode - initialize with default content using authoritative document
+            // No file mode - initialize with default content
             filePath = null;
             debug("Running in memory-only mode (no file)");
 
             const documentId = "default";
 
-            // Get or create authoritative Y.js document for memory-only mode
-            const ydoc = getAuthoritativeDocument(documentId);
+            // Initialize headless editor for memory-only mode
+            try {
+                if (!headlessEditorManager.isReady()) {
+                    await headlessEditorManager.initialize(documentId);
+                }
 
-            // Set default content in the authoritative Y.js document
-            const defaultContent = `# Welcome to AI-Enhanced Markdown Editor
+                const defaultContent = `# Welcome to AI-Enhanced Markdown Editor
 
 Start editing your markdown document with AI assistance!
 
@@ -1295,7 +1301,6 @@ Start editing your markdown document with AI assistance!
 - **Real-time Preview** with full markdown support
 - **Mermaid Diagrams** with visual editing
 - **Math Equations** with LaTeX support
-- **GeoJSON Maps** for location data
 
 ## AI Commands
 
@@ -1305,36 +1310,23 @@ Try these AI-powered commands:
 - Use **Continue Writing** to let AI continue writing
 - Use **Generate Diagram** to create Mermaid diagrams
 - Use **Augment Document** to improve the document
-- Test versions available for testing without API calls
-
-## Example Diagram
-
-\`\`\`mermaid
-graph TD
-    A[Start Editing] --> B{Need AI Help?}
-    B -->|Yes| C[Use / Commands]
-    B -->|No| D[Continue Writing]
-    C --> E[AI Generates Content]
-    E --> F[Review & Edit]
-    F --> G[Save Document]
-    D --> G
-\`\`\`
 
 Start typing to see the editor in action!
 `;
 
-            const ytext = ydoc.getText("content");
+                await headlessEditorManager.setContent(defaultContent);
+                debug(`[HEADLESS] Initialized with default content: ${defaultContent.length} chars`);
+            } catch (error) {
+                console.error(`[HEADLESS] Failed to initialize memory-only mode:`, error);
+            }
 
-            // Only set content if document is empty to avoid overwriting existing content
+            // Also initialize Y.js for fallback
+            const ydoc = getAuthoritativeDocument(documentId);
+            const ytext = ydoc.getText("content");
             if (ytext.length === 0) {
+                const defaultContent = await headlessEditorManager.getContent();
                 ytext.insert(0, defaultContent);
-                debug(
-                    `Initialized authoritative Y.js document ${documentId} with default content: ${defaultContent.length} chars`,
-                );
-            } else {
-                debug(
-                    `Authoritative Y.js document ${documentId} already has content: ${ytext.length} chars`,
-                );
+                debug(`Y.js fallback initialized: ${documentId}, ${defaultContent.length} chars`);
             }
         }
     } else if (message.type == "applyOperations") {
@@ -1352,44 +1344,49 @@ Start typing to see the editor in action!
             );
         });
     } else if (message.type === "applyLLMOperations") {
-        // PRODUCTION: Send operations to PRIMARY client only via SSE to prevent duplicates
+        // Apply LLM operations through headless editor first, then notify clients
         try {
-            debug(
-                `[VIEW] Forwarding ${message.operations?.length || 0} operations to primary client via SSE`,
-            );
+            debug(`[VIEW] Applying ${message.operations?.length || 0} LLM operations via headless editor`);
 
+            if (headlessEditorManager.isReady() && message.operations?.length > 0) {
+                // Apply operations through headless editor for proper markdown parsing
+                await headlessEditorManager.applyLLMOperations(message.operations);
+                debug(`[HEADLESS] Applied ${message.operations.length} operations successfully`);
+
+                // Save to file if in file mode
+                if (filePath) {
+                    await headlessEditorManager.saveToFile(filePath);
+                    debug(`[HEADLESS] Saved changes to file: ${filePath}`);
+                }
+            }
+
+            // Forward operations to clients via SSE for UI updates
             if (clients.length === 0) {
-                console.warn(
-                    `[SSE] No clients connected to receive operations`,
-                );
+                console.warn(`[SSE] No clients connected to receive operations`);
                 process.send?.({
                     type: "operationsApplied",
-                    success: false,
-                    error: "No clients connected",
-                    method: "sse-forwarded",
+                    success: true,
+                    operationCount: message.operations?.length || 0,
+                    method: "headless-applied",
                 });
                 return;
             }
 
-            // Send operations to ONLY the first client to prevent duplicates
+            // Send operations to PRIMARY client only to prevent duplicates
             const primaryClient = clients[0];
             const operationsEvent = {
                 type: "llmOperations",
                 operations: message.operations,
                 timestamp: message.timestamp || Date.now(),
                 source: "agent",
-                clientRole: "primary", // Mark this client as the primary applier
+                clientRole: "primary",
             };
 
             try {
-                primaryClient.write(
-                    `data: ${JSON.stringify(operationsEvent)}\n\n`,
-                );
-                debug(
-                    `[SSE] Sent ${message.operations?.length || 0} operations to PRIMARY client (${clients.indexOf(primaryClient)} of ${clients.length} clients)`,
-                );
+                primaryClient.write(`data: ${JSON.stringify(operationsEvent)}\n\n`);
+                debug(`[SSE] Sent ${message.operations?.length || 0} operations to PRIMARY client`);
 
-                // Notify other clients that operations are being applied (optional)
+                // Notify other clients
                 if (clients.length > 1) {
                     const notificationEvent = {
                         type: "operationsBeingApplied",
@@ -1400,25 +1397,15 @@ Start typing to see the editor in action!
 
                     clients.slice(1).forEach((client, index) => {
                         try {
-                            client.write(
-                                `data: ${JSON.stringify(notificationEvent)}\n\n`,
-                            );
-                            debug(
-                                `[SSE] Notified secondary client ${index + 1} of pending operations`,
-                            );
+                            client.write(`data: ${JSON.stringify(notificationEvent)}\n\n`);
+                            debug(`[SSE] Notified secondary client ${index + 1} of pending operations`);
                         } catch (error) {
-                            console.error(
-                                `[SSE] Failed to notify secondary client ${index + 1}:`,
-                                error,
-                            );
+                            console.error(`[SSE] Failed to notify secondary client ${index + 1}:`, error);
                         }
                     });
                 }
             } catch (error) {
-                console.error(
-                    "[SSE] Failed to send operations to primary client:",
-                    error,
-                );
+                console.error("[SSE] Failed to send operations to primary client:", error);
                 throw error;
             }
 
@@ -1445,27 +1432,38 @@ Start typing to see the editor in action!
             });
         }
     } else if (message.type === "getDocumentContent") {
-        // Handle content requests from agent - read from authoritative Y.js document
+        // Handle content requests from agent - use headless editor as authoritative source
         try {
-            let documentId = "";
+            if (headlessEditorManager.isReady()) {
+                // Get content from headless editor (authoritative source)
+                const content = await headlessEditorManager.getContent();
+                debug(`[HEADLESS] Retrieved content for agent: ${content.length} chars`);
 
+                process.send?.({
+                    type: "documentContent",
+                    content: content,
+                    timestamp: Date.now(),
+                });
+
+                debug("[SENT] [VIEW] Sent headless editor content to agent process");
+                return;
+            }
+
+            // Fallback to Y.js document if headless editor not ready
+            let documentId = "";
             if (!filePath) {
-                // Use default document ID for memory-only mode
                 documentId = "default";
             } else {
                 documentId = path.basename(filePath, ".md");
             }
 
-            debug("Using documentID " + documentId);
+            debug("Using Y.js fallback for documentID " + documentId);
 
-            // Get content from authoritative Y.js document (single source of truth)
             const ydoc = getAuthoritativeDocument(documentId);
             const yText = ydoc.getText("content");
             const content = yText.toString();
 
-            debug(
-                `Retrieved content from authoritative Y.js doc ${documentId}: ${content.length} chars`,
-            );
+            debug(`Retrieved content from Y.js doc ${documentId}: ${content.length} chars`);
 
             process.send?.({
                 type: "documentContent",
@@ -1473,7 +1471,7 @@ Start typing to see the editor in action!
                 timestamp: Date.now(),
             });
 
-            debug("[SENT] [VIEW] Sent document content to agent process");
+            debug("[SENT] [VIEW] Sent Y.js content to agent process");
         } catch (error) {
             console.error("[VIEW] Failed to get document content:", error);
             process.send?.({

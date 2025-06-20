@@ -400,6 +400,7 @@ export class DocumentManager {
             const editorContent = await new Promise<string>((resolve) => {
                 editor.action((ctx) => {
                     const view = ctx.get(editorViewCtx);
+                    
                     resolve(view.state.doc.textContent || "");
                 });
             });

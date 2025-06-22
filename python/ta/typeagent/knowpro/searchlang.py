@@ -1,18 +1,21 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-# TODO: Move this file into knowpro.
-
 import copy
+from dataclasses import dataclass
 from pyexpat.errors import XML_ERROR_RESERVED_PREFIX_XML
 from typing import Callable, Literal, TypeGuard, cast
 
+import typechat
 
 from ..knowpro.collections import PropertyTermSet
+from ..knowpro.convutils import get_time_range_prompt_section_for_conversation
 from ..knowpro.interfaces import (
     DateRange,
     Datetime,
+    IConversation,
     KnowledgePropertyName,
+    KnowledgeType,
     PropertySearchTerm,
     SearchSelectExpr,
     SearchTerm,
@@ -22,7 +25,12 @@ from ..knowpro.interfaces import (
     WhenFilter,
 )
 from ..knowpro.propindex import PropertyNames
-from ..knowpro.search import SearchQueryExpr
+from ..knowpro.search import (
+    ConversationSearchResult,
+    SearchOptions,
+    SearchQueryExpr,
+    run_search_query,
+)
 
 from .date_time_schema import DateTime, DateTimeRange
 from .search_query_schema import (
@@ -34,23 +42,171 @@ from .search_query_schema import (
     VerbsTerm,
 )
 
+# APIs for searching with Natural Language.
+# Work in progress; frequent improvements/tweaks.
+
+
+type SearchQueryTranslator = typechat.TypeChatJsonTranslator[SearchQuery]
+
+
+@dataclass
+class LanguageSearchFilter:
+    """Type representing the filter options for language search."""
+
+    knowledgeType: KnowledgeType | None = None
+    threadDescription: str | None = None
+    tags: list[str] | None = None
+
+
+@dataclass
+class LanguageQueryExpr:
+    query_text: str  # The text of the query.
+    query: SearchQuery  # The structured search query the queryText was translated to.
+    # The search query expressions the structured query was compiled to:
+    query_expressions: list[SearchQueryExpr]
+
+
+@dataclass
+class LanguageQueryCompileOptions:
+    exact_scope: bool = False  # Is fuzzy matching enabled when applying scope?
+    verb_scope: bool = True
+    term_filter: Callable[[str], bool] | None = None  # To ignore noise terms
+    # Debug flags:
+    apply_scope: bool = True  # False to turn off scope matching entirely
+
+
+@dataclass
+class LanguageSearchOptions(SearchOptions):
+    compile_options: LanguageQueryCompileOptions | None = None
+    fallback_rag_options: None = None  # Don't need LanguageSearchRagOptions yet
+    model_instructions: list[typechat.PromptSection] | None = None
+
+
+@dataclass
+class LanguageSearchDebugContext:
+    # Query returned by the LLM:
+    search_query: SearchQuery | None = None
+    # What search_query was compiled into:
+    search_query_expr: list[SearchQueryExpr] | None = None
+    # For each expr in searchQueryExpr, returns if a raw text similarity match was used:
+    # TODO: used_similarity_fallback: list[bool] | None = None
+
+
+# NOTE: Arguments 2 and 3 are reversed compared to the TypeScript version
+# for consistency with other similar functions in this file.
+async def search_conversation_with_language(
+    # TODO: Add comments to the parameters (copy from @param in TS code).
+    conversation: IConversation,
+    query_translator: SearchQueryTranslator,
+    search_text: str,
+    options: LanguageSearchOptions | None = None,
+    lang_search_filter: LanguageSearchFilter | None = None,
+    debug_context: LanguageSearchDebugContext | None = None,
+) -> typechat.Result[list[ConversationSearchResult]]:
+    lang_query_result = await search_query_expr_from_language(
+        conversation,
+        query_translator,
+        search_text,
+        options,
+        lang_search_filter,
+        debug_context,
+    )
+    if not isinstance(lang_query_result, typechat.Success):
+        return lang_query_result
+    search_query_exprs = lang_query_result.value.query_expressions
+    if debug_context:
+        debug_context.search_query_expr = search_query_exprs
+    # TODO: Compile fallback query.
+    search_results: list[ConversationSearchResult] = []
+    for search_query_expr in search_query_exprs:
+        # TODO: fallback query.
+        query_result = await run_search_query(conversation, search_query_expr, options)
+        # TODO: Use fallback query if no results.
+        # TODO: If no matches and fallback enabled... run the raw query.
+        search_results.extend(query_result)
+
+    return typechat.Success(search_results)
+
+
+async def search_query_expr_from_language(
+    # TODO: Add comments to the parameters (copy from @param in TS code).
+    conversation: IConversation,
+    translator: SearchQueryTranslator,
+    query_text: str,
+    options: LanguageSearchOptions | None = None,
+    lang_search_filter: LanguageSearchFilter | None = None,
+    debug_context: LanguageSearchDebugContext | None = None,
+) -> typechat.Result[LanguageQueryExpr]:
+    query_result = await search_query_from_language(
+        conversation,
+        translator,
+        query_text,
+        options.model_instructions if options else None,
+    )
+    if not isinstance(query_result, typechat.Success):
+        return query_result
+    query = query_result.value
+    if debug_context:
+        debug_context.search_query = query
+    options = options or LanguageSearchOptions()
+    query_expressions = compile_search_query(
+        conversation,
+        query,
+        options.compile_options,
+        lang_search_filter,
+    )
+    return typechat.Success(
+        LanguageQueryExpr(
+            query_text,
+            query,
+            query_expressions,
+        )
+    )
+
+
+def compile_search_query(
+    conversation: IConversation,
+    query: SearchQuery,
+    options: LanguageQueryCompileOptions | None = None,
+    lang_search_filter: LanguageSearchFilter | None = None,
+) -> list[SearchQueryExpr]:
+    compiler = SearchQueryCompiler(
+        conversation,
+        options or LanguageQueryCompileOptions(),
+        lang_search_filter,
+    )
+    return compiler.compile_query(query)
+
+
+def compile_search_filter(
+    conversation: IConversation,
+    search_filter: SearchFilter,
+    options: LanguageQueryCompileOptions | None = None,
+    lang_search_filter: LanguageSearchFilter | None = None,
+) -> SearchSelectExpr:
+    compiler = SearchQueryCompiler(
+        conversation,
+        options or LanguageQueryCompileOptions(),
+        lang_search_filter,
+    )
+    return compiler.compile_search_filter(search_filter)
+
 
 class SearchQueryCompiler:
 
     def __init__(
         self,
-        *,
-        exact_scope: bool = False,
-        verb_scope: bool = True,
-        # Use to ignore noise terms etc.
-        term_filter: Callable[[str], bool] | None = None,
-        # Debug flags
-        apply_scope: bool = True,  # False to turn off scope matching entirely
+        conversation: IConversation,
+        options: LanguageQueryCompileOptions | None = None,
+        lang_search_filter: LanguageSearchFilter | None = None,
     ):
-        self.exact_scope = exact_scope
-        self.verb_scope = verb_scope
-        self.term_filter = term_filter
-        self.apply_scope = apply_scope
+        self.conversation = conversation
+        self.options = options = options or LanguageQueryCompileOptions()
+        self.lang_search_filter = lang_search_filter or LanguageSearchFilter()
+        self.exact_scope = options.exact_scope
+        self.verb_scope = options.verb_scope
+        self.term_filter = options.term_filter
+        self.apply_scope = options.apply_scope
 
         self.entity_terms_added = PropertyTermSet()
         self.dedupe = True
@@ -62,6 +218,8 @@ class SearchQueryCompiler:
             query_expressions.append(self.compile_search_expr(search_expr))
         return query_expressions
 
+    # Every searchExpr has one or more filters.
+    # Each filter is compiled into a selectExpr.
     def compile_search_expr(self, search_expr: SearchExpr) -> SearchQueryExpr:
         query_expr = SearchQueryExpr(select_expressions=[])
         if search_expr.filters:
@@ -117,6 +275,7 @@ class SearchQueryCompiler:
             if when is None:
                 when = WhenFilter()
             when.date_range = date_range_from_datetime_range(filter.time_range)
+        return when
 
     def compile_action_term_as_search_terms(
         self,
@@ -489,3 +648,19 @@ def create_property_search_term(
     if exact_match_value:
         property_value.related_terms = []
     return PropertySearchTerm(property_name, property_value)
+
+
+# TODO: Move to searchquerytranslator.py?
+async def search_query_from_language(
+    conversation: IConversation,
+    translator: SearchQueryTranslator,
+    query_text: str,
+    model_instructions: list[typechat.PromptSection] | None = None,
+) -> typechat.Result[SearchQuery]:
+    time_range = get_time_range_prompt_section_for_conversation(conversation)
+    prompt_preamble: list[typechat.PromptSection] = []
+    if model_instructions:
+        prompt_preamble.extend(model_instructions)
+    if time_range:
+        prompt_preamble.append(time_range)
+    return await translator.translate(query_text, prompt_preamble=prompt_preamble)

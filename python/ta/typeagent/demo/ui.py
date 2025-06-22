@@ -2,20 +2,27 @@
 # Licensed under the MIT License.
 
 import asyncio
+from contextlib import contextmanager
 from dataclasses import asdict
+from doctest import debug
+import time
 import io
-import readline
+import re
 import shutil
 import sys
 import traceback
-from typing import cast
+from typing import Any, cast
+
+try:
+    import readline
+except ImportError:
+    readline = None
 
 from black import format_str, FileMode
-from click import File
-from colorama import AnsiToWin32
 import typechat
 
 from ..aitools.auth import load_dotenv
+from ..knowpro.convutils import get_time_range_prompt_section_for_conversation
 from ..knowpro.convknowledge import create_typechat_model
 from ..knowpro.interfaces import (
     DateRange,
@@ -29,7 +36,10 @@ from ..knowpro.interfaces import (
 from ..knowpro.kplib import Action, ActionParam, ConcreteEntity, Quantity
 from ..knowpro.query import QueryEvalContext
 from ..knowpro.search import ConversationSearchResult, SearchQueryExpr, run_search_query
-from ..knowpro.searchlang import SearchQueryCompiler
+from ..knowpro.searchlang import (
+    LanguageSearchDebugContext,
+    search_conversation_with_language,
+)
 from ..knowpro.search_query_schema import SearchQuery
 from ..podcasts.podcast import Podcast
 
@@ -45,19 +55,34 @@ def pretty_print(obj: object) -> None:
     Only works if the repr() is a valid Python expression.
     """
     line_width = cap(200, shutil.get_terminal_size().columns)
-    print(format_str(repr(obj), mode=FileMode(line_length=line_width)))
+    print(format_str(repr(obj), mode=FileMode(line_length=line_width)).rstrip())
+
+
+@contextmanager
+def timelog(label: str):
+    """Context manager to log the time taken by a block of code."""
+    start_time = time.time()
+    try:
+        yield
+    finally:
+        elapsed_time = time.time() - start_time
+        print(f"{elapsed_time:.3f}s -- {label}")
 
 
 def main() -> None:
     load_dotenv()
-    model = create_typechat_model()
+    with timelog("create typechat model"):
+        model = create_typechat_model()
     translator = create_translator(model, SearchQuery)
+
     file = "testdata/Episode_53_AdrianTchaikovsky_index"
-    pod = Podcast.read_from_file(file)
+    with timelog("load podcast"):
+        pod = Podcast.read_from_file(file)
     assert pod is not None, f"Failed to load podcast from {file!r}"
     context = QueryEvalContext(pod)
+
     print("TypeAgent demo UI 0.1 (type 'q' to exit)")
-    if sys.stdin.isatty():
+    if readline and sys.stdin.isatty():
         try:
             readline.read_history_file(".ui_history")
         except FileNotFoundError:
@@ -67,7 +92,7 @@ def main() -> None:
     except KeyboardInterrupt:
         print()
     finally:
-        if sys.stdin.isatty():
+        if readline and sys.stdin.isatty():
             readline.write_history_file(".ui_history")
 
 
@@ -89,17 +114,37 @@ def process_inputs[TMessage: IMessage, TIndex: ITermToSemanticRefIndex](
         query_text = read_one_line(ps1, stream)
         if query_text is None:  # EOF
             break
-        if not query_text:
-            continue
-        if query_text.lower() in ("exit", "quit", "q"):
-            readline.remove_history_item(readline.get_current_history_length() - 1)
-            break
-        if query_text == "pdb":
-            continue
-
-        asyncio.run(wrap_process_query(query_text, context.conversation, translator))
-
-        print()
+        match query_text:  # Already stripped
+            case "":
+                continue
+            case "exit" | "q" | "quit":
+                if readline:
+                    readline.remove_history_item(
+                        readline.get_current_history_length() - 1
+                    )
+                break
+            case "pdb":
+                pretty_print(
+                    asyncio.run(
+                        context.conversation.secondary_indexes.term_to_related_terms_index.fuzzy_index.lookup_term(  # type: ignore
+                            "novel"
+                        )
+                    )
+                )
+                print("Entering debugger; end with 'c' or 'continue'.")
+                breakpoint()  # Do not remove -- 'pdb' should enter the debugger.
+            case _ if re.match(r"^\d+$", query_text):
+                msg_ord = int(query_text)
+                messages = context.conversation.messages
+                if msg_ord < 0 or msg_ord >= len(messages):
+                    print(f"Message ordinal {msg_ord} out of range({len(messages)}).")
+                    continue
+                pretty_print(messages[msg_ord])
+            case _:
+                with timelog("Query processing"):
+                    asyncio.run(
+                        wrap_process_query(query_text, context.conversation, translator)
+                    )
 
 
 def read_one_line(ps1: str, stream: io.TextIOWrapper) -> str | None:
@@ -134,55 +179,60 @@ async def wrap_process_query[TMessage: IMessage, TIndex: ITermToSemanticRefIndex
 
 
 async def process_query[TMessage: IMessage, TIndex: ITermToSemanticRefIndex](
-    query_text: str,
+    orig_query_text: str,
     conversation: IConversation[TMessage, TIndex],
     translator: typechat.TypeChatJsonTranslator[SearchQuery],
-):
-    # Gradually turn the query text into something we can use to search.
-
-    # TODO: # 0. Recognize @-commands like "@search" and handle them specially.
-
-    # 1. With LLM help, translate to SearchQuery (a tree but not yet usable to query)
-    print("Search query:")
-    search_query = await translate_text_to_search_query(
-        conversation, translator, query_text
+) -> None:
+    debug_context = LanguageSearchDebugContext()
+    result = await search_conversation_with_language(
+        conversation,
+        translator,
+        orig_query_text,
+        debug_context=debug_context,
     )
-    if search_query is None:
-        print("Failed to translate command to search terms.")
+    if debug_context.search_query:
+        print("Search query:")
+        pretty_print(debug_context.search_query)
+    if not isinstance(result, typechat.Success):
+        print(f"Error searching conversation: {result.message}")
         return
-    pretty_print(search_query)
-    print()
+    search_results = result.value
+    await generate_answers(search_results, conversation, orig_query_text, debug_context)
 
-    # 2. Translate the search query into something directly usable as a query.
-    print("Search query expressions:")
-    query_exprs = translate_search_query_to_search_query_exprs(search_query)
-    if not query_exprs:
-        print("Failed to translate search query to query expressions.")
-        return
-    # for i, query_expr in enumerate(query_exprs):
-    #     print(f"---------- {i} ----------")
-    #     pretty_print(query_expr)
-    print()
 
-    # 3. Search!
-    for i, query_expr in enumerate(query_exprs):
-        print(f"Query expression {i}:")
-        pretty_print(query_expr)
-        results = await run_search_query(conversation, query_expr)
-        if results is None:
-            print(f"No results for expression {i}.")
-        else:
-            for j, result in enumerate(results):
-                print(f"Result {i}.{j}:")
-                print()
-                # pretty_print(result)
-                # print_result(result, conversation)
-                answer = await generate_answer(result, conversation)
-                if answer.type == "NoAnswer":
-                    print("Failure:", answer.whyNoAnswer)
-                elif answer.type == "Answered":
-                    print(answer.answer)
-                print()
+async def generate_answers(
+    search_results: list[ConversationSearchResult],
+    conversation: IConversation,
+    orig_query_text: str,
+    debug_context: LanguageSearchDebugContext,
+) -> None:
+    answers: list[AnswerResponse] = []
+    for i, search_result in enumerate(search_results):
+        if debug_context.search_query_expr:
+            assert len(debug_context.search_query_expr) == len(search_results)
+            print(f"Query expression {i+1}:")
+            pretty_print(debug_context.search_query_expr[i])
+        print_result(search_result, conversation)
+        for j, result in enumerate(search_results):
+            print(f"Query {i+1} result {j+1}:")
+            # print()
+            # pretty_print(result)
+            # print_result(result, conversation)
+            answer = await generate_answer(result, conversation)
+            answers.append(answer)
+            if answer.type == "NoAnswer":
+                print("Failure:", answer.whyNoAnswer)
+            elif answer.type == "Answered":
+                print(answer.answer)
+            # print()
+    if len(answers) >= 2:
+        # Synthesize the overall answer.
+        print(f"----- COMBINED ANSWER to '{orig_query_text}' -----")
+        answer = await combine_answers(answers, orig_query_text)
+        if answer.type == "NoAnswer":
+            print("Failure:", answer.whyNoAnswer)
+        elif answer.type == "Answered":
+            print(answer.answer)
 
 
 def print_result[TMessage: IMessage, TIndex: ITermToSemanticRefIndex](
@@ -190,12 +240,23 @@ def print_result[TMessage: IMessage, TIndex: ITermToSemanticRefIndex](
 ) -> None:
     print(f"Raw query: {result.raw_query_text}")
     if result.message_matches:
-        print("Message matches:", result.message_matches)
+        print("Message matches:")
+        for scored_ord in sorted(
+            result.message_matches, key=lambda x: x.score, reverse=True
+        ):
+            score = scored_ord.score
+            msg_ord = scored_ord.message_ordinal
+            msg = conversation.messages[msg_ord]
+            text = " ".join(msg.text_chunks).strip()
+            print(
+                f"({score:5.1f}){msg_ord:4d}: "
+                f"{msg.speaker:>15.15s}: "  # type: ignore  # It's a PodcastMessage
+                f"{repr(text)[1:-1]:<150.150s}  "
+            )
     if result.knowledge_matches:
         print("Knowledge matches:")
         for key, value in sorted(result.knowledge_matches.items()):
-            print(f"Type {key}:")
-            print(f"  {value.term_matches}")
+            print(f"Type {key} -- {value.term_matches}:")
             for scored_sem_ref_ord in value.semantic_ref_matches:
                 score = scored_sem_ref_ord.score
                 sem_ref_ord = scored_sem_ref_ord.semantic_ref_ordinal
@@ -207,13 +268,15 @@ def print_result[TMessage: IMessage, TIndex: ITermToSemanticRefIndex](
                     chunk_ord = sem_ref.range.start.chunk_ordinal
                     msg = conversation.messages[msg_ord]
                     print(
-                        f"({score:4.1f}) {msg_ord:3d}: "
+                        f"({score:5.1f}){msg_ord:4d}: "
                         f"{msg.speaker:>15.15s}: "  # type: ignore  # It's a PodcastMessage
                         f"{repr(msg.text_chunks[chunk_ord].strip())[1:-1]:<50.50s}  "
                         f"{summarize_knowledge(sem_ref)}"
                     )
 
 
+# TODO: Pass typechat model in as an argument to avoid creating it every time.
+# TODO: Move to answer*.py.
 async def generate_answer[TMessage: IMessage, TIndex: ITermToSemanticRefIndex](
     context: ConversationSearchResult, conversation: IConversation[TMessage, TIndex]
 ) -> AnswerResponse:
@@ -222,7 +285,7 @@ async def generate_answer[TMessage: IMessage, TIndex: ITermToSemanticRefIndex](
     translator = create_translator(model, AnswerResponse)
     assert context.raw_query_text is not None, "Raw query text must not be None"
     request = f"{create_question_prompt(context.raw_query_text)}\n\n{create_context_prompt(make_context(context, conversation))}"
-    # print(request)
+    # print("="*50 + "\n" + request + "\n" + "="*50)
     result = await translator.translate(request)
     if isinstance(result, typechat.Failure):
         return AnswerResponse(type="NoAnswer", answer=None, whyNoAnswer=result.message)
@@ -249,30 +312,52 @@ def create_question_prompt(question: str) -> str:
 
 
 def create_context_prompt(context: AnswerContext) -> str:
+    # TODO: Use a more compact representation of the context than JSON.
     prompt = [
         "[ANSWER CONTEXT]",
         "===",
-        format_str(str(asdict(context)), mode=FileMode(line_length=200)),
+        format_str(str(dictify(context)), mode=FileMode(line_length=200)),
         "===",
     ]
     return "\n".join(prompt)
 
 
+def dictify(object: object) -> Any:
+    """Convert an object to a dictionary, recursively."""
+    if ann := getattr(object.__class__, "__annotations__", None):
+        return {
+            k: dictify(v) for k in ann if (v := getattr(object, k, None)) is not None
+        }
+    elif isinstance(object, dict):
+        return {k: dictify(v) for k, v in object.items() if v is not None}
+    elif isinstance(object, list):
+        return [dictify(item) for item in object]
+    elif hasattr(object, "__dict__"):
+        return {
+            k: dictify(v) for k, v in object.__dict__.items() if v is not None
+        }  #  if not k.startswith("_")
+    else:
+        if isinstance(object, float) and object.is_integer():
+            return int(object)
+        else:
+            return object
+
+
 def make_context[TMessage: IMessage, TIndex: ITermToSemanticRefIndex](
     context: ConversationSearchResult, conversation: IConversation[TMessage, TIndex]
 ) -> AnswerContext:
-    a = AnswerContext([], [], [])
-    a.entities = []
-    a.topics = []
-    a.messages = []
-    for smo in context.message_matches:
-        msg = conversation.messages[smo.message_ordinal]
+    answer_context = AnswerContext([], [], [])
+    answer_context.entities = []
+    answer_context.topics = []
+    answer_context.messages = []
+    for scored_msg_ord in context.message_matches:
+        msg = conversation.messages[scored_msg_ord.message_ordinal]
         # TODO: Dedupe messages
-        a.messages.append(
-            RelevantMessage(
-                from_=None,
-                to=None,
-                timestamp=None,
+        answer_context.messages.append(
+            RelevantMessage(  # TODO: type-safety
+                from_=msg.speaker,  # type: ignore  # It's a PodcastMessage
+                to=msg.listeners,  # type: ignore  # It's a PodcastMessage
+                timestamp=msg.timestamp,  # type: ignore  # It's a PodcastMessage
                 messageText=" ".join(msg.text_chunks),
             )
         )
@@ -286,7 +371,7 @@ def make_context[TMessage: IMessage, TIndex: ITermToSemanticRefIndex](
                     ]
                     entity = cast(ConcreteEntity, sem_ref.knowledge)
                     # TODO: Dedupe entities
-                    a.entities.append(
+                    answer_context.entities.append(
                         RelevantKnowledge(
                             knowledge=asdict(entity),
                             origin=None,
@@ -296,7 +381,7 @@ def make_context[TMessage: IMessage, TIndex: ITermToSemanticRefIndex](
                     )
             case "topic":
                 topic = cast(Topic, knowledge)
-                a.topics.append(
+                answer_context.topics.append(
                     RelevantKnowledge(
                         knowledge=asdict(topic),
                         origin=None,
@@ -306,33 +391,46 @@ def make_context[TMessage: IMessage, TIndex: ITermToSemanticRefIndex](
                 )
             case _:
                 pass  # TODO: Actions and topics too???
-    return a
+    return answer_context
 
 
-async def translate_text_to_search_query[
-    TMessage: IMessage, TIndex: ITermToSemanticRefIndex
-](
-    conversation: IConversation[TMessage, TIndex],
-    translator: typechat.TypeChatJsonTranslator[SearchQuery],
-    text: str,
-) -> SearchQuery | None:
-    prompt_preamble: list[typechat.PromptSection] = []
-    time_range_preamble = get_time_range_prompt_section_for_conversation(conversation)
-    if time_range_preamble is not None:
-        prompt_preamble.append(time_range_preamble)
-    result: typechat.Result[SearchQuery] = await translator.translate(
-        text, prompt_preamble=prompt_preamble
-    )
+async def combine_answers(
+    answers: list[AnswerResponse],
+    original_query_text: str,
+) -> AnswerResponse:
+    """Combine multiple answers into a single answer."""
+    if not answers:
+        return AnswerResponse(
+            type="NoAnswer", answer=None, whyNoAnswer="No answers provided."
+        )
+    if len(answers) == 1:
+        return answers[0]
+    model = create_typechat_model()
+    translator = create_translator(model, AnswerResponse)
+    request_parts = [
+        "The following are multiple partial answers to the same question.",
+        "Combine the partial answers into a single answer to the original question.",
+        "Don't just concatenate the answers, but blend them into a single accurate and precise answer.",
+        "",
+        "*** Original Question ***",
+        original_query_text,
+        "*** Partial answers ***",
+        "===",
+    ]
+    for answer in answers:
+        if answer.type == "NoAnswer":
+            request_parts.append(f"Failure: {answer.whyNoAnswer}")
+            request_parts.append("===")
+        elif answer.type == "Answered":
+            assert answer.answer is not None
+            request_parts.append(answer.answer)
+            request_parts.append("===")
+    request = "\n".join(request_parts)
+    result = await translator.translate(request)
     if isinstance(result, typechat.Failure):
-        print(f"Error translating {text!r}: {result.message}")
-        return None
-    return result.value
-
-
-def translate_search_query_to_search_query_exprs(
-    search_query: SearchQuery,
-) -> list[SearchQueryExpr]:
-    return SearchQueryCompiler().compile_query(search_query)
+        return AnswerResponse(type="NoAnswer", answer=None, whyNoAnswer=result.message)
+    else:
+        return result.value
 
 
 def summarize_knowledge(sem_ref: SemanticRef) -> str:
@@ -350,6 +448,8 @@ def summarize_knowledge(sem_ref: SemanticRef) -> str:
                     value = facet.value
                     if isinstance(value, Quantity):
                         value = f"{value.amount} {value.units}"
+                    elif isinstance(value, float) and value.is_integer():
+                        value = int(value)
                     res.append(f"<{facet.name}:{value}>")
             return " ".join(res)
         case "action":
@@ -384,39 +484,6 @@ def summarize_knowledge(sem_ref: SemanticRef) -> str:
             return f"#{tag}"
         case _:
             return str(sem_ref.knowledge)
-
-
-# TODO: Move to conversation.py
-def get_time_range_prompt_section_for_conversation[
-    TMessage: IMessage, TIndex: ITermToSemanticRefIndex
-](
-    conversation: IConversation[TMessage, TIndex],
-) -> typechat.PromptSection | None:
-    time_range = get_time_range_for_conversation(conversation)
-    if time_range is not None:
-        return typechat.PromptSection(
-            role="system",
-            content=f"ONLY IF user request explicitly asks for time ranges, "
-            f'THEN use the CONVERSATION TIME RANGE: "{time_range.start} to {time_range.end}"',
-        )
-
-
-# TODO: Move to conversation.py
-def get_time_range_for_conversation[
-    TMessage: IMessage, TIndex: ITermToSemanticRefIndex
-](
-    conversation: IConversation[TMessage, TIndex],
-) -> DateRange | None:
-    messages = conversation.messages
-    if len(messages) > 0:
-        start = messages[0].timestamp
-        if start is not None:
-            end = messages[-1].timestamp
-            return DateRange(
-                start=Datetime.fromisoformat(start),
-                end=Datetime.fromisoformat(end) if end else None,
-            )
-    return None
 
 
 if __name__ == "__main__":

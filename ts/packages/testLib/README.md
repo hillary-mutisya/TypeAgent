@@ -1,6 +1,8 @@
 # testLib
 
-Libraries used for Unit Testing
+testLib is **sample code** used by package unit tests.
+
+Contains wrappers for **jest** and other common scenarios that TypeAgent unit tests must handle.
 
 ## Trademarks
 

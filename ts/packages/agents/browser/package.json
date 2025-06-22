@@ -19,8 +19,8 @@
   },
   "main": "index.js",
   "scripts": {
-    "build": "npm run tsc:common && concurrently npm:tsc:agent npm:tsc:puppeteer npm:vite npm:build:visualization",
-    "build:dev": "npm run tsc:common && concurrently npm:tsc:agent npm:tsc:puppeteer npm:vite:dev npm:build:visualization",
+    "build": "npm run tsc:common && concurrently npm:tsc:agent npm:tsc:puppeteer npm:vite npm:build:visualization npm:tsc:typecheck",
+    "build:dev": "npm run tsc:common && concurrently npm:tsc:agent npm:tsc:puppeteer npm:vite:dev npm:tsc:typecheck npm:build:visualization",
     "build:visualization": "npm run build:vis-shared && npm run build:vis-server && npm run build:vis-client",
     "build:vis-shared": "tsc -p src/agent/discovery/visualization/shared/tsconfig.json",
     "build:vis-server": "tsc -p src/agent/discovery/visualization/server/tsconfig.json", 
@@ -33,6 +33,7 @@
     "tsc:agent": "tsc -p src/agent/tsconfig.json",
     "tsc:common": "tsc -p src/common/tsconfig.json",
     "tsc:puppeteer": "tsc -p src/puppeteer/tsconfig.json",
+    "tsc:typecheck": "tsc --noEmit -p tsconfig.json",
     "vite": "node scripts/buildExtension.mjs",
     "vite:dev": "node scripts/buildExtension.mjs --dev"
   },

@@ -13,5 +13,6 @@
     "strict": true
   },
   "include": ["./client/**/*.ts", "../shared/**/*.ts"],
+  "exclude": ["./dist/**/*", "../../../../dist/**/*"],
   "references": [{ "path": "../shared" }]
 }

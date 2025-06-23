@@ -24,7 +24,7 @@
     "build:visualization": "npm run build:vis-shared && npm run build:vis-server && npm run build:vis-client",
     "build:vis-shared": "tsc -p src/agent/discovery/visualization/shared/tsconfig.json",
     "build:vis-server": "tsc -p src/agent/discovery/visualization/server/tsconfig.json", 
-    "build:vis-client": "vite build --config src/agent/discovery/visualization/client/vite.config.js",
+    "build:vis-client": "vite build --config src/agent/discovery/visualization/client/vite.config.mjs",
     "clean": "rimraf dist deploy",
     "package": "node scripts/packExtension.mjs",
     "prettier": "prettier --check . --ignore-path ../../../.prettierignore",

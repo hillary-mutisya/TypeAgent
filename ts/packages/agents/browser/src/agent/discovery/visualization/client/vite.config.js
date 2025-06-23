@@ -12,7 +12,8 @@ export default defineConfig({
       }
     },
     sourcemap: true,
-    target: 'es2020'
+    target: 'es2020',
+    chunkSizeWarningLimit: 1000,
   },
   server: {
     port: 3000,

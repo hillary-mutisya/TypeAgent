@@ -1,9 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-/**
- * Action schema for plan visualization integration
- */
 
 export type PlanVisualizationActions = 
     | ShowPlanVisualization

@@ -5,6 +5,7 @@
       "rootDir": ".",
       "outDir": "../../dist/agent",
       "types": ["node"],
+      "lib": ["DOM", "ES2020", "DOM.Iterable"],
     },
     "include":["./**/*"],
     "references": [

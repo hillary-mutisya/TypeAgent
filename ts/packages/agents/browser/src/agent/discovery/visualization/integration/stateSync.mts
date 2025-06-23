@@ -2,8 +2,8 @@
 // Licensed under the MIT License.
 
 import { AuthoringState, WebPlanData } from "../shared/types.js";
-import { VisualizationManager } from "./visualizationManager.js";
-import { PlanVisualizationSync } from "./planVisualizationSync.js";
+import { VisualizationManager } from "./visualizationManager.mjs";
+import { PlanVisualizationSync } from "./planVisualizationSync.mjs";
 import registerDebug from "debug";
 
 const debug = registerDebug("typeagent:agent:browser:stateSync");
@@ -14,9 +14,9 @@ const debug = registerDebug("typeagent:agent:browser:stateSync");
  */
 export class StateSynchronizer {
     private visualizationManager: VisualizationManager;
-    private planVisualizationSync?: PlanVisualizationSync;
-    private currentAuthoringState?: AuthoringState;
-    private currentVisualizationState?: WebPlanData;
+    private planVisualizationSync?: PlanVisualizationSync | undefined;
+    private currentAuthoringState?: AuthoringState | undefined;
+    private currentVisualizationState?: WebPlanData | undefined;
     private syncEnabled: boolean = true;
 
     constructor(visualizationManager: VisualizationManager, planVisualizationSync?: PlanVisualizationSync) {
@@ -120,7 +120,7 @@ export class StateSynchronizer {
         }
 
         const nodes = [];
-        const links = [];
+        const links: { source: string; target: string; label: string; }[] = [];
 
         // Create initial node for plan start
         nodes.push({

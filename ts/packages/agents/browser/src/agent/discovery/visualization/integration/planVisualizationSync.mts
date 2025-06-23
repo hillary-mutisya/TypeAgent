@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import { SessionContext } from "@typeagent/agent-sdk";
-import { BrowserActionContext } from "../actionHandler.mjs";
+import { BrowserActionContext } from "../../../actionHandler.mjs";
 import { AuthoringState, WebPlanData } from "../shared/types.js";
 import registerDebug from "debug";
 

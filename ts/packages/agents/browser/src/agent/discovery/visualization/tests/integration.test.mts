@@ -6,15 +6,15 @@
  * Tests all phases of the integration including real-time synchronization
  */
 
-import { VisualizationManager } from "../integration/visualizationManager.js";
-import { StateSynchronizer } from "../integration/stateSync.js";
-import { PlanVisualizationSync } from "../integration/planVisualizationSync.js";
-import { AuthoringState, WebPlanData } from "../shared/types.js";
+import { VisualizationManager } from "../integration/visualizationManager.mjs";
+import { StateSynchronizer } from "../integration/stateSync.mjs";
+import { PlanVisualizationSync } from "../integration/planVisualizationSync.mjs";
+import { AuthoringState } from "../shared/types.js";
 
 // Mock WebSocket for testing
 class MockWebSocket {
     public readyState: number = 1; // WebSocket.OPEN
-    private messageHandler?: (event: any) => void;
+    private messageHandler?: ((event: any) => void) | undefined;
     private messages: any[] = [];
 
     send(data: string) {
@@ -52,10 +52,10 @@ class MockWebSocket {
  * Integration test suite for plan visualizer
  */
 export class PlanVisualizerIntegrationTest {
-    private visualizationManager: VisualizationManager;
-    private stateSynchronizer: StateSynchronizer;
-    private planVisualizationSync: PlanVisualizationSync;
-    private mockWebSocket: MockWebSocket;
+    private visualizationManager: VisualizationManager | undefined;
+    private stateSynchronizer: StateSynchronizer | undefined;
+    private planVisualizationSync: PlanVisualizationSync | undefined;
+    private mockWebSocket: MockWebSocket | undefined;
     private mockSessionContext: any;
 
     constructor() {
@@ -122,18 +122,18 @@ export class PlanVisualizerIntegrationTest {
             };
 
             // Clear previous messages
-            this.mockWebSocket.clearMessages();
+            this.mockWebSocket?.clearMessages();
 
             // Test plan update synchronization
-            await this.stateSynchronizer.syncAuthoringToVisualization(testPlan);
+            await this.stateSynchronizer?.syncAuthoringToVisualization(testPlan);
             
             // Verify WebSocket messages were sent
-            const messages = this.mockWebSocket.getMessages();
-            if (messages.length === 0) {
+            const messages = this.mockWebSocket?.getMessages();
+            if (messages?.length === 0) {
                 throw new Error("No WebSocket messages sent");
             }
 
-            const planUpdateMessage = messages.find(msg => 
+            const planUpdateMessage = messages?.find(msg => 
                 msg.method === 'planVisualization/updatePlan'
             );
             
@@ -146,9 +146,9 @@ export class PlanVisualizerIntegrationTest {
             }
 
             // Test state change
-            await this.planVisualizationSync.sendStateChange("authoring", 1);
+            await this.planVisualizationSync?.sendStateChange("authoring", 1);
             
-            const stateChangeMessage = this.mockWebSocket.getMessages().find(msg => 
+            const stateChangeMessage = this.mockWebSocket?.getMessages().find(msg => 
                 msg.method === 'planVisualization/stateChange'
             );
             
@@ -171,13 +171,13 @@ export class PlanVisualizerIntegrationTest {
         console.log("Testing Phase 3: UI Integration...");
         
         try {
-            this.mockWebSocket.clearMessages();
+            this.mockWebSocket?.clearMessages();
 
             // Test screenshot update
             const testScreenshot = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
-            await this.planVisualizationSync.sendScreenshotUpdate("Step 1", testScreenshot);
+            await this.planVisualizationSync?.sendScreenshotUpdate("Step 1", testScreenshot);
             
-            const screenshotMessage = this.mockWebSocket.getMessages().find(msg => 
+            const screenshotMessage = this.mockWebSocket?.getMessages().find(msg => 
                 msg.method === 'planVisualization/addScreenshot'
             );
             
@@ -187,9 +187,9 @@ export class PlanVisualizerIntegrationTest {
 
             // Test validation results
             const errors = ["Missing step description", "Invalid node connection"];
-            await this.planVisualizationSync.sendValidationResult(false, errors);
+            await this.planVisualizationSync?.sendValidationResult(false, errors);
             
-            const validationMessage = this.mockWebSocket.getMessages().find(msg => 
+            const validationMessage = this.mockWebSocket?.getMessages().find(msg => 
                 msg.method === 'planVisualization/validation'
             );
             
@@ -212,7 +212,7 @@ export class PlanVisualizerIntegrationTest {
         console.log("Testing Phase 4: Real-time Synchronization...");
         
         try {
-            this.mockWebSocket.clearMessages();
+            this.mockWebSocket?.clearMessages();
 
             // Test real-time plan updates
             const initialState: AuthoringState = {
@@ -223,7 +223,7 @@ export class PlanVisualizerIntegrationTest {
                 isEditing: true
             };
 
-            await this.stateSynchronizer.syncAuthoringToVisualization(initialState);
+            await this.stateSynchronizer?.syncAuthoringToVisualization(initialState);
             
             // Simulate state update
             const updatedState: AuthoringState = {
@@ -232,15 +232,15 @@ export class PlanVisualizerIntegrationTest {
                 currentStep: 1
             };
 
-            await this.stateSynchronizer.syncAuthoringToVisualization(updatedState);
+            await this.stateSynchronizer?.syncAuthoringToVisualization(updatedState);
             
-            const messages = this.mockWebSocket.getMessages();
-            if (messages.length < 2) {
+            const messages = this.mockWebSocket?.getMessages();
+            if (!messages || messages?.length < 2) {
                 throw new Error("Real-time updates not sent correctly");
             }
 
             // Test connection status monitoring
-            if (this.planVisualizationSync.getConnectionStatus() !== "open") {
+            if (this.planVisualizationSync?.getConnectionStatus() !== "open") {
                 throw new Error("Connection status not reported correctly");
             }
 
@@ -267,8 +267,8 @@ export class PlanVisualizerIntegrationTest {
         
         try {
             // Test disabled synchronization
-            this.stateSynchronizer.setSyncEnabled(false);
-            this.mockWebSocket.clearMessages();
+            this.stateSynchronizer?.setSyncEnabled(false);
+            this.mockWebSocket?.clearMessages();
 
             const testState: AuthoringState = {
                 planName: "Disabled Test",
@@ -278,14 +278,14 @@ export class PlanVisualizerIntegrationTest {
                 isEditing: true
             };
 
-            await this.stateSynchronizer.syncAuthoringToVisualization(testState);
+            await this.stateSynchronizer?.syncAuthoringToVisualization(testState);
             
-            if (this.mockWebSocket.getMessages().length > 0) {
+            if (this.mockWebSocket && this.mockWebSocket.getMessages().length > 0) {
                 throw new Error("Messages sent when synchronization disabled");
             }
 
             // Re-enable for other tests
-            this.stateSynchronizer.setSyncEnabled(true);
+            this.stateSynchronizer?.setSyncEnabled(true);
 
             // Test empty plan data
             const emptyState: AuthoringState = {
@@ -297,7 +297,7 @@ export class PlanVisualizerIntegrationTest {
             };
 
             // Should not throw error
-            await this.stateSynchronizer.syncAuthoringToVisualization(emptyState);
+            await this.stateSynchronizer?.syncAuthoringToVisualization(emptyState);
 
             console.log("✅ Edge Cases - PASSED");
             return true;
@@ -343,9 +343,9 @@ export class PlanVisualizerIntegrationTest {
      */
     async cleanup(): Promise<void> {
         try {
-            await this.visualizationManager.stop();
-            this.planVisualizationSync.disable();
-            this.mockWebSocket.clearMessages();
+            await this.visualizationManager?.stop();
+            this.planVisualizationSync?.disable();
+            this.mockWebSocket?.clearMessages();
         } catch (error) {
             console.warn("Cleanup warning:", error);
         }

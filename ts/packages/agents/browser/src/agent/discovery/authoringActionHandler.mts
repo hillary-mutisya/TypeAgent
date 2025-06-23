@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { AppAgent, TypeAgentAction } from "@typeagent/agent-sdk";
+import { AppAgent, SessionContext, TypeAgentAction } from "@typeagent/agent-sdk";
 import { BrowserConnector } from "../browserConnector.mjs";
 import { createActionResultNoDisplay } from "@typeagent/agent-sdk/helpers/action";
 import {
@@ -14,10 +14,11 @@ import { UserIntent } from "./schema/recordedActions.mjs";
 import { SchemaDiscoveryActions } from "./schema/discoveryActions.mjs";
 import { SchemaDiscoveryAgent } from "./translator.mjs";
 import { WebPlanResult, WebPlanSuggestions } from "./schema/evaluatePlan.mjs";
-import { VisualizationManager } from "./visualization/integration/visualizationManager.js";
-import { StateSynchronizer } from "./visualization/integration/stateSync.js";
-import { PlanVisualizationSync } from "./visualization/integration/planVisualizationSync.js";
+import { VisualizationManager } from "./visualization/integration/visualizationManager.mjs";
+import { StateSynchronizer } from "./visualization/integration/stateSync.mjs";
+import { PlanVisualizationSync } from "./visualization/integration/planVisualizationSync.mjs";
 import { AuthoringState } from "./visualization/shared/types.js";
+import { BrowserActionContext } from "../actionHandler.mjs";
 
 type WebPlanInfo = {
     webPlanName?: string | undefined;
@@ -34,17 +35,19 @@ type WebPlanAuthoringContext = {
     localHostPort?: number;
 };
 
+
 export function createSchemaAuthoringAgent(
     browser: BrowserConnector,
     agent: SchemaDiscoveryAgent<SchemaDiscoveryActions>,
-    context: WebPlanAuthoringContext,
-    sessionContext?: any, // Add session context for WebSocket access
+    sessionContext?: SessionContext<BrowserActionContext>,
 ): AppAgent {
-    const actionUtils = setupAuthoringActions(browser, agent, context);
+    const actionUtils = setupAuthoringActions(browser, agent, sessionContext);
     let intentInfo: { intentJson: UserIntent; actions: any } | undefined =
         undefined;
 
     let webPlanDraft: WebPlanInfo = {};
+
+    let context: WebPlanAuthoringContext = {};
 
     // Initialize visualization if port is available
     const initializeVisualization = async (): Promise<void> => {
@@ -72,6 +75,8 @@ export function createSchemaAuthoringAgent(
             }
         }
     };
+
+    initializeVisualization();
 
     return {
         async executeAction(

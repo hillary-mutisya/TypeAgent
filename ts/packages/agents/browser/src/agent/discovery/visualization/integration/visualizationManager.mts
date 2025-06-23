@@ -4,7 +4,7 @@
 import { ChildProcess, fork } from "child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { WebPlanData, AuthoringState } from "../shared/types.js";
+import { WebPlanData, AuthoringState, PlanNode, PlanLink } from "../shared/types.js";
 import registerDebug from "debug";
 
 const debug = registerDebug("typeagent:agent:browser:visualizationManager");
@@ -13,11 +13,11 @@ const debug = registerDebug("typeagent:agent:browser:visualizationManager");
  * Central manager for visualization lifecycle and state
  */
 export class VisualizationManager {
-    private server?: ChildProcess;
+    private server?: ChildProcess | undefined;
     private port: number;
     private isActive: boolean = false;
-    private currentPlan?: WebPlanData;
-    private authoringState?: AuthoringState;
+    private currentPlan?: WebPlanData | undefined;
+    private authoringState?: AuthoringState | undefined;
 
     constructor(port: number) {
         this.port = port;
@@ -170,9 +170,9 @@ export class VisualizationManager {
         }
 
         // Convert from authoring plan format
-        const nodes = [];
-        const links = [];
-
+        const nodes: PlanNode[] = [];
+        const links: PlanLink[] = [];
+        
         if (plan.webPlanSteps && Array.isArray(plan.webPlanSteps)) {
             plan.webPlanSteps.forEach((step: string, index: number) => {
                 nodes.push({

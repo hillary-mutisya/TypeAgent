@@ -149,12 +149,12 @@ export interface EventEmitter {
 
 // Authoring-specific types for enhanced integration
 export interface AuthoringState {
-    planName?: string;
-    planDescription?: string;
-    planSteps?: string[];
+    planName?: string | undefined;
+    planDescription?: string | undefined;
+    planSteps?: string[] | undefined;
     currentStep?: number;
     isEditing: boolean;
-    validationErrors?: string[];
+    validationErrors?: string[] | undefined;
 }
 
 export interface AuthoringModeConfig {

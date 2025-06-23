@@ -242,14 +242,14 @@ export class VisualizationManager {
             },
         );
 
-        const result = await Promise.race([viewServicePromise, timeoutPromise]);
+        return Promise.race([viewServicePromise, timeoutPromise]).then((result) => {
         clearTimeout(timeoutHandle);
-        
         if (!result) {
             throw new Error("Failed to create visualization server");
         }
-        
+
         return result;
+    });
     }
 
     /**

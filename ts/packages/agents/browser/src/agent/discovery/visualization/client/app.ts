@@ -109,7 +109,9 @@ document.addEventListener("DOMContentLoaded", function () {
         visualizer.initialize();
 
         // Make visualizer accessible globally
+        if(visualizer){
         window.visualizer = visualizer;
+        }
         window.webPlanData = webPlanData;
 
         if (tooltip) {

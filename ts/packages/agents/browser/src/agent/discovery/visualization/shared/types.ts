@@ -7,7 +7,7 @@
 
 declare global {
     interface Window {
-        webPlanData?: any;
+        webPlanData?: WebPlanData;
         showScreenshotUploadModal?: (nodeId: string, nodeLabel: string) => void;
         uploadScreenshot?: () => void;
     }

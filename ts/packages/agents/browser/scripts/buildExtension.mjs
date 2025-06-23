@@ -15,6 +15,24 @@ const isDev =
 const buildMode = isDev ? "development" : "production";
 const verbose = process.argv.includes("--verbose");
 
+// Shared build options for optimization
+const getSharedBuildOptions = (outDir, format = "iife") => ({
+    logLevel: verbose ? "info" : "error",
+    build: {
+        outDir,
+        emptyOutDir: false,
+        sourcemap: isDev,
+        minify: !isDev,
+        target: 'es2020',
+        rollupOptions: {
+            output: {
+                format,
+                inlineDynamicImports: true,
+            },
+        },
+    },
+});
+
 const chromeOutDir = resolve(__dirname, "../dist/extension");
 const electronOutDir = resolve(__dirname, "../dist/electron");
 const srcDir = resolve(__dirname, "../src/extension");
@@ -71,12 +89,10 @@ if (verbose) console.log(chalk.cyan("🚀 Building Browser extension..."));
 
 // Service worker (ESM)
 await build({
-    logLevel: "error",
+    ...getSharedBuildOptions(chromeOutDir, "es"),
     build: {
-        outDir: chromeOutDir,
+        ...getSharedBuildOptions(chromeOutDir, "es").build,
         emptyOutDir: !isDev,
-        sourcemap: isDev,
-        minify: !isDev,
         rollupOptions: {
             input: { serviceWorker: resolve(srcDir, "serviceWorker/index.ts") },
             output: {
@@ -93,12 +109,9 @@ for (const [name, relPath] of Object.entries(sharedScripts)) {
     const input = resolve(srcDir, relPath);
     if (verbose) console.log(chalk.yellow(`➡️  Chrome content: ${name}`));
     await build({
-        logLevel: "error",
+        ...getSharedBuildOptions(chromeOutDir),
         build: {
-            outDir: chromeOutDir,
-            emptyOutDir: false,
-            sourcemap: isDev,
-            minify: !isDev,
+            ...getSharedBuildOptions(chromeOutDir).build,
             rollupOptions: {
                 input,
                 output: {
@@ -141,12 +154,9 @@ for (const [name, relPath] of Object.entries(sharedScripts)) {
     const input = resolve(srcDir, relPath);
     if (verbose) console.log(chalk.yellow(`➡️  Electron shared: ${name}`));
     await build({
-        logLevel: "error",
+        ...getSharedBuildOptions(electronOutDir),
         build: {
-            outDir: electronOutDir,
-            emptyOutDir: false,
-            sourcemap: isDev,
-            minify: !isDev,
+            ...getSharedBuildOptions(electronOutDir).build,
             rollupOptions: {
                 input,
                 output: {
@@ -164,12 +174,9 @@ for (const [name, relPath] of Object.entries(electronOnlyScripts)) {
     const input = resolve(__dirname, relPath);
     if (verbose) console.log(chalk.yellow(`➡️  Electron only: ${name}`));
     await build({
-        logLevel: "error",
+        ...getSharedBuildOptions(electronOutDir),
         build: {
-            outDir: electronOutDir,
-            emptyOutDir: false,
-            sourcemap: isDev,
-            minify: !isDev,
+            ...getSharedBuildOptions(electronOutDir).build,
             rollupOptions: {
                 input,
                 output: {

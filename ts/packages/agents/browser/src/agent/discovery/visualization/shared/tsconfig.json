@@ -4,6 +4,8 @@
     "outDir": "../../../../../dist/agent/discovery/visualization/shared",
     "rootDir": ".",
     "composite": true,
+    "incremental": true,
+    "tsBuildInfoFile": "../../../../../.tsbuildinfo/vis-shared.tsbuildinfo",
     "declaration": true,
     "declarationMap": true
   },

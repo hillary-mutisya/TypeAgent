@@ -292,16 +292,44 @@ export class WebsiteCollection
         baseFileName: string,
     ): Promise<WebsiteCollection | undefined> {
         const websiteCollection = new WebsiteCollection();
-        const data = await readConversationDataFromFile(
-            dirPath,
-            baseFileName,
-            websiteCollection.settings.relatedTermIndexSettings
-                .embeddingIndexSettings?.embeddingSize,
-        );
-        if (data) {
-            websiteCollection.deserialize(data);
+        try {
+            // First try with expected embedding size validation
+            const data = await readConversationDataFromFile(
+                dirPath,
+                baseFileName,
+                websiteCollection.settings.relatedTermIndexSettings
+                    .embeddingIndexSettings?.embeddingSize,
+            );
+            if (data) {
+                websiteCollection.deserialize(data);
+            }
+            return websiteCollection;
+        } catch (error) {
+            // If embedding size mismatch, try loading without size validation
+            if (error instanceof Error && error.message.includes('File has embeddings of size')) {
+                console.warn(`Website collection embedding size mismatch: ${error.message}`);
+                console.warn('Attempting to load without embedding size validation...');
+                
+                try {
+                    const data = await readConversationDataFromFile(
+                        dirPath,
+                        baseFileName,
+                        undefined, // No embedding size validation
+                    );
+                    if (data) {
+                        websiteCollection.deserialize(data);
+                        console.warn('Successfully loaded website collection with mismatched embedding size.');
+                        console.warn('Consider rebuilding the index for optimal performance.');
+                    }
+                    return websiteCollection;
+                } catch (secondError) {
+                    console.error('Failed to load website collection even without embedding validation:', secondError);
+                    throw secondError;
+                }
+            } else {
+                throw error;
+            }
         }
-        return websiteCollection;
     }
 
     public static async fromBuffer(

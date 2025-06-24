@@ -145,10 +145,14 @@ export type ImportWebsiteData = {
 export type SearchWebsites = {
     actionName: "searchWebsites";
     parameters: {
+        // The original user request
+        originalUserRequest: string;
         // Search query terms
         query: string;
         // Filter by domain
         domain?: string;
+        // Temporal intent, if present
+        temporalIntent: 'recent' | 'earliest' | 'none';
         // Filter by page type (news, commerce, social, etc.)
         pageType?: string;
         // Filter by source (bookmark, history)

@@ -91,7 +91,7 @@ function checkIncrementalBuild() {
     }
 }
 
-const updateBuildHash = checkIncrementalBuild();
+// const updateBuildHash = checkIncrementalBuild();
 
 // --- 🔧 Detect dev mode ---
 const isDev =
@@ -277,7 +277,7 @@ copyFileSync(
 if (verbose) console.log(chalk.green("✅ Electron static assets copied\n"));
 
 // Update build hash to mark successful completion
-updateBuildHash(true); // true = actually built something
+// updateBuildHash(true); // true = actually built something
 
 if (verbose)
     console.log(

@@ -259,6 +259,9 @@ export async function findRequestedWebsites(
     }
 
     try {
+
+        // debug("Website Colletion: ", JSON.stringify(context.websiteCollection))
+
         const matches = await kp.searchConversationKnowledge(
             context.websiteCollection,
             // search group
@@ -275,6 +278,8 @@ export async function findRequestedWebsites(
                 exactMatch: exactMatch,
             },
         );
+
+        debug("Matches: ", JSON.stringify(matches))
 
         if (!matches || matches.size === 0) {
             debug(
@@ -376,7 +381,7 @@ function searchFiltersToSearchTerms(filters: string[]): any[] {
         terms.push({ term: { text: filter } });
 
         // Add individual words if it's a multi-word filter
-        /*
+        
         const words = filter
             .toLowerCase()
             .split(/\s+/)
@@ -386,7 +391,7 @@ function searchFiltersToSearchTerms(filters: string[]): any[] {
                 terms.push({ term: { text: word } });
             }
         });
-        */
+        
     });
 
     return terms;
@@ -517,6 +522,8 @@ export async function searchWebsites(
         const searchFilters = [originalUserRequest];
         if (domain) searchFilters.push(domain);
         if (pageType) searchFilters.push(pageType);
+
+        debug("Search terms: ", searchFilters)
 
         // Use the improved search function
         let matchedWebsites = await findRequestedWebsites(

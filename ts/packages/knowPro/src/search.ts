@@ -160,6 +160,7 @@ export async function searchConversationKnowledge(
         whenFilter,
         options,
     );
+    console.log("Query created: ", JSON.stringify(query))
     return runQuery(conversation, options, query);
 }
 

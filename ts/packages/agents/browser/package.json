@@ -11,6 +11,7 @@
   },
   "license": "MIT",
   "author": "Microsoft",
+  "type": "module",
   "sideEffects": false,
   "exports": {
     "./agent/manifest": "./src/agent/manifest.json",

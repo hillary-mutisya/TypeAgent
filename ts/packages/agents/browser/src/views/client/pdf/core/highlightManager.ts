@@ -117,8 +117,9 @@ export class HighlightManager {
         // Prevent default selection behavior in highlight mode
         document.addEventListener('selectstart', (event) => {
             if (this.isHighlightMode) {
-                const target = event.target as HTMLElement;
-                if (target.closest('.textLayer')) {
+                const target = event.target;
+                // Check if target is an Element (has closest method)
+                if (target instanceof Element && target.closest('.textLayer')) {
                     // Allow text selection in text layer
                     return;
                 }

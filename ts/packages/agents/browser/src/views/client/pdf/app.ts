@@ -5,6 +5,9 @@ import { PDFApiService } from "./services/pdfApiService";
 import { PDFSSEClient } from "./services/pdfSSEClient";
 import { AnnotationManager } from "./core/annotationManager";
 import { AnnotationSidebar } from "./components/annotationSidebar";
+import { ContextMenu } from "./components/contextMenu";
+import { TextSelectionToolbar } from "./components/textSelectionToolbar";
+import { MarkdownNoteEditor } from "./components/markdownNoteEditor";
 
 // PDF.js types
 declare global {
@@ -25,12 +28,23 @@ export class TypeAgentPDFViewerApp {
     private documentId: string | null = null;
     private annotationManager: AnnotationManager;
     private annotationSidebar: AnnotationSidebar;
+    private contextMenu: ContextMenu;
+    private textSelectionToolbar: TextSelectionToolbar;
+    private markdownNoteEditor: MarkdownNoteEditor;
 
     constructor() {
+        console.log('🔍 App: Initializing components');
         this.pdfApiService = new PDFApiService();
         this.annotationManager = new AnnotationManager(this.pdfApiService);
         this.annotationSidebar = new AnnotationSidebar();
+       
+        this.contextMenu = new ContextMenu();
+        this.textSelectionToolbar = new TextSelectionToolbar();
+        this.markdownNoteEditor = new MarkdownNoteEditor();
+        
         this.setupSidebarIntegration();
+        this.setupPhase2Integration();
+        console.log('🔍 App: All components initialized');
     }
 
     /**
@@ -1043,8 +1057,8 @@ export class TypeAgentPDFViewerApp {
 
         // Hide tool panels when clicking outside
         document.addEventListener('click', (event) => {
-            const target = event.target as HTMLElement;
-            if (!target.closest('.annotation-tools')) {
+            const target = event.target;
+            if (target instanceof Element && !target.closest('.annotation-tools')) {
                 this.hideAllToolPanels();
             }
         });
@@ -1112,8 +1126,8 @@ export class TypeAgentPDFViewerApp {
     private setupSidebarIntegration(): void {
         // Listen for sidebar toggle
         document.addEventListener('click', (event) => {
-            const target = event.target as HTMLElement;
-            if (target.id === 'sidebarToggle' || target.closest('#sidebarToggle')) {
+            const target = event.target;
+            if (target instanceof Element && (target.id === 'sidebarToggle' || target.closest('#sidebarToggle'))) {
                 this.annotationSidebar.toggle();
             }
         });
@@ -1255,6 +1269,153 @@ export class TypeAgentPDFViewerApp {
         } catch (error) {
             console.error('Failed to export annotations:', error);
         }
+    }
+
+    /**
+     * Setup Phase 2 component integration
+     */
+    private setupPhase2Integration(): void {
+        // Context Menu Integration
+        this.contextMenu.on('highlight-selected', (data) => {
+            this.annotationManager.getHighlightManager().createHighlightFromSelection(
+                data.selection,
+                data.color,
+                data.pageElement
+            );
+        });
+
+        this.contextMenu.on('note-create', (data) => {
+            if (data.selectedText) {
+                this.annotationManager.getNoteManager().createNoteFromSelection(
+                    data.selectedText,
+                    data.pageElement,
+                    true // Use markdown editor
+                );
+            } else {
+                // Create note at specific position
+                const pageNum = this.getPageNumberFromElement(data.pageElement);
+                if (pageNum) {
+                    this.markdownNoteEditor.show(pageNum, data.position);
+                }
+            }
+        });
+
+        this.contextMenu.on('highlight-delete', async (data) => {
+            await this.annotationManager.getHighlightManager().deleteHighlight(data.highlightId);
+        });
+
+        this.contextMenu.on('highlight-change-color', async (data) => {
+            await this.annotationManager.getHighlightManager().changeHighlightColor(
+                data.highlightId,
+                data.color
+            );
+        });
+
+        this.contextMenu.on('copy-text', (data) => {
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(data.text);
+            }
+        });
+
+        // Text Selection Toolbar Integration
+        this.textSelectionToolbar.on('highlight-created', (data) => {
+            this.annotationManager.getHighlightManager().createHighlightFromSelection(
+                data.selection,
+                data.color,
+                data.pageElement
+            );
+        });
+
+        this.textSelectionToolbar.on('note-created', (data) => {
+            this.annotationManager.getNoteManager().createNoteFromSelection(
+                data.selection.toString(),
+                data.pageElement,
+                true // Use markdown editor
+            );
+        });
+
+        this.textSelectionToolbar.on('text-copied', (data) => {
+            console.log('Text copied via toolbar:', data.text);
+        });
+
+        // Markdown Note Editor Integration
+        this.markdownNoteEditor.on('note-saved', async (data) => {
+            await this.annotationManager.getNoteManager().createNoteWithContent(
+                data.pageNumber,
+                data.position,
+                data.content,
+                data.contentType,
+                data.selectedText
+            );
+        });
+
+        this.markdownNoteEditor.on('note-cancelled', () => {
+            console.log('Note creation cancelled');
+        });
+
+        // Listen for custom events to show markdown editor
+        document.addEventListener('show-markdown-editor', (event: any) => {
+            const { pageNumber, position, initialContent, selectedText } = event.detail;
+            this.markdownNoteEditor.show(pageNumber, position, initialContent, selectedText);
+        });
+
+        // Listen for PDF-specific events
+        document.addEventListener('pdf-zoom-to-fit', () => {
+            this.zoomToFit();
+        });
+
+        document.addEventListener('pdf-zoom-to-width', () => {
+            this.zoomToWidth();
+        });
+    }
+
+    /**
+     * Get page number from page wrapper element
+     */
+    private getPageNumberFromElement(element: HTMLElement): number | null {
+        // Try to find page number from data attribute
+        const pageAttr = element.getAttribute('data-page-number');
+        if (pageAttr) {
+            return parseInt(pageAttr, 10);
+        }
+
+        // Look for child page element
+        const pageElement = element.querySelector('[data-page-number]') as HTMLElement;
+        if (pageElement) {
+            const pageNum = pageElement.getAttribute('data-page-number');
+            if (pageNum) {
+                return parseInt(pageNum, 10);
+            }
+        }
+
+        // Fallback: find by position
+        const container = document.getElementById('viewerContainer') || document.getElementById('pdfContainer');
+        if (container) {
+            const pageWrappers = container.querySelectorAll('.page-wrapper');
+            for (let i = 0; i < pageWrappers.length; i++) {
+                if (pageWrappers[i] === element || pageWrappers[i].contains(element)) {
+                    return i + 1;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Zoom to fit the page in viewport
+     */
+    private zoomToFit(): void {
+        // Implementation would depend on existing zoom logic
+        console.log('Zoom to fit requested');
+    }
+
+    /**
+     * Zoom to fit page width
+     */
+    private zoomToWidth(): void {
+        // Implementation would depend on existing zoom logic
+        console.log('Zoom to width requested');
     }
 
     /**

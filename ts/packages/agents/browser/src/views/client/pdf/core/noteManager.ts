@@ -11,6 +11,7 @@ export interface Note {
     documentId: string;
     page: number;
     content: string;
+    contentType: 'markdown' | 'plain';
     coordinates: {
         x: number;
         y: number;
@@ -18,6 +19,7 @@ export interface Note {
     createdAt: string;
     updatedAt: string;
     userId?: string;
+    selectedText?: string;
 }
 
 /**
@@ -91,8 +93,8 @@ export class NoteManager {
         // Close popup on outside click
         document.addEventListener('click', (event) => {
             if (this.activePopup && !this.activePopup.contains(event.target as Node)) {
-                const target = event.target as HTMLElement;
-                if (!target.closest('.note-icon') && !target.closest('.note-popup')) {
+                const target = event.target;
+                if (target instanceof Element && !target.closest('.note-icon') && !target.closest('.note-popup')) {
                     this.closeNotePopup();
                 }
             }
@@ -115,7 +117,10 @@ export class NoteManager {
         event.preventDefault();
         event.stopPropagation();
 
-        const target = event.target as HTMLElement;
+        const target = event.target;
+        if (!(target instanceof Element)) {
+            return;
+        }
         
         // Don't create note if clicking on existing note or popup
         if (target.closest('.note-icon') || target.closest('.note-popup')) {
@@ -192,7 +197,8 @@ export class NoteManager {
         pageNum: number,
         coordinates: { x: number; y: number },
         screenX: number,
-        screenY: number
+        screenY: number,
+        selectedText?: string
     ): void {
         // Close any existing popup
         this.closeNotePopup();
@@ -216,10 +222,15 @@ export class NoteManager {
         `;
 
         // Create popup content
+        const placeholder = selectedText 
+            ? `Add a note about: "${selectedText.substring(0, 50)}${selectedText.length > 50 ? '...' : ''}"`
+            : 'Enter your note...';
+
         popup.innerHTML = `
             <div style="padding: 16px; border-bottom: 1px solid #eee;">
                 <h4 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600;">Add Note</h4>
-                <textarea id="noteContent" placeholder="Enter your note..." style="
+                ${selectedText ? `<div style="background: #f8f9fa; border-left: 3px solid #007bff; padding: 8px; margin-bottom: 8px; font-size: 12px; color: #666;">Selected: "${selectedText.substring(0, 100)}${selectedText.length > 100 ? '...' : ''}"</div>` : ''}
+                <textarea id="noteContent" placeholder="${placeholder}" style="
                     width: 100%;
                     height: 80px;
                     border: 1px solid #ddd;
@@ -231,24 +242,29 @@ export class NoteManager {
                     font-family: inherit;
                 "></textarea>
             </div>
-            <div style="padding: 12px 16px; display: flex; justify-content: flex-end; gap: 8px;">
-                <button id="cancelNote" style="
-                    background: none;
-                    border: 1px solid #ddd;
-                    padding: 6px 12px;
-                    border-radius: 4px;
-                    cursor: pointer;
-                    font-size: 13px;
-                ">Cancel</button>
-                <button id="saveNote" style="
-                    background: #007acc;
-                    color: white;
-                    border: none;
-                    padding: 6px 12px;
-                    border-radius: 4px;
-                    cursor: pointer;
-                    font-size: 13px;
-                ">Save</button>
+            <div style="padding: 12px 16px; display: flex; justify-content: space-between; align-items: center;">
+                <label style="font-size: 12px; color: #666;">
+                    <input type="checkbox" id="useMarkdown" ${selectedText ? 'checked' : ''}> Use Markdown
+                </label>
+                <div style="display: flex; gap: 8px;">
+                    <button id="cancelNote" style="
+                        background: none;
+                        border: 1px solid #ddd;
+                        padding: 6px 12px;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-size: 13px;
+                    ">Cancel</button>
+                    <button id="saveNote" style="
+                        background: #007acc;
+                        color: white;
+                        border: none;
+                        padding: 6px 12px;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-size: 13px;
+                    ">Save</button>
+                </div>
             </div>
         `;
 
@@ -262,11 +278,13 @@ export class NoteManager {
         // Setup event handlers
         const saveBtn = popup.querySelector('#saveNote') as HTMLButtonElement;
         const cancelBtn = popup.querySelector('#cancelNote') as HTMLButtonElement;
+        const useMarkdownCheckbox = popup.querySelector('#useMarkdown') as HTMLInputElement;
 
         saveBtn.addEventListener('click', async () => {
             const content = textarea.value.trim();
             if (content) {
-                await this.saveNote(pageNum, coordinates, content);
+                const contentType = useMarkdownCheckbox.checked ? 'markdown' : 'plain';
+                await this.saveNote(pageNum, coordinates, content, contentType, selectedText);
             }
             this.closeNotePopup();
         });
@@ -280,7 +298,8 @@ export class NoteManager {
             if (event.key === 'Enter' && event.ctrlKey) {
                 const content = textarea.value.trim();
                 if (content) {
-                    await this.saveNote(pageNum, coordinates, content);
+                    const contentType = useMarkdownCheckbox.checked ? 'markdown' : 'plain';
+                    await this.saveNote(pageNum, coordinates, content, contentType, selectedText);
                 }
                 this.closeNotePopup();
             }
@@ -293,7 +312,9 @@ export class NoteManager {
     private async saveNote(
         pageNum: number,
         coordinates: { x: number; y: number },
-        content: string
+        content: string,
+        contentType: 'markdown' | 'plain' = 'plain',
+        selectedText?: string
     ): Promise<void> {
         if (!this.documentId) {
             return;
@@ -305,7 +326,9 @@ export class NoteManager {
                 documentId: this.documentId,
                 page: pageNum,
                 content: content,
-                coordinates: coordinates
+                contentType: contentType,
+                coordinates: coordinates,
+                selectedText: selectedText
             };
 
             // Save via API
@@ -711,6 +734,145 @@ export class NoteManager {
      */
     getNotesForPage(pageNum: number): Note[] {
         return this.getAllNotes().filter(n => n.page === pageNum);
+    }
+
+    /**
+     * Create note from text selection (for integration with context menu and toolbar)
+     */
+    async createNoteFromSelection(
+        selectedText: string, 
+        pageWrapper: HTMLElement, 
+        useMarkdownEditor = true
+    ): Promise<void> {
+        const pageNum = this.getPageNumberFromWrapper(pageWrapper);
+        if (!pageNum) {
+            console.error('Could not determine page number');
+            return;
+        }
+
+        if (!this.documentId) {
+            console.error('No document ID set for note creation');
+            return;
+        }
+
+        if (useMarkdownEditor) {
+            // Format selected text as markdown blockquote
+            const blockquote = selectedText
+                .split('\n')
+                .map(line => `> ${line}`)
+                .join('\n');
+            
+            const initialContent = `${blockquote}\n\n`;
+            
+            // Get selection position for note placement
+            const selection = window.getSelection();
+            let coordinates = { x: 100, y: 100 }; // Default position
+            
+            if (selection && selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
+                const rect = range.getBoundingClientRect();
+                const pageRect = pageWrapper.getBoundingClientRect();
+                coordinates = {
+                    x: rect.left - pageRect.left,
+                    y: rect.top - pageRect.top
+                };
+            }
+
+            // Emit event for markdown editor to handle
+            const event = new CustomEvent('show-markdown-editor', {
+                detail: {
+                    pageNumber: pageNum,
+                    position: coordinates,
+                    initialContent: initialContent,
+                    selectedText: selectedText
+                }
+            });
+            document.dispatchEvent(event);
+        } else {
+            // Use simple popup editor
+            this.showNoteCreationPopup(pageNum, { x: 100, y: 100 }, 200, 200, selectedText);
+        }
+    }
+
+    /**
+     * Create note with markdown content (for integration with markdown editor)
+     */
+    async createNoteWithContent(
+        pageNum: number,
+        coordinates: { x: number; y: number },
+        content: string,
+        contentType: 'markdown' | 'plain' = 'markdown',
+        selectedText?: string
+    ): Promise<void> {
+        if (!this.documentId) {
+            console.error('No document ID set for note creation');
+            return;
+        }
+
+        try {
+            // Create note data
+            const noteData: Omit<Note, 'id' | 'createdAt' | 'updatedAt'> = {
+                documentId: this.documentId,
+                page: pageNum,
+                content: content,
+                contentType: contentType,
+                coordinates: coordinates,
+                selectedText: selectedText
+            };
+
+            // Save via API
+            const savedNote = await this.pdfApiService.addNote(this.documentId, noteData);
+
+            // Store locally
+            this.notes.set(savedNote.id, savedNote);
+
+            // Render note icon
+            this.renderNoteIcon(savedNote);
+
+            console.log('📝 Note created:', savedNote);
+
+            // Emit success event
+            const event = new CustomEvent('note-created', {
+                detail: { note: savedNote }
+            });
+            document.dispatchEvent(event);
+
+        } catch (error) {
+            console.error('Failed to save note:', error);
+        }
+    }
+
+    /**
+     * Get page number from page wrapper element
+     */
+    private getPageNumberFromWrapper(pageWrapper: HTMLElement): number | null {
+        // First try data attribute
+        const pageAttr = pageWrapper.getAttribute('data-page-number');
+        if (pageAttr) {
+            return parseInt(pageAttr, 10);
+        }
+
+        // Look for child page element with data attribute
+        const pageElement = pageWrapper.querySelector('.page[data-page-number]') as HTMLElement;
+        if (pageElement) {
+            const pageNum = pageElement.getAttribute('data-page-number');
+            if (pageNum) {
+                return parseInt(pageNum, 10);
+            }
+        }
+
+        // Fallback: find by position in container
+        const container = document.getElementById('viewerContainer') || document.getElementById('pdfContainer');
+        if (container) {
+            const pageWrappers = container.querySelectorAll('.page-wrapper');
+            for (let i = 0; i < pageWrappers.length; i++) {
+                if (pageWrappers[i] === pageWrapper) {
+                    return i + 1;
+                }
+            }
+        }
+
+        return null;
     }
 
     /**

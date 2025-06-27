@@ -1,0 +1,363 @@
+/* Markdown Note Editor Styles */
+.markdown-note-editor-modal {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+    animation: modalFadeIn 0.3s ease-out;
+}
+
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+        backdrop-filter: blur(0px);
+    }
+    to {
+        opacity: 1;
+        backdrop-filter: blur(4px);
+    }
+}
+
+.markdown-editor-container {
+    animation: containerSlideIn 0.3s ease-out;
+}
+
+@keyframes containerSlideIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9) translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* Editor textarea styles */
+.markdown-editor {
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Source Code Pro', monospace;
+    tab-size: 4;
+}
+
+.markdown-editor:focus {
+    box-shadow: inset 0 0 0 2px #007bff;
+}
+
+/* Preview styles */
+.markdown-preview {
+    color: #333;
+}
+
+.markdown-preview h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 16px 0;
+    color: #1a1a1a;
+    border-bottom: 2px solid #e0e0e0;
+    padding-bottom: 8px;
+}
+
+.markdown-preview h2 {
+    font-size: 22px;
+    font-weight: 600;
+    margin: 24px 0 12px 0;
+    color: #1a1a1a;
+}
+
+.markdown-preview h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 20px 0 10px 0;
+    color: #1a1a1a;
+}
+
+.markdown-preview p {
+    margin: 0 0 16px 0;
+    line-height: 1.6;
+}
+
+.markdown-preview ul {
+    margin: 0 0 16px 0;
+    padding-left: 24px;
+}
+
+.markdown-preview li {
+    margin: 4px 0;
+}
+
+.markdown-preview blockquote {
+    margin: 16px 0;
+    padding: 12px 16px;
+    background: #f8f9fa;
+    border-left: 4px solid #007bff;
+    border-radius: 0 4px 4px 0;
+    font-style: italic;
+    color: #555;
+}
+
+.markdown-preview code {
+    background: #f1f3f4;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+    font-size: 0.9em;
+    color: #d73a49;
+}
+
+.markdown-preview pre {
+    background: #f8f9fa;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 16px;
+    margin: 16px 0;
+    overflow-x: auto;
+}
+
+.markdown-preview pre code {
+    background: none;
+    padding: 0;
+    color: #333;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.markdown-preview a {
+    color: #007bff;
+    text-decoration: none;
+}
+
+.markdown-preview a:hover {
+    text-decoration: underline;
+}
+
+.markdown-preview strong {
+    font-weight: 600;
+    color: #1a1a1a;
+}
+
+.markdown-preview em {
+    font-style: italic;
+    color: #555;
+}
+
+/* Toolbar button styles */
+.markdown-editor-container button {
+    transition: all 0.2s ease;
+}
+
+.markdown-editor-container button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.markdown-editor-container button:active {
+    transform: translateY(0);
+    transition: all 0.1s ease;
+}
+
+/* Keyboard shortcut styling */
+kbd {
+    background: #f1f3f4;
+    border: 1px solid #c0c0c0;
+    border-radius: 3px;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.2), inset 0 0 0 2px #ffffff;
+    color: #333;
+    display: inline-block;
+    font-family: 'SF Mono', 'Monaco', monospace;
+    font-size: 11px;
+    line-height: 1.4;
+    margin: 0 2px;
+    padding: 2px 6px;
+    white-space: nowrap;
+}
+
+/* Scrollbar styling for webkit browsers */
+.markdown-preview::-webkit-scrollbar {
+    width: 8px;
+}
+
+.markdown-preview::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.markdown-preview::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.markdown-preview::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+.markdown-editor::-webkit-scrollbar {
+    width: 8px;
+}
+
+.markdown-editor::-webkit-scrollbar-track {
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
+.markdown-editor::-webkit-scrollbar-thumb {
+    background: #d0d0d0;
+    border-radius: 4px;
+}
+
+.markdown-editor::-webkit-scrollbar-thumb:hover {
+    background: #b0b0b0;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .markdown-editor-container {
+        background: #1e1e1e;
+        border-color: #444;
+    }
+    
+    .markdown-editor-container .header,
+    .markdown-editor-container .footer {
+        background: #2d2d2d;
+        border-color: #444;
+        color: #fff;
+    }
+    
+    .markdown-editor {
+        background: #1a1a1a;
+        color: #e0e0e0;
+        border-color: #444;
+    }
+    
+    .markdown-preview {
+        background: #1e1e1e;
+        color: #e0e0e0;
+        border-color: #444;
+    }
+    
+    .markdown-preview h1,
+    .markdown-preview h2,
+    .markdown-preview h3 {
+        color: #fff;
+    }
+    
+    .markdown-preview h1 {
+        border-bottom-color: #444;
+    }
+    
+    .markdown-preview blockquote {
+        background: #2a2a2a;
+        color: #ccc;
+        border-left-color: #007bff;
+    }
+    
+    .markdown-preview code {
+        background: #2a2a2a;
+        color: #ff79c6;
+    }
+    
+    .markdown-preview pre {
+        background: #2a2a2a;
+        border-color: #444;
+    }
+    
+    kbd {
+        background: #2a2a2a;
+        border-color: #555;
+        color: #e0e0e0;
+        box-shadow: 0 1px 0 rgba(255,255,255,0.1), inset 0 0 0 2px #1e1e1e;
+    }
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+    .markdown-editor-container {
+        width: 95%;
+        height: 90%;
+        max-height: none;
+    }
+    
+    .markdown-editor-container .content {
+        flex-direction: column;
+    }
+    
+    .markdown-editor-container .editor-pane,
+    .markdown-editor-container .preview-pane {
+        min-width: auto;
+        min-height: 200px;
+    }
+    
+    .markdown-editor-container .splitter {
+        width: auto;
+        height: 4px;
+        cursor: row-resize;
+    }
+    
+    .markdown-editor-container .toolbar {
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    
+    .markdown-editor-container .footer {
+        flex-direction: column;
+        gap: 12px;
+        text-align: center;
+    }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .markdown-editor-container {
+        border: 2px solid;
+    }
+    
+    .markdown-editor,
+    .markdown-preview {
+        border: 1px solid;
+    }
+    
+    .markdown-preview blockquote {
+        border-left-width: 6px;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    .markdown-note-editor-modal,
+    .markdown-editor-container,
+    .markdown-editor-container button {
+        animation: none;
+        transition: none;
+    }
+    
+    .markdown-editor-container button:hover {
+        transform: none;
+        box-shadow: none;
+    }
+}
+
+/* Print styles */
+@media print {
+    .markdown-note-editor-modal {
+        position: static;
+        background: none;
+        backdrop-filter: none;
+    }
+    
+    .markdown-editor-container {
+        box-shadow: none;
+        border: 1px solid #000;
+        width: 100%;
+        height: auto;
+        max-width: none;
+        max-height: none;
+    }
+    
+    .markdown-editor-container .header,
+    .markdown-editor-container .footer,
+    .markdown-editor-container .toolbar,
+    .markdown-editor-container .editor-pane {
+        display: none;
+    }
+    
+    .markdown-editor-container .preview-pane {
+        border: none;
+        min-width: auto;
+    }
+}

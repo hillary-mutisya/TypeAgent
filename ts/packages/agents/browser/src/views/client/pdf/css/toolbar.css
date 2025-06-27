@@ -1,0 +1,189 @@
+/* Text Selection Toolbar Styles */
+.text-selection-toolbar {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+    animation: toolbarFadeIn 0.2s ease-out;
+    transform-origin: center bottom;
+}
+
+@keyframes toolbarFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9) translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* Toolbar button animations */
+.text-selection-toolbar button {
+    transition: all 0.2s ease;
+}
+
+.text-selection-toolbar button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.text-selection-toolbar button:active {
+    transform: translateY(0);
+    transition: all 0.1s ease;
+}
+
+/* Color button specific styles */
+.color-button {
+    position: relative;
+    overflow: hidden;
+}
+
+.color-button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.color-button:hover::before {
+    opacity: 1;
+}
+
+/* Separator styling */
+.toolbar-separator {
+    height: 24px;
+    width: 1px;
+    background: linear-gradient(to bottom, transparent, #e0e0e0 20%, #e0e0e0 80%, transparent);
+}
+
+/* Tooltip enhancements */
+.text-selection-toolbar button[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    z-index: 10002;
+    margin-bottom: 5px;
+    animation: tooltipFadeIn 0.3s ease;
+}
+
+.text-selection-toolbar button[title]:hover::before {
+    content: '';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 4px solid transparent;
+    border-top-color: #333;
+    z-index: 10002;
+    margin-bottom: 1px;
+}
+
+@keyframes tooltipFadeIn {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+/* Copy feedback animation */
+.copy-feedback {
+    animation: copyFeedback 2s ease-in-out;
+}
+
+@keyframes copyFeedback {
+    0% { 
+        opacity: 0; 
+        transform: translateY(10px) scale(0.9); 
+    }
+    20% { 
+        opacity: 1; 
+        transform: translateY(0) scale(1); 
+    }
+    80% { 
+        opacity: 1; 
+        transform: translateY(0) scale(1); 
+    }
+    100% { 
+        opacity: 0; 
+        transform: translateY(-10px) scale(0.9); 
+    }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .text-selection-toolbar {
+        background: rgba(45, 45, 45, 0.95) !important;
+        border-color: #555;
+        color: #fff;
+    }
+    
+    .text-selection-toolbar button:hover {
+        background-color: #404040 !important;
+    }
+    
+    .toolbar-separator {
+        background: linear-gradient(to bottom, transparent, #555 20%, #555 80%, transparent);
+    }
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+    .text-selection-toolbar {
+        padding: 10px;
+        gap: 6px;
+    }
+    
+    .text-selection-toolbar button {
+        min-width: 36px;
+        height: 36px;
+        font-size: 18px;
+    }
+    
+    .color-button {
+        width: 28px;
+        height: 28px;
+    }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .text-selection-toolbar {
+        border: 2px solid;
+        background: white !important;
+    }
+    
+    .text-selection-toolbar button {
+        border: 1px solid;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    .text-selection-toolbar,
+    .text-selection-toolbar button,
+    .copy-feedback {
+        animation: none;
+        transition: none;
+    }
+    
+    .text-selection-toolbar button:hover {
+        transform: none;
+    }
+}

@@ -550,4 +550,32 @@ export class AnnotationManager {
             thickness: this.inkManager.getCurrentThickness()
         };
     }
+
+    /**
+     * Get highlight manager instance
+     */
+    getHighlightManager(): HighlightManager {
+        return this.highlightManager;
+    }
+
+    /**
+     * Get note manager instance
+     */
+    getNoteManager(): NoteManager {
+        return this.noteManager;
+    }
+
+    /**
+     * Get ink manager instance
+     */
+    getInkManager(): InkManager {
+        return this.inkManager;
+    }
+
+    /**
+     * Get text layer manager instance
+     */
+    getTextLayerManager(): TextLayerManager {
+        return this.textLayerManager;
+    }
 }

@@ -146,3 +146,168 @@ export interface EventEmitter {
     off(event: EventType, listener: EventListener): void;
     emit(event: EventType, data: any): void;
 }
+
+/**
+ * PDF-specific type definitions for annotations
+ */
+
+// Enhanced annotation types
+export interface PDFHighlight {
+    id: string;
+    documentId: string;
+    page: number;
+    color: string;
+    selectedText: string;
+    coordinates: {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+    };
+    textRange?: {
+        startOffset: number;
+        endOffset: number;
+        startContainer: string;
+        endContainer: string;
+    };
+    createdAt: string;
+    userId?: string;
+}
+
+export interface PDFNote {
+    id: string;
+    documentId: string;
+    page: number;
+    content: string;
+    coordinates: {
+        x: number;
+        y: number;
+    };
+    createdAt: string;
+    updatedAt: string;
+    userId?: string;
+}
+
+export interface PDFDrawingStroke {
+    points: { x: number; y: number; pressure?: number }[];
+    color: string;
+    thickness: number;
+    timestamp: number;
+}
+
+export interface PDFDrawing {
+    id: string;
+    documentId: string;
+    page: number;
+    strokes: PDFDrawingStroke[];
+    createdAt: string;
+    updatedAt: string;
+    userId?: string;
+}
+
+// Text selection events
+export interface PDFTextSelectionEvent extends CustomEvent {
+    detail: {
+        text: string;
+        range: Range;
+    };
+}
+
+// Annotation tool types
+export type PDFAnnotationTool = 'select' | 'highlight' | 'note' | 'ink';
+
+// Tool change events
+export interface PDFToolChangeEvent extends CustomEvent {
+    detail: {
+        tool: PDFAnnotationTool;
+    };
+}
+
+// Annotation mode events
+export interface PDFAnnotationModeEvent extends CustomEvent {
+    detail: {
+        isActive: boolean;
+    };
+}
+
+// Page render events for annotation setup
+export interface PDFPageRenderEvent extends CustomEvent {
+    detail: {
+        pageNum: number;
+        pageElement: HTMLElement;
+        viewport: any;
+    };
+}
+
+// Annotation selection events
+export interface PDFAnnotationSelectionEvent extends CustomEvent {
+    detail: {
+        type: string;
+        annotation: PDFHighlight | PDFNote | PDFDrawing;
+    };
+}
+
+// Real-time annotation update events
+export interface PDFAnnotationUpdateEvent extends CustomEvent {
+    detail: {
+        type: string;
+        action: 'added' | 'updated' | 'deleted';
+        annotation: PDFHighlight | PDFNote | PDFDrawing;
+    };
+}
+
+// Color picker data
+export interface ColorOption {
+    name: string;
+    value: string;
+    isDefault?: boolean;
+}
+
+// Annotation filter options
+export interface PDFAnnotationFilter {
+    type?: string[];
+    page?: number;
+    userId?: string;
+    dateRange?: {
+        start: string;
+        end: string;
+    };
+}
+
+// Annotation statistics
+export interface PDFAnnotationStats {
+    total: number;
+    highlights: number;
+    notes: number;
+    drawings: number;
+    byPage: Map<number, number>;
+}
+
+// Sidebar view types
+export type PDFSidebarView = 'annotations' | 'thumbnails' | 'outline' | 'none';
+
+// Annotation sidebar item
+export interface PDFAnnotationListItem {
+    id: string;
+    type: 'highlight' | 'note' | 'drawing';
+    page: number;
+    preview: string;
+    createdAt: string;
+    userId?: string;
+}
+
+declare global {
+    interface DocumentEventMap {
+        'pdfTextSelected': PDFTextSelectionEvent;
+        'annotationToolChanged': PDFToolChangeEvent;
+        'highlightModeChanged': PDFAnnotationModeEvent;
+        'noteModeChanged': PDFAnnotationModeEvent;
+        'inkModeChanged': PDFAnnotationModeEvent;
+        'activeToolChanged': PDFToolChangeEvent;
+        'pageRendered': PDFPageRenderEvent;
+        'pageCleanup': CustomEvent<{ pageNum: number }>;
+        'annotationSelected': PDFAnnotationSelectionEvent;
+        'highlightSelected': CustomEvent<PDFHighlight>;
+        'annotationUpdate': PDFAnnotationUpdateEvent;
+    }
+}

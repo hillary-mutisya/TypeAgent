@@ -61,6 +61,60 @@ export interface PDFAnnotation {
     userId?: string;
 }
 
+// Enhanced annotation types
+export interface PDFHighlight {
+    id: string;
+    documentId: string;
+    page: number;
+    color: string;
+    selectedText: string;
+    coordinates: {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+    };
+    textRange?: {
+        startOffset: number;
+        endOffset: number;
+        startContainer: string;
+        endContainer: string;
+    };
+    createdAt: string;
+    userId?: string;
+}
+
+export interface PDFNote {
+    id: string;
+    documentId: string;
+    page: number;
+    content: string;
+    coordinates: {
+        x: number;
+        y: number;
+    };
+    createdAt: string;
+    updatedAt: string;
+    userId?: string;
+}
+
+export interface PDFDrawingStroke {
+    points: { x: number; y: number; pressure?: number }[];
+    color: string;
+    thickness: number;
+    timestamp: number;
+}
+
+export interface PDFDrawing {
+    id: string;
+    documentId: string;
+    page: number;
+    strokes: PDFDrawingStroke[];
+    createdAt: string;
+    updatedAt: string;
+    userId?: string;
+}
+
 export interface PDFBookmark {
     id: string;
     documentId: string;

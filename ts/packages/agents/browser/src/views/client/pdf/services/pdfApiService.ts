@@ -210,4 +210,199 @@ export class PDFApiService {
 
         return response.json();
     }
+
+    /**
+     * Highlight-specific API methods
+     */
+    async getHighlights(documentId: string): Promise<any[]> {
+        const response = await fetch(`${this.baseUrl}/${documentId}/highlights`);
+
+        if (!response.ok) {
+            throw new Error(`Failed to get highlights: ${response.statusText}`);
+        }
+
+        return response.json();
+    }
+
+    async addHighlight(documentId: string, highlight: any): Promise<any> {
+        const response = await fetch(`${this.baseUrl}/${documentId}/highlights`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(highlight),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to add highlight: ${response.statusText}`);
+        }
+
+        return response.json();
+    }
+
+    async updateHighlight(documentId: string, highlightId: string, highlight: any): Promise<any> {
+        const response = await fetch(`${this.baseUrl}/${documentId}/highlights/${highlightId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(highlight),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to update highlight: ${response.statusText}`);
+        }
+
+        return response.json();
+    }
+
+    async deleteHighlight(documentId: string, highlightId: string): Promise<void> {
+        const response = await fetch(`${this.baseUrl}/${documentId}/highlights/${highlightId}`, {
+            method: 'DELETE',
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to delete highlight: ${response.statusText}`);
+        }
+    }
+
+    /**
+     * Note-specific API methods
+     */
+    async getNotes(documentId: string): Promise<any[]> {
+        const response = await fetch(`${this.baseUrl}/${documentId}/notes`);
+
+        if (!response.ok) {
+            throw new Error(`Failed to get notes: ${response.statusText}`);
+        }
+
+        return response.json();
+    }
+
+    async addNote(documentId: string, note: any): Promise<any> {
+        const response = await fetch(`${this.baseUrl}/${documentId}/notes`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(note),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to add note: ${response.statusText}`);
+        }
+
+        return response.json();
+    }
+
+    async updateNote(documentId: string, noteId: string, note: any): Promise<any> {
+        const response = await fetch(`${this.baseUrl}/${documentId}/notes/${noteId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(note),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to update note: ${response.statusText}`);
+        }
+
+        return response.json();
+    }
+
+    async deleteNote(documentId: string, noteId: string): Promise<void> {
+        const response = await fetch(`${this.baseUrl}/${documentId}/notes/${noteId}`, {
+            method: 'DELETE',
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to delete note: ${response.statusText}`);
+        }
+    }
+
+    /**
+     * Drawing-specific API methods
+     */
+    async getDrawings(documentId: string): Promise<any[]> {
+        const response = await fetch(`${this.baseUrl}/${documentId}/drawings`);
+
+        if (!response.ok) {
+            throw new Error(`Failed to get drawings: ${response.statusText}`);
+        }
+
+        return response.json();
+    }
+
+    async addDrawing(documentId: string, drawing: any): Promise<any> {
+        const response = await fetch(`${this.baseUrl}/${documentId}/drawings`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(drawing),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to add drawing: ${response.statusText}`);
+        }
+
+        return response.json();
+    }
+
+    async updateDrawing(documentId: string, drawingId: string, drawing: any): Promise<any> {
+        const response = await fetch(`${this.baseUrl}/${documentId}/drawings/${drawingId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(drawing),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to update drawing: ${response.statusText}`);
+        }
+
+        return response.json();
+    }
+
+    async deleteDrawing(documentId: string, drawingId: string): Promise<void> {
+        const response = await fetch(`${this.baseUrl}/${documentId}/drawings/${drawingId}`, {
+            method: 'DELETE',
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to delete drawing: ${response.statusText}`);
+        }
+    }
+
+    /**
+     * Text extraction for search and selection
+     */
+    async extractText(documentId: string, pageNum?: number): Promise<any> {
+        const url = pageNum 
+            ? `${this.baseUrl}/${documentId}/text?page=${pageNum}`
+            : `${this.baseUrl}/${documentId}/text`;
+            
+        const response = await fetch(url);
+
+        if (!response.ok) {
+            throw new Error(`Failed to extract text: ${response.statusText}`);
+        }
+
+        return response.json();
+    }
+
+    /**
+     * Search within document
+     */
+    async searchDocument(documentId: string, query: string): Promise<any[]> {
+        const response = await fetch(`${this.baseUrl}/${documentId}/search?q=${encodeURIComponent(query)}`);
+
+        if (!response.ok) {
+            throw new Error(`Failed to search document: ${response.statusText}`);
+        }
+
+        return response.json();
+    }
 }

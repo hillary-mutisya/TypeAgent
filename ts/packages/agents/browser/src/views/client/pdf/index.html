@@ -170,7 +170,7 @@
 
       .viewer-container {
         flex: 1;
-        overflow: auto;
+        overflow-y: auto;
         padding: 20px;
         display: flex;
         flex-direction: column;
@@ -179,10 +179,18 @@
         background: #323639;
       }
 
-      .page {
-        border: 1px solid #555;
+      .page-wrapper {
+        position: relative;
+        margin-bottom: 20px;
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        border: 1px solid #555;
         background: white;
+      }
+
+      .page {
+        display: block;
+        max-width: 100%;
+        height: auto;
       }
 
       .error {
@@ -246,6 +254,318 @@
           order: 2;
         }
       }
+
+      /* Annotation Tools Styles */
+      .annotation-tools {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin-right: 12px;
+        padding-right: 12px;
+        border-right: 1px solid #555;
+      }
+
+      .tool-button {
+        background: transparent;
+        color: #e8eaed;
+        border: none;
+        padding: 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
+        transition: all 0.2s ease;
+        position: relative;
+      }
+
+      .tool-button:hover {
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      .tool-button.active {
+        background: #1a73e8;
+        color: white;
+      }
+
+      .tool-button:disabled {
+        color: #5f6368;
+        cursor: not-allowed;
+      }
+
+      .color-picker {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        background: white;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        padding: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        z-index: 1000;
+        display: flex;
+        gap: 4px;
+      }
+
+      .color-option {
+        width: 20px;
+        height: 20px;
+        border-radius: 3px;
+        cursor: pointer;
+        border: 2px solid transparent;
+        transition: border-color 0.2s ease;
+      }
+
+      .color-option:hover,
+      .color-option.active {
+        border-color: #007acc;
+      }
+
+      .ink-controls {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        background: white;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        padding: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        z-index: 1000;
+        min-width: 120px;
+      }
+
+      .ink-controls input[type="range"] {
+        width: 100%;
+        margin-bottom: 8px;
+      }
+
+      .ink-colors {
+        display: flex;
+        gap: 4px;
+        justify-content: center;
+      }
+
+      /* Text Layer Styles */
+      .textLayer {
+        position: absolute;
+        left: 0;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        overflow: hidden;
+        line-height: 1.0;
+        pointer-events: auto;
+        user-select: text;
+        z-index: 2;
+      }
+
+      .textLayer > span {
+        color: transparent;
+        position: absolute;
+        white-space: pre;
+        cursor: text;
+        transform-origin: 0% 0%;
+        user-select: text;
+        display: inline-block;
+      }
+
+      /* Text selection highlighting */
+      .textLayer > span::selection {
+        background: rgba(0, 123, 255, 0.3);
+        color: transparent;
+      }
+
+      .textLayer > span::-moz-selection {
+        background: rgba(0, 123, 255, 0.3);
+        color: transparent;
+      }
+
+      /* Debug mode for text layer (uncomment to see text boundaries) */
+      /*
+      .textLayer {
+        background: rgba(255, 0, 0, 0.1) !important;
+        border: 1px solid red;
+      }
+      .textLayer > span {
+        background: rgba(0, 255, 0, 0.1) !important;
+        border: 1px solid green;
+      }
+      */
+
+      /* Highlight Container Styles */
+      .highlight-container {
+        position: absolute;
+        z-index: 1;
+        pointer-events: auto;
+      }
+
+      .highlight-overlay {
+        position: absolute;
+        border-radius: 2px;
+        cursor: pointer;
+        transition: opacity 0.2s ease;
+        mix-blend-mode: multiply;
+      }
+
+      .highlight-overlay:hover {
+        opacity: 0.5 !important;
+      }
+        background: rgba(0, 123, 255, 0.3);
+        color: transparent;
+      }
+
+      /* Highlight Mode Styles */
+      .highlight-mode .textLayer > span {
+        opacity: 0.4;
+      }
+
+      .pdf-highlight {
+        position: absolute;
+        background-color: #ffff00;
+        opacity: 0.3;
+        pointer-events: auto;
+        z-index: 1;
+        border-radius: 2px;
+        cursor: pointer;
+        transition: opacity 0.2s ease;
+      }
+
+      .pdf-highlight:hover {
+        opacity: 0.5;
+      }
+
+      .pdf-highlight.selected {
+        outline: 2px solid #007acc;
+      }
+
+      /* Note Styles */
+      .note-mode {
+        cursor: crosshair;
+      }
+
+      .note-icon {
+        position: absolute;
+        width: 24px;
+        height: 24px;
+        background: #ffd700;
+        border: 2px solid #e6c200;
+        border-radius: 4px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        z-index: 2;
+        transition: transform 0.2s ease;
+      }
+
+      .note-icon:hover {
+        transform: scale(1.1);
+      }
+
+      .note-popup {
+        position: fixed;
+        background: white;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        font-family: system-ui, -apple-system, sans-serif;
+        color: #333;
+      }
+
+      /* Ink Mode Styles */
+      .ink-mode {
+        cursor: crosshair;
+      }
+
+      .ink-canvas {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 3;
+        touch-action: none;
+      }
+
+      .ink-mode .ink-canvas {
+        pointer-events: auto;
+      }
+
+      /* Copy Feedback */
+      .copy-feedback {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #4caf50;
+        color: white;
+        padding: 8px 16px;
+        border-radius: 4px;
+        font-size: 14px;
+        z-index: 10000;
+        pointer-events: none;
+        opacity: 1;
+        transition: opacity 0.3s ease;
+      }
+
+      /* Context Menus */
+      .highlight-context-menu,
+      .note-context-menu {
+        position: fixed;
+        background: white;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        z-index: 10000;
+        min-width: 120px;
+        color: #333;
+      }
+
+      .highlight-context-menu > div,
+      .note-context-menu > div {
+        padding: 8px 12px;
+        cursor: pointer;
+        border-bottom: 1px solid #eee;
+        transition: background-color 0.2s ease;
+      }
+
+      .highlight-context-menu > div:hover,
+      .note-context-menu > div:hover {
+        background: #f5f5f5;
+      }
+
+      .highlight-context-menu > div:last-child,
+      .note-context-menu > div:last-child {
+        border-bottom: none;
+      }
+
+      /* Annotation highlighting */
+      .pdf-highlight.highlighted,
+      .note-icon.highlighted {
+        animation: highlightPulse 2s ease-in-out;
+      }
+
+      @keyframes highlightPulse {
+        0%, 100% { opacity: 0.3; }
+        50% { opacity: 0.8; }
+      }
+
+      /* Sidebar content when visible */
+      .annotation-sidebar:not(.hidden) ~ .container {
+        margin-right: 300px;
+      }
+
+      /* Mobile adjustments */
+      @media (max-width: 768px) {
+        .annotation-sidebar:not(.hidden) ~ .container {
+          margin-right: 0;
+        }
+      }
     </style>
   </head>
   <body>
@@ -257,6 +577,11 @@
             <span>Open</span>
           </button>
           <input type="file" id="fileInput" class="file-input" accept=".pdf" />
+          
+          <!-- Sidebar Toggle -->
+          <button id="sidebarToggle" class="toolbar button" title="Toggle annotations sidebar">
+            <i class="fas fa-list"></i>
+          </button>
         </div>
 
         <div class="toolbar-center">
@@ -280,6 +605,43 @@
         </div>
 
         <div class="toolbar-right">
+          <!-- Annotation Tools -->
+          <div class="annotation-tools">
+            <button id="selectTool" class="tool-button active" title="Select">
+              <i class="fas fa-mouse-pointer"></i>
+            </button>
+            <button id="highlightTool" class="tool-button" title="Highlight text">
+              <i class="fas fa-highlighter"></i>
+            </button>
+            <button id="noteTool" class="tool-button" title="Add note">
+              <i class="fas fa-sticky-note"></i>
+            </button>
+            <button id="inkTool" class="tool-button" title="Draw">
+              <i class="fas fa-pen"></i>
+            </button>
+            
+            <!-- Color Picker for Highlights -->
+            <div class="color-picker" id="highlightColorPicker" style="display: none;">
+              <div class="color-option active" data-color="#ffff00" style="background: #ffff00;" title="Yellow"></div>
+              <div class="color-option" data-color="#00ff00" style="background: #00ff00;" title="Green"></div>
+              <div class="color-option" data-color="#ff00ff" style="background: #ff00ff;" title="Magenta"></div>
+              <div class="color-option" data-color="#ff0000" style="background: #ff0000;" title="Red"></div>
+              <div class="color-option" data-color="#00ffff" style="background: #00ffff;" title="Cyan"></div>
+            </div>
+
+            <!-- Ink Controls -->
+            <div class="ink-controls" id="inkControls" style="display: none;">
+              <input type="range" id="inkThickness" min="1" max="10" value="2" title="Pen thickness">
+              <div class="ink-colors">
+                <div class="color-option active" data-color="#000000" style="background: #000000;" title="Black"></div>
+                <div class="color-option" data-color="#ff0000" style="background: #ff0000;" title="Red"></div>
+                <div class="color-option" data-color="#0000ff" style="background: #0000ff;" title="Blue"></div>
+                <div class="color-option" data-color="#008000" style="background: #008000;" title="Green"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Zoom Controls -->
           <button id="zoomOut" title="Zoom out">
             <i class="fas fa-minus"></i>
           </button>

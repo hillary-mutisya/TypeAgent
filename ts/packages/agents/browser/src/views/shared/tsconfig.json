@@ -5,6 +5,7 @@
     "rootDir": ".",
     "composite": true,
     "incremental": true,
+    "lib": ["DOM", "ES2020"],
     "types": []
   },
   "include": ["./**/*.ts"]

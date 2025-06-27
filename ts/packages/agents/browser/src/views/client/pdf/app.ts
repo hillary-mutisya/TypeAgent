@@ -520,32 +520,29 @@ export class TypeAgentPDFViewerApp {
             textLayerDiv.className = 'textLayer';
             textLayerDiv.setAttribute('data-page-number', pageNum.toString());
 
-            // Position over canvas with exact size match
-            const canvas = pageWrapper.querySelector('canvas');
-            const canvasStyle = window.getComputedStyle(canvas);
-            const canvasWidth = parseFloat(canvasStyle.width);
-            const canvasHeight = parseFloat(canvasStyle.height);
+            // Position over canvas using canvas pixel dimensions (not CSS dimensions)
+            const canvas = pageWrapper.querySelector('canvas') as HTMLCanvasElement;
             
             textLayerDiv.style.cssText = `
                 position: absolute;
                 left: 0;
                 top: 0;
-                width: ${canvasWidth}px;
-                height: ${canvasHeight}px;
+                width: ${viewport.width}px;
+                height: ${viewport.height}px;
                 overflow: hidden;
                 line-height: 1.0;
                 pointer-events: auto;
                 user-select: text;
                 z-index: 2;
                 transform-origin: 0% 0%;
-                transform: scale(${canvasWidth / viewport.width}, ${canvasHeight / viewport.height});
+                transform: scale(${canvas.width / viewport.width}, ${canvas.height / viewport.height});
             `;
 
             // Render text layer with improved positioning
             await this.renderTextLayerManual(textLayerDiv, textContent, viewport);
             pageWrapper.appendChild(textLayerDiv);
 
-            console.log(`📝 Text layer enabled for page ${pageNum}`);
+            console.log(`📝 Text layer enabled for page ${pageNum} at scale ${this.scale.toFixed(2)}`);
         } catch (error) {
             console.error(`❌ Failed to enable text layer for page ${pageNum}:`, error);
         }
@@ -560,7 +557,7 @@ export class TypeAgentPDFViewerApp {
                 // Clear existing content
                 textLayerDiv.innerHTML = '';
 
-                // Render each text item with improved positioning
+                // Render each text item with improved positioning and width constraints
                 textContent.items.forEach((textItem: any) => {
                     const textSpan = document.createElement('span');
                     textSpan.textContent = textItem.str;
@@ -568,12 +565,18 @@ export class TypeAgentPDFViewerApp {
                     // Get transform matrix
                     const [a, b, c, d, e, f] = textItem.transform;
                     
-                    // Calculate position relative to page
+                    // Calculate position relative to viewport (not scaled)
                     const x = e;
                     const y = viewport.height - f;
-                    const scaleX = a;
+                    const scaleX = Math.abs(a);
                     const scaleY = Math.abs(d);
                     const fontSize = scaleY;
+                    
+                    // Calculate text width based on PDF text item width
+                    // Use the PDF's intrinsic width if available, otherwise estimate
+                    const textWidth = textItem.width && textItem.width > 0 ? 
+                        Math.abs(textItem.width) : 
+                        fontSize * textItem.str.length * 0.6;
                     
                     textSpan.style.cssText = `
                         position: absolute;
@@ -589,12 +592,16 @@ export class TypeAgentPDFViewerApp {
                         user-select: text;
                         pointer-events: auto;
                         height: ${fontSize}px;
+                        width: ${textWidth}px;
+                        max-width: ${textWidth}px;
                         overflow: hidden;
+                        box-sizing: border-box;
                     `;
 
                     textLayerDiv.appendChild(textSpan);
                 });
 
+                console.log(`📝 Rendered ${textContent.items.length} text items`);
                 resolve();
             } catch (error) {
                 reject(error);
@@ -660,6 +667,37 @@ export class TypeAgentPDFViewerApp {
     }
 
     /**
+     * Refresh text layers for all visible pages (useful after zoom)
+     */
+    private async refreshTextLayers(): Promise<void> {
+        try {
+            const container = document.getElementById('viewerContainer');
+            if (!container) return;
+
+            const pageWrappers = container.querySelectorAll('.page-wrapper');
+            
+            for (const pageWrapper of pageWrappers) {
+                const pageNum = parseInt(pageWrapper.getAttribute('data-page-number') || '1');
+                
+                // Remove existing text layer
+                const existingTextLayer = pageWrapper.querySelector('.textLayer');
+                if (existingTextLayer) {
+                    existingTextLayer.remove();
+                }
+                
+                // Re-create text layer with current scale
+                const page = await this.pdfDoc.getPage(pageNum);
+                const viewport = page.getViewport({ scale: this.scale });
+                await this.enableTextLayerForPage(pageNum, pageWrapper as HTMLElement, viewport);
+            }
+            
+            console.log('🔄 Text layers refreshed for all pages');
+        } catch (error) {
+            console.error('❌ Failed to refresh text layers:', error);
+        }
+    }
+
+    /**
      * Render a specific page (legacy method - now scrolls to page)
      */
     async renderPage(pageNum: number): Promise<void> {
@@ -715,18 +753,88 @@ export class TypeAgentPDFViewerApp {
      * Zoom in
      */
     async zoomIn(): Promise<void> {
+        const oldScale = this.scale;
         this.scale = Math.min(this.scale * 1.2, 3.0);
-        await this.renderAllPages(); // Re-render all pages with new scale
+        
+        console.log(`🔍 Zooming in: ${oldScale.toFixed(2)} → ${this.scale.toFixed(2)}`);
+        
+        // Store current scroll position relative to current page
+        const scrollPosition = this.getCurrentScrollPosition();
+        
+        // Re-render all pages with new scale
+        await this.renderAllPages();
         this.updateScaleIndicator();
+        
+        // Restore scroll position after a brief delay to allow rendering
+        setTimeout(() => {
+            this.restoreScrollPosition(scrollPosition);
+        }, 100);
     }
 
     /**
      * Zoom out
      */
     async zoomOut(): Promise<void> {
+        const oldScale = this.scale;
         this.scale = Math.max(this.scale / 1.2, 0.3);
-        await this.renderAllPages(); // Re-render all pages with new scale
+        
+        console.log(`🔍 Zooming out: ${oldScale.toFixed(2)} → ${this.scale.toFixed(2)}`);
+        
+        // Store current scroll position relative to current page
+        const scrollPosition = this.getCurrentScrollPosition();
+        
+        // Re-render all pages with new scale
+        await this.renderAllPages();
         this.updateScaleIndicator();
+        
+        // Restore scroll position after a brief delay to allow rendering
+        setTimeout(() => {
+            this.restoreScrollPosition(scrollPosition);
+        }, 100);
+    }
+
+    /**
+     * Get current scroll position relative to current page
+     */
+    private getCurrentScrollPosition(): { pageNum: number; relativeY: number } {
+        const container = document.getElementById('viewerContainer');
+        if (!container) return { pageNum: this.currentPage, relativeY: 0 };
+        
+        const currentPageElement = container.querySelector(`[data-page-number="${this.currentPage}"]`) as HTMLElement;
+        if (!currentPageElement) return { pageNum: this.currentPage, relativeY: 0 };
+        
+        const containerRect = container.getBoundingClientRect();
+        const pageRect = currentPageElement.getBoundingClientRect();
+        
+        // Calculate how far down the current page we are (0 = top, 1 = bottom)
+        const relativeY = Math.max(0, Math.min(1, 
+            (containerRect.top - pageRect.top) / pageRect.height
+        ));
+        
+        return { pageNum: this.currentPage, relativeY };
+    }
+
+    /**
+     * Restore scroll position after zoom
+     */
+    private restoreScrollPosition(scrollPosition: { pageNum: number; relativeY: number }): void {
+        const container = document.getElementById('viewerContainer');
+        if (!container) return;
+        
+        const pageElement = container.querySelector(`[data-page-number="${scrollPosition.pageNum}"]`) as HTMLElement;
+        if (!pageElement) return;
+        
+        const pageRect = pageElement.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        
+        // Calculate target scroll position
+        const targetY = pageRect.top - containerRect.top + (pageRect.height * scrollPosition.relativeY);
+        
+        // Scroll to maintain relative position
+        container.scrollBy({
+            top: targetY,
+            behavior: 'auto' // Use 'auto' for immediate positioning
+        });
     }
 
     /**

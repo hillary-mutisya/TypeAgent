@@ -271,10 +271,13 @@ export class HighlightManager {
                     continue;
                 }
 
+                // Calculate more precise width based on text content
+                const preciseWidth = this.calculatePreciseTextWidth(range, rect, i, rects.length);
+
                 coordinates.push({
                     x: rect.left - pageRect.left,
                     y: rect.top - pageRect.top,
-                    width: rect.width,
+                    width: preciseWidth,
                     height: rect.height
                 });
             }
@@ -284,6 +287,86 @@ export class HighlightManager {
             console.error('Failed to get selection coordinates:', error);
             return null;
         }
+    }
+
+    /**
+     * Calculate more precise text width for highlight rectangles
+     */
+    private calculatePreciseTextWidth(range: Range, rect: DOMRect, rectIndex: number, totalRects: number): number {
+        try {
+            // Get the actual selected text for this rectangle
+            const selectedText = range.toString();
+            
+            // For single rectangles, try to measure the actual text width
+            if (totalRects === 1) {
+                return this.measureTextWidth(selectedText, rect);
+            }
+            
+            // For multi-line selections, handle each rectangle differently
+            const lines = selectedText.split('\n');
+            
+            if (rectIndex === 0) {
+                // First line - might be partial
+                const firstLine = lines[0] || '';
+                return this.measureTextWidth(firstLine, rect);
+            } else if (rectIndex === totalRects - 1) {
+                // Last line - might be partial  
+                const lastLine = lines[lines.length - 1] || '';
+                return this.measureTextWidth(lastLine, rect);
+            } else {
+                // Middle lines - use the rectangle width but cap at reasonable bounds
+                return Math.min(rect.width, this.getMaxLineWidth(rect));
+            }
+        } catch (error) {
+            console.warn('Failed to calculate precise text width, using original:', error);
+            return rect.width;
+        }
+    }
+
+    /**
+     * Measure actual text width using canvas or DOM measurement
+     */
+    private measureTextWidth(text: string, rect: DOMRect): number {
+        try {
+            // Create a temporary element to measure text width
+            const measureElement = document.createElement('span');
+            measureElement.style.cssText = `
+                position: absolute;
+                visibility: hidden;
+                white-space: pre;
+                font-family: sans-serif;
+                font-size: ${rect.height * 0.8}px;
+                line-height: 1;
+            `;
+            measureElement.textContent = text;
+            
+            document.body.appendChild(measureElement);
+            const measuredWidth = measureElement.offsetWidth;
+            document.body.removeChild(measureElement);
+            
+            // Return the smaller of measured width or original rectangle width
+            // Add small padding for precision issues
+            return Math.min(measuredWidth + 2, rect.width);
+        } catch (error) {
+            console.warn('Text measurement failed, using rectangle width:', error);
+            return rect.width;
+        }
+    }
+
+    /**
+     * Get maximum reasonable line width based on context
+     */
+    private getMaxLineWidth(rect: DOMRect): number {
+        // Find the text layer container to get context
+        const textLayer = document.elementFromPoint(rect.left + rect.width/2, rect.top + rect.height/2)?.closest('.textLayer');
+        if (textLayer) {
+            const textLayerRect = textLayer.getBoundingClientRect();
+            // Don't exceed 90% of the text layer width
+            return Math.min(rect.width, textLayerRect.width * 0.9);
+        }
+        
+        // Fallback: cap at a reasonable maximum
+        return Math.min(rect.width, 600);
     }
 
     /**

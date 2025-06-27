@@ -105,20 +105,28 @@
         background: transparent;
       }
 
-      .open-button {
-        background: #1a73e8;
-        color: white;
-        padding: 8px 16px;
-        border-radius: 4px;
-        font-size: 13px;
-        font-weight: 500;
-        width: auto;
-        gap: 8px;
+      /* Drag & Drop Styling */
+      .container.drag-over {
+        background: rgba(26, 115, 232, 0.1);
+        border: 2px dashed #1a73e8;
       }
 
-      .open-button:hover {
-        background: #1557b0;
+      .container.drag-over::after {
+        content: "Drop PDF file here";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(26, 115, 232, 0.9);
+        color: white;
+        padding: 16px 32px;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 500;
+        z-index: 10000;
+        pointer-events: none;
       }
+      
 
       .page-controls {
         display: flex;
@@ -162,6 +170,169 @@
         font-size: 13px;
         min-width: 40px;
         text-align: center;
+      }
+
+      /* Unified Zoom Control Styles */
+      .zoom-control-container {
+        position: relative;
+        display: inline-block;
+      }
+
+      .zoom-control-button {
+        background: #3c4043;
+        border: 1px solid #5f6368;
+        border-radius: 4px;
+        color: #e8eaed;
+        padding: 6px 12px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        min-width: 80px;
+        transition: background-color 0.2s;
+      }
+
+      .zoom-control-button:hover {
+        background: #484a4d;
+      }
+
+      .zoom-display {
+        color: #e8eaed;
+        font-weight: 500;
+      }
+
+      .zoom-chevron {
+        font-size: 10px;
+        color: #9aa0a6;
+        transition: transform 0.2s;
+      }
+
+      .zoom-control-button.open .zoom-chevron {
+        transform: rotate(180deg);
+      }
+
+      .zoom-flyout {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        background: #2d3134;
+        border: 1px solid #5f6368;
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        z-index: 1000;
+        min-width: 200px;
+        margin-top: 4px;
+        padding: 8px 0;
+      }
+
+      .zoom-options {
+        padding: 4px 0;
+      }
+
+      .zoom-option {
+        width: 100% !important;
+        background: transparent;
+        border: none;
+        color: #e8eaed;
+        padding: 8px 16px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: left !important;
+        gap: 12px;
+        font-size: 13px;
+        transition: background-color 0.2s;
+      }
+
+      .zoom-option:hover {
+        background: #3c4043;
+      }
+
+      .zoom-option.active {
+        background: #1a73e8;
+        color: white;
+      }
+
+      .zoom-option i {
+        width: 16px;
+        text-align: center;
+      }
+
+      .zoom-divider {
+        height: 1px;
+        background: #5f6368;
+        margin: 8px 0;
+      }
+
+      .zoom-granular {
+        display: flex;
+        align-items: center;
+        padding: 8px 16px;
+        gap: 8px;
+      }
+
+      .zoom-btn {
+        background: #3c4043;
+        border: 1px solid #5f6368;
+        border-radius: 3px;
+        color: #e8eaed;
+        width: 28px;
+        height: 28px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background-color 0.2s;
+      }
+
+      .zoom-btn:hover {
+        background: #484a4d;
+      }
+
+      .zoom-input {
+        background: #3c4043;
+        border: 1px solid #5f6368;
+        border-radius: 3px;
+        color: #e8eaed;
+        padding: 4px 8px;
+        width: 60px;
+        text-align: center;
+        font-size: 12px;
+      }
+
+      .zoom-input:focus {
+        outline: none;
+        border-color: #1a73e8;
+      }
+
+      .zoom-presets {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 4px;
+        padding: 8px 16px;
+      }
+
+      .zoom-preset {
+        background: transparent;
+        border: 1px solid #5f6368;
+        border-radius: 3px;
+        color: #e8eaed;
+        padding: 6px 8px;
+        cursor: pointer;
+        font-size: 12px;
+        transition: all 0.2s;
+      }
+
+      .zoom-preset:hover {
+        background: #3c4043;
+        border-color: #8ab4f8;
+      }
+
+      .zoom-preset.active {
+        background: #1a73e8;
+        border-color: #1a73e8;
+        color: white;
       }
 
       .file-input {
@@ -425,9 +596,6 @@
       .highlight-overlay:hover {
         opacity: 0.5 !important;
       }
-        background: rgba(0, 123, 255, 0.3);
-        color: transparent;
-      }
 
       /* Highlight Mode Styles */
       .highlight-mode .textLayer > span {
@@ -588,16 +756,7 @@
     <div class="container">
       <div class="toolbar">
         <div class="toolbar-left">
-          <button class="open-button" id="openFile" title="Open file">
-            <i class="fas fa-folder-open"></i>
-            <span>Open</span>
-          </button>
           <input type="file" id="fileInput" class="file-input" accept=".pdf" />
-          
-          <!-- Sidebar Toggle -->
-          <button id="sidebarToggle" class="toolbar button" title="Toggle annotations sidebar">
-            <i class="fas fa-list"></i>
-          </button>
         </div>
 
         <div class="toolbar-center">
@@ -655,15 +814,64 @@
                 <div class="color-option" data-color="#008000" style="background: #008000;" title="Green"></div>
               </div>
             </div>
+
+            <!-- Unified Zoom Control -->
+            <div class="zoom-control-container">
+              <button id="zoomControlButton" class="zoom-control-button" title="Zoom options">
+                <span id="zoomDisplay" class="zoom-display">100%</span>
+                <i class="fas fa-chevron-down zoom-chevron"></i>
+              </button>
+              
+              <div id="zoomFlyout" class="zoom-flyout" style="display: none;">
+                <!-- Zoom Mode Options -->
+                <div class="zoom-options">
+                  <button class="zoom-option" data-mode="auto">
+                    <i class="fas fa-magic"></i>
+                    <span>Automatic Zoom</span>
+                  </button>
+                  <button class="zoom-option" data-mode="fit">
+                    <i class="fas fa-expand-arrows-alt"></i>
+                    <span>Fit Page</span>
+                  </button>
+                  <button class="zoom-option" data-mode="width">
+                    <i class="fas fa-arrows-alt-h"></i>
+                    <span>Fit Width</span>
+                  </button>
+                  <button class="zoom-option" data-mode="actual">
+                    <i class="fas fa-search"></i>
+                    <span>Actual Size</span>
+                  </button>
+                </div>
+                
+                <div class="zoom-divider"></div>
+                
+                <!-- Granular Zoom Controls -->
+                <div class="zoom-granular">
+                  <button id="zoomOutFlyout" class="zoom-btn" title="Zoom out">
+                    <i class="fas fa-minus"></i>
+                  </button>
+                  <input id="zoomInput" type="text" class="zoom-input" value="100%" title="Enter zoom level">
+                  <button id="zoomInFlyout" class="zoom-btn" title="Zoom in">
+                    <i class="fas fa-plus"></i>
+                  </button>
+                </div>
+                
+                <!-- Preset Zoom Levels -->
+                <div class="zoom-presets">
+                  <button class="zoom-preset" data-zoom="0.5">50%</button>
+                  <button class="zoom-preset" data-zoom="0.75">75%</button>
+                  <button class="zoom-preset" data-zoom="1.0">100%</button>
+                  <button class="zoom-preset" data-zoom="1.25">125%</button>
+                  <button class="zoom-preset" data-zoom="1.5">150%</button>
+                  <button class="zoom-preset" data-zoom="2.0">200%</button>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <!-- Zoom Controls -->
-          <button id="zoomOut" title="Zoom out">
-            <i class="fas fa-minus"></i>
-          </button>
-          <span id="scale" class="zoom-level">100%</span>
-          <button id="zoomIn" title="Zoom in">
-            <i class="fas fa-plus"></i>
+          <!-- Sidebar toggle button -->
+          <button id="sidebarToggle" class="toolbar-button" title="Toggle annotations sidebar">
+            <i class="fas fa-list-ul"></i>
           </button>
         </div>
       </div>

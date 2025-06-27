@@ -35,6 +35,7 @@ export class TypeAgentPDFViewerApp {
     private _eventHandlersSetup: boolean = false;
     private _sidebarIntegrationSetup: boolean = false;
     private _phase2IntegrationSetup: boolean = false;
+    private _autoZoomMode: 'auto' | 'fit' | 'width' | 'manual' = 'auto';
 
     constructor() {
         console.log('🔍 App: Initializing components');
@@ -115,9 +116,7 @@ export class TypeAgentPDFViewerApp {
         const pageNumInput = document.getElementById(
             "pageNum",
         ) as HTMLInputElement;
-        const zoomInBtn = document.getElementById("zoomIn");
-        const zoomOutBtn = document.getElementById("zoomOut");
-        const openBtn = document.getElementById("openFile");
+        const zoomControlButton = document.getElementById("zoomControlButton");
         const fileInput = document.getElementById(
             "fileInput",
         ) as HTMLInputElement;
@@ -126,9 +125,7 @@ export class TypeAgentPDFViewerApp {
             prevBtn: !!prevBtn,
             nextBtn: !!nextBtn,
             pageNumInput: !!pageNumInput,
-            zoomInBtn: !!zoomInBtn,
-            zoomOutBtn: !!zoomOutBtn,
-            openBtn: !!openBtn,
+            zoomControlButton: !!zoomControlButton,
             fileInput: !!fileInput,
         });
 
@@ -136,9 +133,7 @@ export class TypeAgentPDFViewerApp {
             !prevBtn ||
             !nextBtn ||
             !pageNumInput ||
-            !zoomInBtn ||
-            !zoomOutBtn ||
-            !openBtn ||
+            !zoomControlButton ||
             !fileInput
         ) {
             console.error(
@@ -183,21 +178,227 @@ export class TypeAgentPDFViewerApp {
             }
         });
 
-        // Zoom events
-        zoomInBtn.addEventListener("click", () => this.zoomIn());
-        zoomOutBtn.addEventListener("click", () => this.zoomOut());
+        // Unified Zoom Control Events
+        this.setupUnifiedZoomControl();
 
-        // File open events
-        openBtn.addEventListener("click", () => this.openFileDialog());
+        // File input change events (for drag & drop and programmatic file selection)
         fileInput.addEventListener("change", (e) => this.handleFileSelect(e));
+
+        // Add drag & drop functionality and keyboard shortcuts since we removed the Open button
+        this.setupFileDropAndKeyboard();
 
         // Annotation tool events
         this.setupAnnotationToolHandlers();
+
+        // Window resize handler for auto zoom modes
+        window.addEventListener('resize', () => this.handleWindowResize());
+
+        // Mouse wheel zoom handler (Ctrl + scroll wheel)
+        this.setupMouseWheelZoom();
 
         // Mark event handlers as set up
         this._eventHandlersSetup = true;
         console.log("✅ Event handlers set up successfully");
     }
+
+    /**
+     * Setup the unified zoom control interface
+     */
+    private setupUnifiedZoomControl(): void {
+        const zoomControlButton = document.getElementById("zoomControlButton");
+        const zoomFlyout = document.getElementById("zoomFlyout");
+        const zoomDisplay = document.getElementById("zoomDisplay");
+        
+        if (!zoomControlButton || !zoomFlyout || !zoomDisplay) {
+            console.error("Zoom control elements not found");
+            return;
+        }
+
+        // Toggle flyout on button click
+        zoomControlButton.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const isOpen = zoomFlyout.style.display === "block";
+            if (isOpen) {
+                this.closeZoomFlyout();
+            } else {
+                this.openZoomFlyout();
+            }
+        });
+
+        // Close flyout when clicking outside
+        document.addEventListener("click", (e) => {
+            if (!zoomControlButton.contains(e.target as Node) && !zoomFlyout.contains(e.target as Node)) {
+                this.closeZoomFlyout();
+            }
+        });
+
+        // Zoom mode option buttons
+        const zoomOptions = zoomFlyout.querySelectorAll(".zoom-option");
+        zoomOptions.forEach(option => {
+            option.addEventListener("click", async (e) => {
+                const mode = (e.currentTarget as HTMLElement).getAttribute("data-mode");
+                await this.handleZoomModeClick(mode);
+                this.closeZoomFlyout();
+            });
+        });
+
+        // Granular zoom controls
+        const zoomInBtn = document.getElementById("zoomInFlyout");
+        const zoomOutBtn = document.getElementById("zoomOutFlyout");
+        const zoomInput = document.getElementById("zoomInput") as HTMLInputElement;
+
+        if (zoomInBtn) {
+            zoomInBtn.addEventListener("click", () => this.zoomIn());
+        }
+        if (zoomOutBtn) {
+            zoomOutBtn.addEventListener("click", () => this.zoomOut());
+        }
+        if (zoomInput) {
+            zoomInput.addEventListener("keypress", (e) => {
+                if (e.key === "Enter") {
+                    this.handleZoomInputChange(zoomInput.value);
+                }
+            });
+            zoomInput.addEventListener("blur", () => {
+                this.handleZoomInputChange(zoomInput.value);
+            });
+        }
+
+        // Preset zoom buttons
+        const zoomPresets = zoomFlyout.querySelectorAll(".zoom-preset");
+        zoomPresets.forEach(preset => {
+            preset.addEventListener("click", async (e) => {
+                const zoom = parseFloat((e.currentTarget as HTMLElement).getAttribute("data-zoom") || "1");
+                await this.setZoomLevel(zoom);
+                this.closeZoomFlyout();
+            });
+        });
+
+        // Initialize display
+        this.updateZoomDisplay();
+    }
+
+    /**
+     * Setup mouse wheel zoom control (Ctrl + scroll wheel)
+     */
+    private setupMouseWheelZoom(): void {
+        // Add event listener to the viewer container to capture wheel events
+        const viewerContainer = document.getElementById("viewerContainer");
+        
+        if (viewerContainer) {
+            viewerContainer.addEventListener('wheel', (e) => {
+                // Only handle wheel events with Ctrl key pressed
+                if (e.ctrlKey) {
+                    e.preventDefault(); // Prevent browser zoom
+                    e.stopPropagation();
+                    
+                    // Determine zoom direction based on wheel delta
+                    const delta = e.deltaY;
+                    
+                    if (delta < 0) {
+                        // Scroll up = zoom in
+                        this.handleMouseWheelZoom('in');
+                    } else if (delta > 0) {
+                        // Scroll down = zoom out
+                        this.handleMouseWheelZoom('out');
+                    }
+                }
+            }, { passive: false }); // passive: false allows preventDefault()
+            
+            console.log("🖱️ Mouse wheel zoom control set up (Ctrl + scroll wheel)");
+        } else {
+            console.error("Viewer container not found for mouse wheel zoom setup");
+        }
+    }
+
+    /**
+     * Setup file drop zone and keyboard shortcuts (since Open button was removed)
+     */
+    private setupFileDropAndKeyboard(): void {
+        const container = document.querySelector('.container') as HTMLElement;
+        const fileInput = document.getElementById("fileInput") as HTMLInputElement;
+        
+        if (container && fileInput) {
+            // Drag & Drop events
+            container.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                container.classList.add('drag-over');
+            });
+
+            container.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                // Only remove if actually leaving the container
+                if (!container.contains(e.relatedTarget as Node)) {
+                    container.classList.remove('drag-over');
+                }
+            });
+
+            container.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                container.classList.remove('drag-over');
+                
+                const files = e.dataTransfer?.files;
+                if (files && files.length > 0) {
+                    const file = files[0];
+                    if (file.type === 'application/pdf') {
+                        // Simulate file input change
+                        fileInput.files = files;
+                        this.handleFileSelect({ target: fileInput } as any);
+                    } else {
+                        this.showError('Please drop a PDF file.');
+                    }
+                }
+            });
+
+            // Keyboard shortcut: Ctrl+O to open file
+            document.addEventListener('keydown', (e) => {
+                if (e.ctrlKey && e.key === 'o') {
+                    e.preventDefault();
+                    fileInput.click();
+                }
+            });
+
+            console.log("📁 File drop zone and keyboard shortcuts set up (Ctrl+O to open, drag & drop supported)");
+        }
+    }
+
+    /**
+     * Handle mouse wheel zoom events
+     */
+    private async handleMouseWheelZoom(direction: 'in' | 'out'): Promise<void> {
+        const zoomFactor = 1.1; // 10% zoom increment for smooth scrolling
+        const oldScale = this.scale;
+        
+        if (direction === 'in') {
+            this.scale = Math.min(this.scale * zoomFactor, 3.0);
+        } else {
+            this.scale = Math.max(this.scale / zoomFactor, 0.25);
+        }
+        
+        // Only re-render if zoom actually changed
+        if (Math.abs(this.scale - oldScale) > 0.001) {
+            console.log(`🖱️ Mouse wheel zoom ${direction}: ${oldScale.toFixed(3)} → ${this.scale.toFixed(3)}`);
+            
+            // Switch to manual mode for mouse wheel zoom
+            this._autoZoomMode = 'manual';
+            
+            // Store current scroll position
+            const scrollPosition = this.getCurrentScrollPosition();
+            
+            // Re-render with new scale
+            await this.renderAllPages();
+            this.updateScaleIndicator();
+            
+            // Restore scroll position
+            setTimeout(() => {
+                this.restoreScrollPosition(scrollPosition);
+            }, 50); // Shorter delay for responsive feel
+        }
+    }
+
     /**
      * Open file dialog
      */
@@ -265,6 +466,9 @@ export class TypeAgentPDFViewerApp {
                 // Update UI
                 this.updatePageCount();
                 this.currentPage = 1;
+                
+                // Calculate and apply automatic zoom before rendering
+                await this.applyInitialAutoZoom();
                 
                 // Render all pages for continuous scrolling
                 await this.renderAllPages();
@@ -430,6 +634,9 @@ export class TypeAgentPDFViewerApp {
                 this.updatePageCount();
                 this.currentPage = 1;
                 
+                // Calculate and apply automatic zoom before rendering
+                await this.applyInitialAutoZoom();
+                
                 // Render all pages for continuous scrolling
                 await this.renderAllPages();
 
@@ -469,6 +676,9 @@ export class TypeAgentPDFViewerApp {
                 // Update UI
                 this.updatePageCount();
                 this.currentPage = 1;
+                
+                // Calculate and apply automatic zoom before rendering
+                await this.applyInitialAutoZoom();
                 
                 // Render all pages for continuous scrolling
                 await this.renderAllPages();
@@ -863,12 +1073,15 @@ export class TypeAgentPDFViewerApp {
         
         console.log(`🔍 Zooming in: ${oldScale.toFixed(2)} → ${this.scale.toFixed(2)}`);
         
+        // Switch to manual mode when user manually adjusts zoom
+        this._autoZoomMode = 'manual';
+        
         // Store current scroll position relative to current page
         const scrollPosition = this.getCurrentScrollPosition();
         
         // Re-render all pages with new scale
         await this.renderAllPages();
-        this.updateScaleIndicator();
+        this.updateScaleIndicator(); // This now also updates zoom display
         
         // Restore scroll position after a brief delay to allow rendering
         setTimeout(() => {
@@ -885,12 +1098,15 @@ export class TypeAgentPDFViewerApp {
         
         console.log(`🔍 Zooming out: ${oldScale.toFixed(2)} → ${this.scale.toFixed(2)}`);
         
+        // Switch to manual mode when user manually adjusts zoom
+        this._autoZoomMode = 'manual';
+        
         // Store current scroll position relative to current page
         const scrollPosition = this.getCurrentScrollPosition();
         
         // Re-render all pages with new scale
         await this.renderAllPages();
-        this.updateScaleIndicator();
+        this.updateScaleIndicator(); // This now also updates zoom display
         
         // Restore scroll position after a brief delay to allow rendering
         setTimeout(() => {
@@ -1518,17 +1734,225 @@ export class TypeAgentPDFViewerApp {
     /**
      * Zoom to fit the page in viewport
      */
-    private zoomToFit(): void {
-        // Implementation would depend on existing zoom logic
-        console.log('Zoom to fit requested');
+    /**
+     * Zoom to fit the page within the viewport
+     */
+    private async zoomToFit(): Promise<void> {
+        if (!this.pdfDoc) {
+            console.log('No PDF document loaded');
+            return;
+        }
+
+        try {
+            // Get the container dimensions
+            const container = document.getElementById('viewerContainer');
+            if (!container) {
+                console.error('Viewer container not found');
+                return;
+            }
+
+            // Get container dimensions (subtract padding and margins)
+            const containerRect = container.getBoundingClientRect();
+            const availableWidth = containerRect.width - 40; // Account for padding
+            const availableHeight = containerRect.height - 40; // Account for padding
+
+            // Get the first page to calculate optimal scale
+            const page = await this.pdfDoc.getPage(1);
+            const viewport = page.getViewport({ scale: 1.0 });
+
+            // Calculate scale to fit both width and height
+            const scaleX = availableWidth / viewport.width;
+            const scaleY = availableHeight / viewport.height;
+            
+            // Use the smaller scale to ensure page fits completely
+            const newScale = Math.min(scaleX, scaleY, 3.0); // Cap at 3x max zoom
+
+            console.log(`🔍 Zoom to fit: ${this.scale.toFixed(2)} → ${newScale.toFixed(2)}`);
+            
+            // Update scale and re-render
+            this.scale = newScale;
+            
+            // Store current scroll position
+            const scrollPosition = this.getCurrentScrollPosition();
+            
+            // Re-render all pages with new scale
+            await this.renderAllPages();
+            this.updateScaleIndicator();
+            
+            // Restore scroll position after rendering
+            setTimeout(() => {
+                this.restoreScrollPosition(scrollPosition);
+            }, 100);
+
+        } catch (error) {
+            console.error('Failed to zoom to fit:', error);
+        }
     }
 
     /**
      * Zoom to fit page width
      */
-    private zoomToWidth(): void {
-        // Implementation would depend on existing zoom logic
-        console.log('Zoom to width requested');
+    private async zoomToWidth(): Promise<void> {
+        if (!this.pdfDoc) {
+            console.log('No PDF document loaded');
+            return;
+        }
+
+        try {
+            // Get the container dimensions
+            const container = document.getElementById('viewerContainer');
+            if (!container) {
+                console.error('Viewer container not found');
+                return;
+            }
+
+            // Get container width (subtract padding)
+            const containerRect = container.getBoundingClientRect();
+            const availableWidth = containerRect.width - 40; // Account for padding
+
+            // Get the first page to calculate optimal scale
+            const page = await this.pdfDoc.getPage(1);
+            const viewport = page.getViewport({ scale: 1.0 });
+
+            // Calculate scale to fit width
+            const newScale = Math.min(availableWidth / viewport.width, 3.0); // Cap at 3x max zoom
+
+            console.log(`🔍 Zoom to width: ${this.scale.toFixed(2)} → ${newScale.toFixed(2)}`);
+            
+            // Update scale and re-render
+            this.scale = newScale;
+            
+            // Store current scroll position
+            const scrollPosition = this.getCurrentScrollPosition();
+            
+            // Re-render all pages with new scale
+            await this.renderAllPages();
+            this.updateScaleIndicator();
+            
+            // Restore scroll position after rendering
+            setTimeout(() => {
+                this.restoreScrollPosition(scrollPosition);
+            }, 100);
+
+        } catch (error) {
+            console.error('Failed to zoom to width:', error);
+        }
+    }
+
+    /**
+     * Calculate and apply automatic zoom based on container and document size
+     * Similar to Mozilla PDF.js automatic zoom functionality
+     */
+    private async calculateAndApplyAutoZoom(): Promise<void> {
+        if (!this.pdfDoc) {
+            return;
+        }
+
+        try {
+            // Get the container dimensions
+            const container = document.getElementById('viewerContainer');
+            if (!container) {
+                console.error('Viewer container not found for auto zoom');
+                return;
+            }
+
+            // Get container dimensions
+            const containerRect = container.getBoundingClientRect();
+            const availableWidth = containerRect.width - 40; // Account for padding
+            const availableHeight = containerRect.height - 40; // Account for padding
+
+            // Get the first page to analyze document characteristics
+            const page = await this.pdfDoc.getPage(1);
+            const viewport = page.getViewport({ scale: 1.0 });
+
+            // Calculate potential scales
+            const scaleToFitWidth = availableWidth / viewport.width;
+            const scaleToFitHeight = availableHeight / viewport.height;
+            const scaleToFit = Math.min(scaleToFitWidth, scaleToFitHeight);
+
+            // Mozilla PDF.js automatic zoom logic:
+            // - If document is very wide relative to height, prefer width fitting
+            // - If document is tall and narrow, use fit to container
+            // - Consider viewport aspect ratio
+            const documentAspectRatio = viewport.width / viewport.height;
+            const containerAspectRatio = availableWidth / availableHeight;
+            
+            let autoScale: number;
+            let zoomType: string;
+
+            // If document is much wider than container, fit to width
+            if (documentAspectRatio > containerAspectRatio * 1.5) {
+                autoScale = scaleToFitWidth;
+                zoomType = 'width-fit';
+            } 
+            // If document is much taller than container, fit to container
+            else if (documentAspectRatio < containerAspectRatio * 0.6) {
+                autoScale = scaleToFit;
+                zoomType = 'full-fit';
+            }
+            // For typical documents, prefer a scale that gives good readability
+            else {
+                // Use width fitting but cap it for readability
+                autoScale = Math.min(scaleToFitWidth, 1.5); // Don't go above 150% for readability
+                zoomType = 'auto-readable';
+            }
+
+            // Apply reasonable bounds (between 25% and 300%)
+            autoScale = Math.max(0.25, Math.min(autoScale, 3.0));
+
+            console.log(`🔍 Auto zoom: ${this.scale.toFixed(2)} → ${autoScale.toFixed(2)} (${zoomType})`);
+            console.log(`📊 Document: ${viewport.width}x${viewport.height} (ratio: ${documentAspectRatio.toFixed(2)})`);
+            console.log(`📊 Container: ${availableWidth}x${availableHeight} (ratio: ${containerAspectRatio.toFixed(2)})`);
+
+            // Update scale
+            this.scale = autoScale;
+
+        } catch (error) {
+            console.error('Failed to calculate auto zoom:', error);
+            // Fallback to a reasonable default scale
+            this.scale = 1.0;
+        }
+    }
+
+    /**
+     * Apply automatic zoom when document loads
+     */
+    private async applyInitialAutoZoom(): Promise<void> {
+        if (this._autoZoomMode === 'auto') {
+            await this.calculateAndApplyAutoZoom();
+            console.log(`🎯 Applied automatic zoom: ${this.scale.toFixed(2)}`);
+        }
+    }
+
+    /**
+     * Handle window resize - reapply zoom modes that depend on container size
+     */
+    private handleWindowResize(): void {
+        // Debounce resize events to avoid excessive re-rendering
+        clearTimeout((this as any)._resizeTimeout);
+        (this as any)._resizeTimeout = setTimeout(async () => {
+            if (!this.pdfDoc) return;
+
+            console.log('🔄 Window resized, checking zoom mode...');
+
+            // Only reapply zoom for modes that depend on container size
+            switch (this._autoZoomMode) {
+                case 'auto':
+                    await this.calculateAndApplyAutoZoom();
+                    await this.renderAllPages();
+                    this.updateScaleIndicator();
+                    break;
+                case 'fit':
+                    await this.zoomToFit();
+                    break;
+                case 'width':
+                    await this.zoomToWidth();
+                    break;
+                case 'manual':
+                    // Don't change zoom in manual mode
+                    break;
+            }
+        }, 250); // 250ms debounce
     }
 
     /**
@@ -1542,6 +1966,155 @@ export class TypeAgentPDFViewerApp {
         } catch (error) {
             console.error('Failed to clear annotations:', error);
         }
+    }
+
+    /**
+     * Open the zoom flyout
+     */
+    private openZoomFlyout(): void {
+        const zoomControlButton = document.getElementById("zoomControlButton");
+        const zoomFlyout = document.getElementById("zoomFlyout");
+        
+        if (zoomControlButton && zoomFlyout) {
+            zoomControlButton.classList.add("open");
+            zoomFlyout.style.display = "block";
+            this.updateZoomOptionStates();
+        }
+    }
+
+    /**
+     * Close the zoom flyout
+     */
+    private closeZoomFlyout(): void {
+        const zoomControlButton = document.getElementById("zoomControlButton");
+        const zoomFlyout = document.getElementById("zoomFlyout");
+        
+        if (zoomControlButton && zoomFlyout) {
+            zoomControlButton.classList.remove("open");
+            zoomFlyout.style.display = "none";
+        }
+    }
+
+    /**
+     * Update the zoom display percentage
+     */
+    private updateZoomDisplay(): void {
+        const zoomDisplay = document.getElementById("zoomDisplay");
+        const zoomInput = document.getElementById("zoomInput") as HTMLInputElement;
+        
+        if (zoomDisplay) {
+            const percentage = Math.round(this.scale * 100);
+            zoomDisplay.textContent = `${percentage}%`;
+        }
+        
+        if (zoomInput) {
+            const percentage = Math.round(this.scale * 100);
+            zoomInput.value = `${percentage}%`;
+        }
+    }
+
+    /**
+     * Update zoom option button states
+     */
+    private updateZoomOptionStates(): void {
+        const zoomOptions = document.querySelectorAll(".zoom-option");
+        const zoomPresets = document.querySelectorAll(".zoom-preset");
+        
+        // Update mode options
+        zoomOptions.forEach(option => {
+            const mode = option.getAttribute("data-mode");
+            option.classList.toggle("active", mode === this._autoZoomMode);
+        });
+        
+        // Update preset buttons
+        zoomPresets.forEach(preset => {
+            const zoomLevel = parseFloat(preset.getAttribute("data-zoom") || "0");
+            const isActive = Math.abs(this.scale - zoomLevel) < 0.01;
+            preset.classList.toggle("active", isActive);
+        });
+    }
+
+    /**
+     * Handle zoom mode button clicks
+     */
+    private async handleZoomModeClick(mode: string | null): Promise<void> {
+        if (!mode) return;
+        
+        console.log(`📐 Zoom mode clicked: ${this._autoZoomMode} → ${mode}`);
+        
+        switch (mode) {
+            case 'auto':
+                this._autoZoomMode = 'auto';
+                await this.calculateAndApplyAutoZoom();
+                await this.renderAllPages();
+                this.updateScaleIndicator();
+                break;
+            case 'fit':
+                this._autoZoomMode = 'fit';
+                await this.zoomToFit();
+                break;
+            case 'width':
+                this._autoZoomMode = 'width';
+                await this.zoomToWidth();
+                break;
+            case 'actual':
+                this._autoZoomMode = 'manual';
+                await this.setZoomLevel(1.0);
+                break;
+        }
+        
+        this.updateZoomDisplay();
+    }
+
+    /**
+     * Handle zoom input changes
+     */
+    private async handleZoomInputChange(value: string): Promise<void> {
+        const numericValue = parseFloat(value.replace('%', ''));
+        if (!isNaN(numericValue) && numericValue > 0) {
+            const scale = numericValue / 100;
+            await this.setZoomLevel(scale);
+        } else {
+            // Reset to current value if invalid
+            this.updateZoomDisplay();
+        }
+    }
+
+    /**
+     * Set zoom to specific level
+     */
+    private async setZoomLevel(scale: number): Promise<void> {
+        const oldScale = this.scale;
+        this.scale = Math.max(0.25, Math.min(scale, 3.0)); // Clamp between 25% and 300%
+        
+        console.log(`🔍 Setting zoom level: ${oldScale.toFixed(2)} → ${this.scale.toFixed(2)}`);
+        
+        // Switch to manual mode for specific zoom levels
+        this._autoZoomMode = 'manual';
+        
+        // Store current scroll position
+        const scrollPosition = this.getCurrentScrollPosition();
+        
+        // Re-render all pages with new scale
+        await this.renderAllPages();
+        this.updateScaleIndicator();
+        this.updateZoomDisplay();
+        
+        // Restore scroll position
+        setTimeout(() => {
+            this.restoreScrollPosition(scrollPosition);
+        }, 100);
+    }
+
+    /**
+     * Override updateScaleIndicator to also update zoom display
+     */
+    updateScaleIndicator(): void {
+        const scaleElement = document.getElementById("scale");
+        if (scaleElement) {
+            scaleElement.textContent = `${Math.round(this.scale * 100)}%`;
+        }
+        this.updateZoomDisplay();
     }
 }
 

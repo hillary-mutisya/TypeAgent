@@ -392,6 +392,9 @@ export class TypeAgentPDFViewerApp {
             await this.renderAllPages();
             this.updateScaleIndicator();
             
+            // Ensure text layers are properly refreshed with new coordinates
+            await this.refreshTextLayers();
+            
             // Restore scroll position
             setTimeout(() => {
                 this.restoreScrollPosition(scrollPosition);
@@ -835,63 +838,98 @@ export class TypeAgentPDFViewerApp {
             textLayerDiv.className = 'textLayer';
             textLayerDiv.setAttribute('data-page-number', pageNum.toString());
 
-            // Position over canvas using canvas pixel dimensions (not CSS dimensions)
+            // Get the actual canvas element to match its exact dimensions
             const canvas = pageWrapper.querySelector('canvas') as HTMLCanvasElement;
-            
+            if (!canvas) {
+                console.error(`Canvas not found for page ${pageNum}`);
+                return;
+            }
+
+            // Use the canvas CSS dimensions (not the internal canvas.width/height)
+            // This ensures the text layer matches exactly what the user sees
+            const canvasRect = canvas.getBoundingClientRect();
+            const canvasStyle = window.getComputedStyle(canvas);
+            const canvasWidth = parseFloat(canvasStyle.width);
+            const canvasHeight = parseFloat(canvasStyle.height);
+
+            // Position text layer to exactly match the displayed canvas
             textLayerDiv.style.cssText = `
                 position: absolute;
                 left: 0;
                 top: 0;
-                width: ${viewport.width}px;
-                height: ${viewport.height}px;
+                width: ${canvasWidth}px;
+                height: ${canvasHeight}px;
                 overflow: hidden;
                 line-height: 1.0;
                 pointer-events: auto;
                 user-select: text;
                 z-index: 2;
                 transform-origin: 0% 0%;
-                transform: scale(${canvas.width / viewport.width}, ${canvas.height / viewport.height});
             `;
 
-            // Render text layer with improved positioning
-            await this.renderTextLayerManual(textLayerDiv, textContent, viewport);
+            // Render text layer with canvas-aligned coordinates
+            await this.renderTextLayerManual(textLayerDiv, textContent, viewport, canvasWidth, canvasHeight);
             pageWrapper.appendChild(textLayerDiv);
 
-            console.log(`📝 Text layer enabled for page ${pageNum} at scale ${this.scale.toFixed(2)}`);
+            console.log(`📝 Text layer enabled for page ${pageNum} at scale ${this.scale.toFixed(2)}, canvas: ${canvasWidth}x${canvasHeight}, viewport: ${viewport.width}x${viewport.height}`);
         } catch (error) {
             console.error(`❌ Failed to enable text layer for page ${pageNum}:`, error);
         }
     }
 
     /**
-     * Manual text layer rendering (fallback)
+     * Manual text layer rendering with canvas-aligned coordinate mapping
      */
-    private async renderTextLayerManual(textLayerDiv: HTMLElement, textContent: any, viewport: any): Promise<void> {
+    private async renderTextLayerManual(textLayerDiv: HTMLElement, textContent: any, viewport: any, canvasWidth?: number, canvasHeight?: number): Promise<void> {
         return new Promise((resolve, reject) => {
             try {
                 // Clear existing content
                 textLayerDiv.innerHTML = '';
 
-                // Render each text item with improved positioning and width constraints
+                // Calculate scaling factors if canvas dimensions differ from viewport
+                const scaleX = canvasWidth ? canvasWidth / viewport.width : 1;
+                const scaleY = canvasHeight ? canvasHeight / viewport.height : 1;
+
+                // Render each text item with canvas-aligned positioning
                 textContent.items.forEach((textItem: any) => {
                     const textSpan = document.createElement('span');
                     textSpan.textContent = textItem.str;
                     
-                    // Get transform matrix
+                    // Get transform matrix from PDF text item
                     const [a, b, c, d, e, f] = textItem.transform;
                     
-                    // Calculate position relative to viewport (not scaled)
-                    const x = e;
-                    const y = viewport.height - f;
-                    const scaleX = Math.abs(a);
-                    const scaleY = Math.abs(d);
-                    const fontSize = scaleY;
+                    // Apply PDF.js viewport transformation
+                    const transform = viewport.transform;
+                    const baseX = e * transform[0] + transform[4];
+                    const baseY = f * transform[3] + transform[5];
                     
-                    // Calculate text width based on PDF text item width
-                    // Use the PDF's intrinsic width if available, otherwise estimate
-                    const textWidth = textItem.width && textItem.width > 0 ? 
-                        Math.abs(textItem.width) : 
-                        fontSize * textItem.str.length * 0.6;
+                    // Scale coordinates to match canvas display size
+                    const x = baseX * scaleX;
+                    
+                    // Adjust Y coordinate - PDF.js gives us the baseline, but we need the top of the text box
+                    const baseFontSize = Math.abs(d * transform[3]);
+                    const fontSize = baseFontSize * scaleY;
+                    // Move the text down by the font size to position the baseline correctly
+                    const y = (baseY * scaleY) - fontSize;
+                    
+                    // Calculate text width more accurately with padding for complete text capture
+                    // Use the actual text item width if available, otherwise estimate based on font metrics
+                    let textWidth;
+                    if (textItem.width && textItem.width > 0) {
+                        // Use PDF-provided width, scaled appropriately, with extra padding
+                        textWidth = Math.abs(textItem.width * transform[0] * scaleX) * 1.1; // 10% padding
+                    } else {
+                        // Fallback estimation - be more generous to avoid cut-off
+                        const avgCharWidth = fontSize * 0.7; // Increased from 0.6 to 0.7
+                        textWidth = textItem.str.length * avgCharWidth;
+                    }
+                    
+                    // Ensure minimum width and add extra padding for edge cases
+                    const minWidth = fontSize * 0.4; // Increased minimum width
+                    textWidth = Math.max(textWidth, minWidth);
+                    
+                    // Add extra padding for the last few characters (common truncation issue)
+                    textWidth += fontSize * 0.2; // Add 20% of font size as padding
                     
                     textSpan.style.cssText = `
                         position: absolute;
@@ -900,7 +938,7 @@ export class TypeAgentPDFViewerApp {
                         cursor: text;
                         transform-origin: 0% 0%;
                         left: ${x}px;
-                        top: ${y - fontSize}px;
+                        top: ${y}px;
                         font-size: ${fontSize}px;
                         font-family: sans-serif;
                         line-height: 1;
@@ -908,15 +946,15 @@ export class TypeAgentPDFViewerApp {
                         pointer-events: auto;
                         height: ${fontSize}px;
                         width: ${textWidth}px;
-                        max-width: ${textWidth}px;
-                        overflow: hidden;
+                        max-width: none;
+                        overflow: visible;
                         box-sizing: border-box;
                     `;
 
                     textLayerDiv.appendChild(textSpan);
                 });
 
-                console.log(`📝 Rendered ${textContent.items.length} text items`);
+                console.log(`📝 Rendered ${textContent.items.length} text items with scale ${this.scale.toFixed(2)}, canvas scaling: ${scaleX.toFixed(3)}x${scaleY.toFixed(3)}`);
                 resolve();
             } catch (error) {
                 reject(error);
@@ -982,7 +1020,7 @@ export class TypeAgentPDFViewerApp {
     }
 
     /**
-     * Refresh text layers for all visible pages (useful after zoom)
+     * Refresh text layers for all visible pages (improved synchronization after zoom)
      */
     private async refreshTextLayers(): Promise<void> {
         try {
@@ -991,22 +1029,26 @@ export class TypeAgentPDFViewerApp {
 
             const pageWrappers = container.querySelectorAll('.page-wrapper');
             
+            // Process pages sequentially to avoid race conditions
             for (const pageWrapper of pageWrappers) {
                 const pageNum = parseInt(pageWrapper.getAttribute('data-page-number') || '1');
                 
-                // Remove existing text layer
+                // Remove existing text layer completely
                 const existingTextLayer = pageWrapper.querySelector('.textLayer');
                 if (existingTextLayer) {
                     existingTextLayer.remove();
                 }
                 
-                // Re-create text layer with current scale
+                // Wait a tick to ensure DOM cleanup
+                await new Promise(resolve => setTimeout(resolve, 0));
+                
+                // Re-create text layer with current scale and viewport
                 const page = await this.pdfDoc.getPage(pageNum);
                 const viewport = page.getViewport({ scale: this.scale });
                 await this.enableTextLayerForPage(pageNum, pageWrapper as HTMLElement, viewport);
             }
             
-            console.log('🔄 Text layers refreshed for all pages');
+            console.log('🔄 Text layers refreshed for all pages with proper coordinate alignment');
         } catch (error) {
             console.error('❌ Failed to refresh text layers:', error);
         }
@@ -1083,6 +1125,9 @@ export class TypeAgentPDFViewerApp {
         await this.renderAllPages();
         this.updateScaleIndicator(); // This now also updates zoom display
         
+        // Ensure text layers are properly refreshed with new coordinates
+        await this.refreshTextLayers();
+        
         // Restore scroll position after a brief delay to allow rendering
         setTimeout(() => {
             this.restoreScrollPosition(scrollPosition);
@@ -1107,6 +1152,9 @@ export class TypeAgentPDFViewerApp {
         // Re-render all pages with new scale
         await this.renderAllPages();
         this.updateScaleIndicator(); // This now also updates zoom display
+        
+        // Ensure text layers are properly refreshed with new coordinates
+        await this.refreshTextLayers();
         
         // Restore scroll position after a brief delay to allow rendering
         setTimeout(() => {
@@ -1779,6 +1827,9 @@ export class TypeAgentPDFViewerApp {
             await this.renderAllPages();
             this.updateScaleIndicator();
             
+            // Ensure text layers are properly refreshed with new coordinates
+            await this.refreshTextLayers();
+            
             // Restore scroll position after rendering
             setTimeout(() => {
                 this.restoreScrollPosition(scrollPosition);
@@ -1828,6 +1879,9 @@ export class TypeAgentPDFViewerApp {
             // Re-render all pages with new scale
             await this.renderAllPages();
             this.updateScaleIndicator();
+            
+            // Ensure text layers are properly refreshed with new coordinates
+            await this.refreshTextLayers();
             
             // Restore scroll position after rendering
             setTimeout(() => {
@@ -2099,6 +2153,9 @@ export class TypeAgentPDFViewerApp {
         await this.renderAllPages();
         this.updateScaleIndicator();
         this.updateZoomDisplay();
+        
+        // Ensure text layers are properly refreshed with new coordinates
+        await this.refreshTextLayers();
         
         // Restore scroll position
         setTimeout(() => {

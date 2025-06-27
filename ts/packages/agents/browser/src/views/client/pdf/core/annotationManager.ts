@@ -41,6 +41,8 @@ export class AnnotationManager {
     private pdfApiService: PDFApiService;
     private currentTool: AnnotationTool = 'select';
     private documentId: string | null = null;
+    private _isInitialized: boolean = false;
+    private _eventHandlersSetup: boolean = false;
 
     constructor(pdfApiService: PDFApiService) {
         this.pdfApiService = pdfApiService;
@@ -56,6 +58,18 @@ export class AnnotationManager {
      * Initialize annotation system for document
      */
     async initialize(documentId: string, pdfDoc: any): Promise<void> {
+        // Prevent multiple initialization
+        if (this._isInitialized && this.documentId === documentId) {
+            console.log('📝 Annotation system already initialized for this document, skipping...');
+            return;
+        }
+
+        // Cleanup any previous initialization
+        if (this._isInitialized) {
+            console.log('📝 Cleaning up previous annotation initialization...');
+            await this.cleanup();
+        }
+
         this.documentId = documentId;
         
         // Set document ID for all managers
@@ -67,13 +81,45 @@ export class AnnotationManager {
         // Load existing annotations
         await this.loadAllAnnotations();
 
+        this._isInitialized = true;
         console.log('📝 Annotation system initialized for document:', documentId);
+    }
+
+    /**
+     * Cleanup annotation system
+     */
+    async cleanup(): Promise<void> {
+        if (!this._isInitialized) {
+            return;
+        }
+
+        console.log('🧹 Cleaning up annotation system...');
+        
+        // Clear all annotations from UI
+        this.highlightManager.clearAllHighlights();
+        this.noteManager.clearAllNotes();
+        this.inkManager.clearAllDrawings();
+        
+        // Reset state
+        this.documentId = null;
+        this._isInitialized = false;
+        this._eventHandlersSetup = false; // Reset event handlers flag too
+        
+        console.log('✅ Annotation system cleanup complete');
     }
 
     /**
      * Setup annotation-related event handlers
      */
     private setupEventHandlers(): void {
+        // Prevent duplicate event handler setup
+        if (this._eventHandlersSetup) {
+            console.log("📝 Annotation event handlers already set up, skipping...");
+            return;
+        }
+
+        console.log("📝 Setting up annotation event handlers...");
+
         // Listen for tool change events
         document.addEventListener('annotationToolChanged', (event: any) => {
             this.setActiveTool(event.detail.tool);
@@ -100,6 +146,10 @@ export class AnnotationManager {
         document.addEventListener('annotationUpdate', (event: any) => {
             this.handleRemoteAnnotationUpdate(event.detail);
         });
+
+        // Mark event handlers as set up
+        this._eventHandlersSetup = true;
+        console.log("✅ Annotation event handlers set up successfully");
     }
 
     /**

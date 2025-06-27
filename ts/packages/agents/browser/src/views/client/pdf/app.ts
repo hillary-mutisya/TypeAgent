@@ -31,6 +31,10 @@ export class TypeAgentPDFViewerApp {
     private contextMenu: ContextMenu;
     private textSelectionToolbar: TextSelectionToolbar;
     private markdownNoteEditor: MarkdownNoteEditor;
+    private _loadingPDF: boolean = false;
+    private _eventHandlersSetup: boolean = false;
+    private _sidebarIntegrationSetup: boolean = false;
+    private _phase2IntegrationSetup: boolean = false;
 
     constructor() {
         console.log('🔍 App: Initializing components');
@@ -61,7 +65,7 @@ export class TypeAgentPDFViewerApp {
             this.setupEventHandlers();
 
             // Extract document ID from URL if present
-            this.extractDocumentId();
+            await this.extractDocumentId();
 
             // Load document if we have an ID
             if (this.documentId) {
@@ -98,6 +102,12 @@ export class TypeAgentPDFViewerApp {
      * Set up UI event handlers
      */
     private setupEventHandlers(): void {
+        // Prevent duplicate event handler setup
+        if (this._eventHandlersSetup) {
+            console.log("🔧 Event handlers already set up, skipping...");
+            return;
+        }
+
         console.log("🔧 Setting up event handlers...");
 
         const prevBtn = document.getElementById("prevPage");
@@ -184,6 +194,8 @@ export class TypeAgentPDFViewerApp {
         // Annotation tool events
         this.setupAnnotationToolHandlers();
 
+        // Mark event handlers as set up
+        this._eventHandlersSetup = true;
         console.log("✅ Event handlers set up successfully");
     }
     /**
@@ -195,6 +207,25 @@ export class TypeAgentPDFViewerApp {
         ) as HTMLInputElement;
         if (fileInput) {
             fileInput.click();
+        }
+    }
+
+    /**
+     * Coordinate PDF loading to prevent multiple simultaneous loads
+     */
+    private async ensureSinglePDFLoad(loadingFn: () => Promise<void>): Promise<void> {
+        if (this._loadingPDF) {
+            console.log('📄 PDF loading already in progress, skipping...');
+            return;
+        }
+
+        this._loadingPDF = true;
+        try {
+            // Cleanup any existing annotation system
+            await this.annotationManager.cleanup();
+            await loadingFn();
+        } finally {
+            this._loadingPDF = false;
         }
     }
 
@@ -215,35 +246,37 @@ export class TypeAgentPDFViewerApp {
         }
 
         try {
-            console.log("📁 Loading selected file:", file.name);
-            this.showLoading(`Loading ${file.name}...`);
+            await this.ensureSinglePDFLoad(async () => {
+                console.log("📁 Loading selected file:", file.name);
+                this.showLoading(`Loading ${file.name}...`);
 
-            // Read file as array buffer
-            const arrayBuffer = await file.arrayBuffer();
+                // Read file as array buffer
+                const arrayBuffer = await file.arrayBuffer();
 
-            // Load PDF from array buffer
-            const loadingTask = window.pdfjsLib.getDocument(arrayBuffer);
-            this.pdfDoc = await loadingTask.promise;
+                // Load PDF from array buffer
+                const loadingTask = window.pdfjsLib.getDocument(arrayBuffer);
+                this.pdfDoc = await loadingTask.promise;
 
-            console.log(
-                "📄 PDF loaded from file. Pages:",
-                this.pdfDoc.numPages,
-            );
+                console.log(
+                    "📄 PDF loaded from file. Pages:",
+                    this.pdfDoc.numPages,
+                );
 
-            // Update UI
-            this.updatePageCount();
-            this.currentPage = 1;
-            
-            // Render all pages for continuous scrolling
-            await this.renderAllPages();
+                // Update UI
+                this.updatePageCount();
+                this.currentPage = 1;
+                
+                // Render all pages for continuous scrolling
+                await this.renderAllPages();
 
-            // Initialize annotation system
-            if (this.documentId) {
-                await this.annotationManager.initialize(this.documentId, this.pdfDoc);
-            }
+                // Initialize annotation system
+                if (this.documentId) {
+                    await this.annotationManager.initialize(this.documentId, this.pdfDoc);
+                }
 
-            // Setup scroll tracking for page navigation
-            this.setupScrollTracking();
+                // Setup scroll tracking for page navigation
+                this.setupScrollTracking();
+            });
 
             // Clear the file input for next use
             target.value = "";
@@ -259,16 +292,27 @@ export class TypeAgentPDFViewerApp {
     /**
      * Extract document ID or URL from path and query parameters
      */
-    private extractDocumentId(): void {
+    private async extractDocumentId(): Promise<void> {
         const path = window.location.pathname;
         const urlParams = new URLSearchParams(window.location.search);
 
         // Check for URL parameter (for direct PDF URLs)
         const fileUrl = urlParams.get("url") || urlParams.get("file");
         if (fileUrl) {
-            this.documentId = fileUrl;
-            console.log("📄 PDF URL from query parameter:", this.documentId);
-            return;
+            console.log("📄 PDF URL from query parameter:", fileUrl);
+            try {
+                // Register the URL with the server to get a document ID
+                const document = await this.pdfApiService.registerUrlDocument(fileUrl);
+                this.documentId = document.id;
+                console.log("📄 Registered URL, got document ID:", this.documentId);
+                return;
+            } catch (error) {
+                console.error("❌ Failed to register URL with server:", error);
+                // Fallback: use URL as document ID (for backward compatibility)
+                this.documentId = fileUrl;
+                console.log("📄 Using URL as document ID (fallback):", this.documentId);
+                return;
+            }
         }
 
         // Check for document ID in path
@@ -286,22 +330,65 @@ export class TypeAgentPDFViewerApp {
         try {
             this.showLoading("Loading document...");
 
-            // Check if documentId is a direct URL
+            // Check if documentId is a direct URL (including from file query param)
             if (this.isUrl(documentId)) {
-                console.log("📄 Loading PDF from direct URL:", documentId);
+                console.log("📄 Loading PDF from URL:", documentId);
                 await this.loadPDFFromUrl(documentId);
+                return;
+            }
+
+            // Check if we have a file query parameter that should be loaded as URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const fileParam = urlParams.get("file") || urlParams.get("url");
+            
+            if (fileParam && this.isUrl(fileParam)) {
+                console.log("📄 Loading PDF from file query parameter:", fileParam);
+                await this.loadPDFFromUrl(fileParam);
                 return;
             }
 
             // Otherwise, treat as document ID and get from API
             console.log("📄 Loading document via API:", documentId);
 
-            // Get document metadata from API
-            const docInfo = await this.pdfApiService.getDocument(documentId);
-            console.log("📋 Document info:", docInfo);
+            try {
+                // Get document metadata from API
+                const docInfo = await this.pdfApiService.getDocument(documentId);
+                console.log("📋 Document info:", docInfo);
 
-            // For now, load a sample PDF since we don't have upload implemented
-            await this.loadSampleDocument();
+                // If the document has a URL, load it directly
+                if (docInfo.url) {
+                    console.log("📄 Document has URL, loading from:", docInfo.url);
+                    await this.loadPDFFromUrl(docInfo.url);
+                    return;
+                }
+
+                // If the document has file data, handle it appropriately
+                if (docInfo.fileData || docInfo.filePath) {
+                    console.log("📄 Loading document from server storage");
+                    // This would be implemented based on your server's file serving approach
+                    // For now, fallback to sample document
+                    await this.loadSampleDocument();
+                    return;
+                }
+
+                // Fallback if no specific loading method is available
+                console.log("📄 No specific loading method found, using sample document");
+                await this.loadSampleDocument();
+
+            } catch (apiError) {
+                console.error("❌ Failed to get document from API:", apiError);
+                
+                // If API fails but we have a potential URL as documentId, try loading it directly
+                if (documentId.includes('http') || documentId.includes('.pdf')) {
+                    console.log("📄 API failed, attempting to load documentId as URL:", documentId);
+                    await this.loadPDFFromUrl(documentId);
+                    return;
+                }
+                
+                // Final fallback
+                console.log("📄 All methods failed, loading sample document");
+                await this.loadSampleDocument();
+            }
 
             // Set up SSE connection for real-time features
             this.setupSSEConnection(documentId);
@@ -331,27 +418,29 @@ export class TypeAgentPDFViewerApp {
      */
     async loadPDFFromUrl(url: string): Promise<void> {
         try {
-            this.showLoading("Loading PDF from URL...");
+            await this.ensureSinglePDFLoad(async () => {
+                this.showLoading("Loading PDF from URL...");
 
-            const loadingTask = window.pdfjsLib.getDocument(url);
-            this.pdfDoc = await loadingTask.promise;
+                const loadingTask = window.pdfjsLib.getDocument(url);
+                this.pdfDoc = await loadingTask.promise;
 
-            console.log("📄 PDF loaded from URL. Pages:", this.pdfDoc.numPages);
+                console.log("📄 PDF loaded from URL. Pages:", this.pdfDoc.numPages);
 
-            // Update UI
-            this.updatePageCount();
-            this.currentPage = 1;
-            
-            // Render all pages for continuous scrolling
-            await this.renderAllPages();
+                // Update UI
+                this.updatePageCount();
+                this.currentPage = 1;
+                
+                // Render all pages for continuous scrolling
+                await this.renderAllPages();
 
-            // Initialize annotation system
-            if (this.documentId) {
-                await this.annotationManager.initialize(this.documentId, this.pdfDoc);
-            }
+                // Initialize annotation system
+                if (this.documentId) {
+                    await this.annotationManager.initialize(this.documentId, this.pdfDoc);
+                }
 
-            // Setup scroll tracking for page navigation
-            this.setupScrollTracking();
+                // Setup scroll tracking for page navigation
+                this.setupScrollTracking();
+            });
         } catch (error) {
             console.error("❌ Failed to load PDF from URL:", error);
             this.showError(
@@ -365,31 +454,33 @@ export class TypeAgentPDFViewerApp {
      */
     async loadSampleDocument(): Promise<void> {
         try {
-            this.showLoading("Loading sample document...");
+            await this.ensureSinglePDFLoad(async () => {
+                this.showLoading("Loading sample document...");
 
-            // Use a sample PDF URL - you can replace this with your own
-            const samplePdfUrl =
-                "https://raw.githubusercontent.com/mozilla/pdf.js/ba2edeae/web/compressed.tracemonkey-pldi-09.pdf";
+                // Use a sample PDF URL - you can replace this with your own
+                const samplePdfUrl =
+                    "https://raw.githubusercontent.com/mozilla/pdf.js/ba2edeae/web/compressed.tracemonkey-pldi-09.pdf";
 
-            const loadingTask = window.pdfjsLib.getDocument(samplePdfUrl);
-            this.pdfDoc = await loadingTask.promise;
+                const loadingTask = window.pdfjsLib.getDocument(samplePdfUrl);
+                this.pdfDoc = await loadingTask.promise;
 
-            console.log("📄 PDF loaded. Pages:", this.pdfDoc.numPages);
+                console.log("📄 PDF loaded. Pages:", this.pdfDoc.numPages);
 
-            // Update UI
-            this.updatePageCount();
-            this.currentPage = 1;
-            
-            // Render all pages for continuous scrolling
-            await this.renderAllPages();
+                // Update UI
+                this.updatePageCount();
+                this.currentPage = 1;
+                
+                // Render all pages for continuous scrolling
+                await this.renderAllPages();
 
-            // Initialize annotation system
-            if (this.documentId) {
-                await this.annotationManager.initialize(this.documentId, this.pdfDoc);
-            }
+                // Initialize annotation system
+                if (this.documentId) {
+                    await this.annotationManager.initialize(this.documentId, this.pdfDoc);
+                }
 
-            // Setup scroll tracking for page navigation
-            this.setupScrollTracking();
+                // Setup scroll tracking for page navigation
+                this.setupScrollTracking();
+            });
         } catch (error) {
             console.error("❌ Failed to load sample document:", error);
             this.showError("Failed to load PDF document");
@@ -454,11 +545,11 @@ export class TypeAgentPDFViewerApp {
      */
     private async renderPageInContainer(pageNum: number, container: HTMLElement): Promise<void> {
         try {
-            // Check if page already exists (prevent duplicates)
-            const existingPage = container.querySelector(`[data-page-number="${pageNum}"]`);
-            if (existingPage) {
-                console.log(`⚠️ Page ${pageNum} already exists, skipping`);
-                return;
+            // Check if page already exists (prevent duplicates) - more robust check
+            const existingPages = container.querySelectorAll(`[data-page-number="${pageNum}"]`);
+            if (existingPages.length > 0) {
+                console.log(`⚠️ Page ${pageNum} already exists (${existingPages.length} copies), removing duplicates and creating fresh`);
+                existingPages.forEach(page => page.remove());
             }
 
             const page = await this.pdfDoc.getPage(pageNum);
@@ -1124,6 +1215,14 @@ export class TypeAgentPDFViewerApp {
      * Setup integration between annotation manager and sidebar
      */
     private setupSidebarIntegration(): void {
+        // Prevent duplicate setup
+        if (this._sidebarIntegrationSetup) {
+            console.log("📁 Sidebar integration already set up, skipping...");
+            return;
+        }
+
+        console.log("📁 Setting up sidebar integration...");
+
         // Listen for sidebar toggle
         document.addEventListener('click', (event) => {
             const target = event.target;
@@ -1154,6 +1253,9 @@ export class TypeAgentPDFViewerApp {
         document.addEventListener('clearAllAnnotationsRequested', () => {
             this.clearAllAnnotations();
         });
+
+        this._sidebarIntegrationSetup = true;
+        console.log("✅ Sidebar integration set up successfully");
     }
 
     /**
@@ -1275,6 +1377,14 @@ export class TypeAgentPDFViewerApp {
      * Setup Phase 2 component integration
      */
     private setupPhase2Integration(): void {
+        // Prevent duplicate setup
+        if (this._phase2IntegrationSetup) {
+            console.log("🎯 Phase 2 integration already set up, skipping...");
+            return;
+        }
+
+        console.log("🎯 Setting up Phase 2 integration...");
+
         // Context Menu Integration
         this.contextMenu.on('highlight-selected', (data) => {
             this.annotationManager.getHighlightManager().createHighlightFromSelection(
@@ -1367,6 +1477,9 @@ export class TypeAgentPDFViewerApp {
         document.addEventListener('pdf-zoom-to-width', () => {
             this.zoomToWidth();
         });
+
+        this._phase2IntegrationSetup = true;
+        console.log("✅ Phase 2 integration set up successfully");
     }
 
     /**
@@ -1451,12 +1564,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         console.error("❌ Failed to start PDF viewer:", error);
     }
 });
-
-// Fallback in case DOMContentLoaded already fired
-if (document.readyState !== "loading") {
-    console.log("🔄 DOM already ready, initializing immediately...");
-    document.dispatchEvent(new Event("DOMContentLoaded"));
-}
 
 // Export for global access
 export default TypeAgentPDFViewerApp;

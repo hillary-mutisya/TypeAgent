@@ -34,6 +34,25 @@ export class PDFApiService {
     }
 
     /**
+     * Register a PDF document from URL and get document ID
+     */
+    async registerUrlDocument(url: string): Promise<any> {
+        const response = await fetch(`${this.baseUrl}/register-url`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ url }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to register URL document: ${response.statusText}`);
+        }
+
+        return response.json();
+    }
+
+    /**
      * Get annotations for a document
      */
     async getAnnotations(documentId: string): Promise<any[]> {
@@ -215,22 +234,65 @@ export class PDFApiService {
      * Highlight-specific API methods
      */
     async getHighlights(documentId: string): Promise<any[]> {
-        const response = await fetch(`${this.baseUrl}/${documentId}/highlights`);
+        const response = await fetch(`${this.baseUrl}/${documentId}/annotations`);
 
         if (!response.ok) {
             throw new Error(`Failed to get highlights: ${response.statusText}`);
         }
 
-        return response.json();
+        const annotations = await response.json();
+        // Filter to only highlight annotations and transform back to frontend format
+        return annotations
+            .filter((annotation: any) => annotation.type === 'highlight')
+            .map((annotation: any) => {
+                // Transform server annotation format back to frontend highlight format
+                const highlight = {
+                    id: annotation.id,
+                    page: annotation.page,
+                    color: annotation.color,
+                    selectedText: annotation.content,
+                    createdAt: annotation.createdAt,
+                    updatedAt: annotation.updatedAt
+                };
+
+                // Restore coordinates array from highlightData if available, otherwise create array from single coordinate
+                if (annotation.highlightData && annotation.highlightData.coordinates) {
+                    highlight.coordinates = annotation.highlightData.coordinates;
+                    highlight.textRange = annotation.highlightData.textRange;
+                } else {
+                    // Fallback: convert single coordinate to array format
+                    highlight.coordinates = [annotation.coordinates];
+                }
+
+                return highlight;
+            });
     }
 
     async addHighlight(documentId: string, highlight: any): Promise<any> {
-        const response = await fetch(`${this.baseUrl}/${documentId}/highlights`, {
+        // Convert highlight to server annotation format
+        const annotation = {
+            type: 'highlight',
+            page: highlight.page,
+            content: highlight.selectedText, // Store selected text in content field
+            color: highlight.color,
+            // Convert array of coordinates to single coordinate (use first rectangle)
+            coordinates: highlight.coordinates && highlight.coordinates.length > 0 
+                ? highlight.coordinates[0] 
+                : { x: 0, y: 0, width: 0, height: 0 },
+            // Store additional highlight-specific data in a custom field
+            highlightData: {
+                selectedText: highlight.selectedText,
+                coordinates: highlight.coordinates, // Store full array here
+                textRange: highlight.textRange
+            }
+        };
+
+        const response = await fetch(`${this.baseUrl}/${documentId}/annotations`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify(highlight),
+            body: JSON.stringify(annotation),
         });
 
         if (!response.ok) {
@@ -241,12 +303,18 @@ export class PDFApiService {
     }
 
     async updateHighlight(documentId: string, highlightId: string, highlight: any): Promise<any> {
-        const response = await fetch(`${this.baseUrl}/${documentId}/highlights/${highlightId}`, {
+        // Convert highlight to generic annotation format
+        const annotation = {
+            ...highlight,
+            type: 'highlight'
+        };
+
+        const response = await fetch(`${this.baseUrl}/${documentId}/annotations/${highlightId}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify(highlight),
+            body: JSON.stringify(annotation),
         });
 
         if (!response.ok) {
@@ -257,7 +325,7 @@ export class PDFApiService {
     }
 
     async deleteHighlight(documentId: string, highlightId: string): Promise<void> {
-        const response = await fetch(`${this.baseUrl}/${documentId}/highlights/${highlightId}`, {
+        const response = await fetch(`${this.baseUrl}/${documentId}/annotations/${highlightId}`, {
             method: 'DELETE',
         });
 
@@ -270,22 +338,44 @@ export class PDFApiService {
      * Note-specific API methods
      */
     async getNotes(documentId: string): Promise<any[]> {
-        const response = await fetch(`${this.baseUrl}/${documentId}/notes`);
+        const response = await fetch(`${this.baseUrl}/${documentId}/annotations`);
 
         if (!response.ok) {
             throw new Error(`Failed to get notes: ${response.statusText}`);
         }
 
-        return response.json();
+        const annotations = await response.json();
+        // Filter to only note annotations
+        return annotations.filter((annotation: any) => annotation.type === 'note');
     }
 
     async addNote(documentId: string, note: any): Promise<any> {
-        const response = await fetch(`${this.baseUrl}/${documentId}/notes`, {
+        // Convert note to server annotation format
+        const annotation = {
+            type: 'note',
+            page: note.page,
+            content: note.content,
+            // Convert note coordinates to single coordinate object
+            coordinates: {
+                x: note.coordinates.x,
+                y: note.coordinates.y,
+                width: 20, // Default width for note icon
+                height: 20  // Default height for note icon
+            },
+            // Store additional note-specific data
+            noteData: {
+                contentType: note.contentType || 'plain',
+                selectedText: note.selectedText,
+                originalCoordinates: note.coordinates
+            }
+        };
+
+        const response = await fetch(`${this.baseUrl}/${documentId}/annotations`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify(note),
+            body: JSON.stringify(annotation),
         });
 
         if (!response.ok) {
@@ -296,12 +386,18 @@ export class PDFApiService {
     }
 
     async updateNote(documentId: string, noteId: string, note: any): Promise<any> {
-        const response = await fetch(`${this.baseUrl}/${documentId}/notes/${noteId}`, {
+        // Convert note to generic annotation format
+        const annotation = {
+            ...note,
+            type: 'note'
+        };
+
+        const response = await fetch(`${this.baseUrl}/${documentId}/annotations/${noteId}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify(note),
+            body: JSON.stringify(annotation),
         });
 
         if (!response.ok) {
@@ -312,7 +408,7 @@ export class PDFApiService {
     }
 
     async deleteNote(documentId: string, noteId: string): Promise<void> {
-        const response = await fetch(`${this.baseUrl}/${documentId}/notes/${noteId}`, {
+        const response = await fetch(`${this.baseUrl}/${documentId}/annotations/${noteId}`, {
             method: 'DELETE',
         });
 
@@ -325,55 +421,45 @@ export class PDFApiService {
      * Drawing-specific API methods
      */
     async getDrawings(documentId: string): Promise<any[]> {
-        const response = await fetch(`${this.baseUrl}/${documentId}/drawings`);
-
-        if (!response.ok) {
-            throw new Error(`Failed to get drawings: ${response.statusText}`);
-        }
-
-        return response.json();
+        // Use unified annotations API and filter for drawing type
+        const annotations = await this.getAnnotations(documentId);
+        return annotations.filter((annotation: any) => 
+            annotation.type === 'drawing' || 
+            'strokes' in annotation
+        );
     }
 
     async addDrawing(documentId: string, drawing: any): Promise<any> {
-        const response = await fetch(`${this.baseUrl}/${documentId}/drawings`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(drawing),
-        });
+        // Convert drawing to annotation format
+        const annotation = {
+            type: 'drawing',
+            page: drawing.page,
+            coordinates: drawing.coordinates || { x: 0, y: 0, width: 0, height: 0 },
+            strokes: drawing.strokes,
+            color: drawing.color || '#000000',
+            createdAt: drawing.createdAt || new Date().toISOString()
+        };
 
-        if (!response.ok) {
-            throw new Error(`Failed to add drawing: ${response.statusText}`);
-        }
-
-        return response.json();
+        return this.addAnnotation(documentId, annotation);
     }
 
     async updateDrawing(documentId: string, drawingId: string, drawing: any): Promise<any> {
-        const response = await fetch(`${this.baseUrl}/${documentId}/drawings/${drawingId}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(drawing),
-        });
+        // Convert drawing to annotation format and use existing updateAnnotation method
+        const annotation = {
+            type: 'drawing',
+            page: drawing.page,
+            coordinates: drawing.coordinates || { x: 0, y: 0, width: 0, height: 0 },
+            strokes: drawing.strokes,
+            color: drawing.color || '#000000',
+            updatedAt: new Date().toISOString()
+        };
 
-        if (!response.ok) {
-            throw new Error(`Failed to update drawing: ${response.statusText}`);
-        }
-
-        return response.json();
+        return this.updateAnnotation(documentId, drawingId, annotation);
     }
 
     async deleteDrawing(documentId: string, drawingId: string): Promise<void> {
-        const response = await fetch(`${this.baseUrl}/${documentId}/drawings/${drawingId}`, {
-            method: 'DELETE',
-        });
-
-        if (!response.ok) {
-            throw new Error(`Failed to delete drawing: ${response.statusText}`);
-        }
+        // Use existing deleteAnnotation method
+        return this.deleteAnnotation(documentId, drawingId);
     }
 
     /**

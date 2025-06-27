@@ -94,6 +94,7 @@ export class PDFRoutes {
         app.get("/api/pdf/documents", this.getDocuments.bind(this));
         app.get("/api/pdf/:documentId", this.getDocument.bind(this));
         app.post("/api/pdf/upload", this.uploadDocument.bind(this));
+        app.post("/api/pdf/register-url", this.registerUrlDocument.bind(this)); // NEW: URL registration
         app.get(
             "/api/pdf/:documentId/download",
             this.downloadDocument.bind(this),
@@ -217,6 +218,37 @@ export class PDFRoutes {
         } catch (error) {
             debug("Error getting document:", error);
             res.status(500).json({ error: "Failed to get document" });
+        }
+    }
+
+    /**
+     * Register a PDF document from URL and return document ID
+     */
+    private registerUrlDocument(req: Request, res: Response): void {
+        try {
+            const { url } = req.body;
+
+            if (!url) {
+                res.status(400).json({ error: "URL is required" });
+                return;
+            }
+
+            // Validate URL format
+            try {
+                new URL(url);
+            } catch {
+                res.status(400).json({ error: "Invalid URL format" });
+                return;
+            }
+
+            // Get or create document for this URL
+            const document = this.pdfService.getOrCreateDocumentFromUrl(url);
+
+            debug(`Registered document ${document.id} for URL: ${url}`);
+            res.json(document);
+        } catch (error) {
+            debug("Error registering URL document:", error);
+            res.status(500).json({ error: "Failed to register document from URL" });
         }
     }
 

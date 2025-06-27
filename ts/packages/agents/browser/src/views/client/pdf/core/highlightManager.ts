@@ -97,13 +97,40 @@ export class HighlightManager {
     }
 
     /**
+     * Create highlight from selection object (public API for integration)
+     */
+    createHighlightFromSelection(selection: Selection, color: string, pageElement: HTMLElement): void {
+        if (!selection || selection.rangeCount === 0) {
+            console.error('Invalid selection provided');
+            return;
+        }
+
+        const selectedText = selection.toString().trim();
+        if (selectedText.length === 0) {
+            console.error('Empty selection provided');
+            return;
+        }
+
+        // Set the color for this highlight
+        const previousColor = this.currentColor;
+        this.currentColor = color;
+
+        // Create highlight using the range and provided page element
+        const range = selection.getRangeAt(0);
+        this.createHighlightFromRangeAndPage(selectedText, range, pageElement);
+
+        // Restore previous color
+        this.currentColor = previousColor;
+    }
+
+    /**
      * Setup event handlers for highlighting
      */
     private setupEventHandlers(): void {
         // Listen for text selection events
         document.addEventListener('pdfTextSelected', (event: any) => {
             if (this.isHighlightMode && event.detail) {
-                this.createHighlightFromSelection(event.detail.text, event.detail.range);
+                this.createHighlightFromRange(event.detail.text, event.detail.range);
             }
         });
 
@@ -146,7 +173,7 @@ export class HighlightManager {
         // Check if selection is in text layer
         const textLayer = this.findTextLayerParent(range.commonAncestorContainer);
         if (textLayer) {
-            this.createHighlightFromSelection(selectedText, range);
+            this.createHighlightFromRange(selectedText, range);
         }
     }
 
@@ -157,7 +184,7 @@ export class HighlightManager {
         let element = node.nodeType === Node.ELEMENT_NODE ? node as HTMLElement : node.parentElement;
         
         while (element) {
-            if (element.classList.contains('textLayer')) {
+            if (element.classList && element.classList.contains('textLayer')) {
                 return element;
             }
             element = element.parentElement;
@@ -169,7 +196,257 @@ export class HighlightManager {
     /**
      * Create highlight from text selection
      */
-    private async createHighlightFromSelection(selectedText: string, range: Range): Promise<void> {
+    private async createHighlightFromRange(selectedText: string, range: Range): Promise<void> {
+        if (!this.documentId) {
+            console.error('No document ID set for highlight creation');
+            return;
+        }
+
+        // Get page information
+        const textLayer = this.findTextLayerParent(range.commonAncestorContainer);
+        if (!textLayer) {
+            console.error('No text layer found for selection');
+            return;
+        }
+
+        const pageElement = textLayer.closest('.page') as HTMLElement;
+        if (!pageElement) {
+            console.error('No page element found');
+            return;
+        }
+
+        const pageNum = this.getPageNumber(pageElement);
+        if (!pageNum) {
+            console.error('Could not determine page number');
+            return;
+        }
+
+        // Get selection coordinates
+        const coordinates = this.getSelectionCoordinates(range, pageElement);
+        if (!coordinates || coordinates.length === 0) {
+            console.error('Could not get selection coordinates');
+            return;
+        }
+
+        // Create highlight data
+        const highlightData: Omit<Highlight, 'id' | 'createdAt'> = {
+            documentId: this.documentId,
+            page: pageNum,
+            color: this.currentColor,
+            selectedText: selectedText,
+            coordinates: coordinates
+        };
+
+        try {
+            // Save via API
+            const savedHighlight = await this.pdfApiService.addHighlight(this.documentId, highlightData);
+
+            // Store locally
+            this.highlights.set(savedHighlight.id, savedHighlight);
+
+            // Render highlight
+            this.renderHighlight(savedHighlight);
+
+            console.log('✨ Highlight created:', savedHighlight);
+
+        } catch (error) {
+            console.error('Failed to save highlight:', error);
+        }
+    }
+
+    /**
+     * Create highlight from range with provided page element (bypasses text layer detection)
+     */
+    private async createHighlightFromRangeAndPage(selectedText: string, range: Range, pageElement: HTMLElement): Promise<void> {
+        if (!this.documentId) {
+            console.error('No document ID set for highlight creation');
+            return;
+        }
+
+        const pageNum = this.getPageNumberFromElement(pageElement);
+        if (!pageNum) {
+            console.error('Could not determine page number from provided element');
+            return;
+        }
+
+        // Get selection coordinates relative to the page
+        const coordinates = this.getSelectionCoordinatesForPage(range, pageElement);
+        if (!coordinates || coordinates.length === 0) {
+            console.error('Could not get selection coordinates');
+            return;
+        }
+
+        // Create highlight data
+        const highlightData: Omit<Highlight, 'id' | 'createdAt'> = {
+            documentId: this.documentId,
+            page: pageNum,
+            color: this.currentColor,
+            selectedText: selectedText,
+            coordinates: coordinates
+        };
+
+        try {
+            // Save via API
+            const savedHighlight = await this.pdfApiService.addHighlight(this.documentId, highlightData);
+
+            // Store locally
+            this.highlights.set(savedHighlight.id, savedHighlight);
+
+            // Render highlight on the page
+            this.renderHighlightOnPage(savedHighlight, pageElement);
+
+            console.log('✨ Highlight created:', savedHighlight);
+
+        } catch (error) {
+            console.error('Failed to save highlight:', error);
+        }
+    }
+
+    /**
+     * Get page number from page wrapper element
+     */
+    private getPageNumberFromElement(pageElement: HTMLElement): number | null {
+        // Try data attribute first
+        const pageAttr = pageElement.getAttribute('data-page-number');
+        if (pageAttr) {
+            return parseInt(pageAttr, 10);
+        }
+
+        // Try to find page element inside wrapper
+        const pageChild = pageElement.querySelector('[data-page-number]') as HTMLElement;
+        if (pageChild) {
+            const childPageAttr = pageChild.getAttribute('data-page-number');
+            if (childPageAttr) {
+                return parseInt(childPageAttr, 10);
+            }
+        }
+
+        // Fallback: find by position
+        const container = document.getElementById('viewerContainer');
+        if (container) {
+            const pageWrappers = container.querySelectorAll('.page-wrapper');
+            for (let i = 0; i < pageWrappers.length; i++) {
+                if (pageWrappers[i] === pageElement) {
+                    return i + 1;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Get selection coordinates for a specific page element
+     */
+    private getSelectionCoordinatesForPage(range: Range, pageElement: HTMLElement): Array<{x: number, y: number, width: number, height: number}> {
+        const coordinates: Array<{x: number, y: number, width: number, height: number}> = [];
+        
+        try {
+            const pageRect = pageElement.getBoundingClientRect();
+            const rects = range.getClientRects();
+            
+            for (let i = 0; i < rects.length; i++) {
+                const rect = rects[i];
+                
+                // Convert to page-relative coordinates
+                const relativeRect = {
+                    x: rect.left - pageRect.left,
+                    y: rect.top - pageRect.top,
+                    width: rect.width,
+                    height: rect.height
+                };
+                
+                coordinates.push(relativeRect);
+            }
+        } catch (error) {
+            console.error('Error getting selection coordinates:', error);
+        }
+        
+        return coordinates;
+    }
+
+    /**
+     * Render highlight on specific page element
+     */
+    private renderHighlightOnPage(highlight: Highlight, pageElement: HTMLElement): void {
+        // Create highlight container
+        const container = document.createElement('div');
+        container.className = 'highlight-container';
+        container.setAttribute('data-highlight-id', highlight.id);
+        container.style.cssText = `
+            position: absolute;
+            pointer-events: none;
+            z-index: 10;
+        `;
+
+        // Create overlays for each coordinate rectangle
+        // Ensure coordinates is always an array
+        const coordinates = Array.isArray(highlight.coordinates) 
+            ? highlight.coordinates 
+            : [highlight.coordinates];
+            
+        coordinates.forEach((coord, index) => {
+            const overlay = document.createElement('div');
+            overlay.className = 'highlight-overlay';
+            overlay.style.cssText = `
+                position: absolute;
+                left: ${coord.x}px;
+                top: ${coord.y}px;
+                width: ${coord.width}px;
+                height: ${coord.height}px;
+                background-color: ${highlight.color || '#ffff00'};
+                opacity: 0.3;
+                pointer-events: auto;
+                cursor: pointer;
+            `;
+
+            // Add interaction handlers
+            overlay.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.handleHighlightClick(highlight.id, e);
+            });
+
+            overlay.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.handleHighlightRightClick(highlight.id, e);
+            });
+
+            container.appendChild(overlay);
+        });
+
+        // Add to page
+        pageElement.appendChild(container);
+    }
+
+    /**
+     * Handle highlight click
+     */
+    private handleHighlightClick(highlightId: string, event: MouseEvent): void {
+        console.log('Highlight clicked:', highlightId);
+        // Emit event for other components to handle
+        const customEvent = new CustomEvent('highlightClicked', {
+            detail: { highlightId, event }
+        });
+        document.dispatchEvent(customEvent);
+    }
+
+    /**
+     * Handle highlight right-click
+     */
+    private handleHighlightRightClick(highlightId: string, event: MouseEvent): void {
+        console.log('Highlight right-clicked:', highlightId);
+        // Emit event for context menu to handle
+        const customEvent = new CustomEvent('highlightRightClicked', {
+            detail: { highlightId, event }
+        });
+        document.dispatchEvent(customEvent);
+    }
+
+    /**
+     * Original method renamed to avoid conflict
+     */
+    private async createHighlightFromRange(selectedText: string, range: Range): Promise<void> {
         if (!this.documentId) {
             console.error('No document ID set for highlight creation');
             return;
@@ -446,7 +723,12 @@ export class HighlightManager {
         `;
 
         // Create highlight rectangle for each coordinate
-        highlight.coordinates.forEach((coord, index) => {
+        // Ensure coordinates is always an array
+        const coordinates = Array.isArray(highlight.coordinates) 
+            ? highlight.coordinates 
+            : [highlight.coordinates];
+            
+        coordinates.forEach((coord, index) => {
             const highlightElement = document.createElement('div');
             highlightElement.className = 'highlight-overlay';
             

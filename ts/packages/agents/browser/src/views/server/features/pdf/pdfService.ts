@@ -19,6 +19,7 @@ export class PDFService {
     private annotations: Map<string, PDFAnnotation[]> = new Map();
     private bookmarks: Map<string, PDFBookmark[]> = new Map();
     private userPresence: Map<string, Map<string, UserPresence>> = new Map();
+    private urlToDocumentId: Map<string, string> = new Map(); // NEW: URL to Document ID mapping
 
     constructor() {
         this.initializeSampleData();
@@ -207,5 +208,107 @@ export class PDFService {
      */
     generateId(): string {
         return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    }
+
+    /**
+     * Get or create document ID for a given URL
+     */
+    getOrCreateDocumentFromUrl(url: string): PDFDocument {
+        // Check if we already have a document for this URL
+        const existingDocumentId = this.urlToDocumentId.get(url);
+        if (existingDocumentId) {
+            const document = this.documents.get(existingDocumentId);
+            if (document) {
+                debug(`Found existing document ${existingDocumentId} for URL: ${url}`);
+                return document;
+            }
+        }
+
+        // Create new document for this URL
+        const documentId = this.generateId();
+        const document: PDFDocument = {
+            id: documentId,
+            title: this.extractTitleFromUrl(url),
+            filename: this.extractFilenameFromUrl(url),
+            size: 0, // Unknown until downloaded
+            pageCount: 0, // Unknown until processed
+            uploadDate: new Date().toISOString(),
+            lastModified: new Date().toISOString(),
+            mimeType: "application/pdf",
+            path: url, // Store the source URL
+        };
+
+        // Store the mappings
+        this.urlToDocumentId.set(url, documentId);
+        this.documents.set(documentId, document);
+        this.annotations.set(documentId, []);
+        this.bookmarks.set(documentId, []);
+        this.userPresence.set(documentId, new Map());
+
+        debug(`Created new document ${documentId} for URL: ${url}`);
+        return document;
+    }
+
+    /**
+     * Extract a meaningful title from URL
+     */
+    private extractTitleFromUrl(url: string): string {
+        try {
+            const urlObj = new URL(url);
+            const pathname = urlObj.pathname;
+            
+            // Try to extract filename without extension
+            const filename = pathname.split('/').pop() || 'Unknown Document';
+            const nameWithoutExt = filename.replace(/\.[^/.]+$/, "");
+            
+            // Clean up the name
+            return nameWithoutExt
+                .replace(/[-_]/g, ' ')
+                .replace(/\b\w/g, l => l.toUpperCase()) || 'PDF Document';
+        } catch {
+            return 'PDF Document';
+        }
+    }
+
+    /**
+     * Extract filename from URL
+     */
+    private extractFilenameFromUrl(url: string): string {
+        try {
+            const urlObj = new URL(url);
+            const pathname = urlObj.pathname;
+            return pathname.split('/').pop() || 'document.pdf';
+        } catch {
+            return 'document.pdf';
+        }
+    }
+
+    /**
+     * Get document by URL (if it exists)
+     */
+    getDocumentByUrl(url: string): PDFDocument | null {
+        const documentId = this.urlToDocumentId.get(url);
+        if (documentId) {
+            return this.documents.get(documentId) || null;
+        }
+        return null;
+    }
+
+    /**
+     * Update document metadata (e.g., after processing the PDF)
+     */
+    updateDocumentMetadata(documentId: string, updates: Partial<PDFDocument>): PDFDocument | null {
+        const document = this.documents.get(documentId);
+        if (document) {
+            const updatedDocument = { 
+                ...document, 
+                ...updates, 
+                lastModified: new Date().toISOString() 
+            };
+            this.documents.set(documentId, updatedDocument);
+            debug(`Updated metadata for document ${documentId}`);
+            return updatedDocument;
+        }
+        return null;
     }
 }

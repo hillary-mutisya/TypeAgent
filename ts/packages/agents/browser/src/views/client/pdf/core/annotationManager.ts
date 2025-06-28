@@ -1,16 +1,17 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { TextLayerManager } from './textLayerManager';
-import { HighlightManager, Highlight } from './highlightManager';
+import { PdfJsTextLayerManager } from './pdfJsTextLayerManager';
+import { PdfJsAnnotationManager } from './pdfJsAnnotationManager';
+import { ModernHighlightManager } from './modernHighlightManager';
 import { NoteManager, Note } from './noteManager';
 import { InkManager, Drawing } from './inkManager';
 import { PDFApiService } from '../services/pdfApiService';
 
 /**
- * Unified annotation data type
+ * Unified annotation data type (Note: highlights now handled by ModernHighlightManager)
  */
-export type Annotation = Highlight | Note | Drawing;
+export type Annotation = Note | Drawing;
 
 /**
  * Annotation tool types
@@ -32,10 +33,12 @@ export interface AnnotationFilter {
 
 /**
  * Unified Annotation Manager that coordinates all annotation types
+ * Updated to use ModernHighlightManager for PDF.js native highlighting
  */
 export class AnnotationManager {
-    private textLayerManager: TextLayerManager;
-    private highlightManager: HighlightManager;
+    private pdfJsTextLayerManager: PdfJsTextLayerManager;
+    private pdfJsAnnotationManager: PdfJsAnnotationManager;
+    private modernHighlightManager: ModernHighlightManager;
     private noteManager: NoteManager;
     private inkManager: InkManager;
     private pdfApiService: PDFApiService;
@@ -46,181 +49,125 @@ export class AnnotationManager {
 
     constructor(pdfApiService: PDFApiService) {
         this.pdfApiService = pdfApiService;
-        this.textLayerManager = new TextLayerManager();
-        this.highlightManager = new HighlightManager(pdfApiService);
+        this.pdfJsTextLayerManager = new PdfJsTextLayerManager();
+        this.pdfJsAnnotationManager = new PdfJsAnnotationManager(pdfApiService);
+        this.modernHighlightManager = new ModernHighlightManager(pdfApiService);
         this.noteManager = new NoteManager(pdfApiService);
         this.inkManager = new InkManager(pdfApiService);
-        
-        this.setupEventHandlers();
     }
 
     /**
-     * Initialize annotation system for document
+     * Initialize the annotation manager with PDF document and viewer
      */
-    async initialize(documentId: string, pdfDoc: any): Promise<void> {
-        // Prevent multiple initialization
-        if (this._isInitialized && this.documentId === documentId) {
-            console.log('📝 Annotation system already initialized for this document, skipping...');
-            return;
-        }
-
-        // Cleanup any previous initialization
+    async initialize(documentId: string, pdfDoc: any, pdfjsApp: any, viewerContainer: HTMLElement): Promise<void> {
         if (this._isInitialized) {
-            console.log('📝 Cleaning up previous annotation initialization...');
-            await this.cleanup();
-        }
-
-        this.documentId = documentId;
-        
-        // Set document ID for all managers
-        this.highlightManager.setDocumentId(documentId);
-        this.noteManager.setDocumentId(documentId);
-        this.inkManager.setDocumentId(documentId);
-        this.textLayerManager.setPDFDocument(pdfDoc);
-
-        // Load existing annotations
-        await this.loadAllAnnotations();
-
-        this._isInitialized = true;
-        console.log('📝 Annotation system initialized for document:', documentId);
-    }
-
-    /**
-     * Cleanup annotation system
-     */
-    async cleanup(): Promise<void> {
-        if (!this._isInitialized) {
+            console.log('📝 Annotation Manager already initialized');
             return;
         }
 
-        console.log('🧹 Cleaning up annotation system...');
-        
-        // Clear all annotations from UI
-        this.highlightManager.clearAllHighlights();
-        this.noteManager.clearAllNotes();
-        this.inkManager.clearAllDrawings();
-        
-        // Reset state
-        this.documentId = null;
-        this._isInitialized = false;
-        this._eventHandlersSetup = false; // Reset event handlers flag too
-        
-        console.log('✅ Annotation system cleanup complete');
+        try {
+            this.documentId = documentId;
+
+            // Initialize text layer manager
+            this.pdfJsTextLayerManager.setPDFDocument(pdfDoc);
+
+            // Initialize PDF.js annotation manager
+            this.pdfJsAnnotationManager.initialize(documentId, pdfDoc);
+
+            // Initialize modern highlight manager
+            await this.modernHighlightManager.initialize(pdfjsApp, viewerContainer);
+            this.modernHighlightManager.setDocumentId(documentId);
+
+            // Initialize other managers
+            this.noteManager.setDocumentId(documentId);
+            this.inkManager.setDocumentId(documentId);
+
+            // Load existing highlights
+            await this.modernHighlightManager.loadHighlights(documentId);
+
+            // Setup event handlers
+            this.setupEventHandlers();
+
+            this._isInitialized = true;
+            console.log('📝 Annotation Manager initialized successfully');
+        } catch (error) {
+            console.error('❌ Failed to initialize Annotation Manager:', error);
+            throw error;
+        }
     }
 
     /**
-     * Setup annotation-related event handlers
+     * Setup event handlers for cross-component communication
      */
     private setupEventHandlers(): void {
-        // Prevent duplicate event handler setup
-        if (this._eventHandlersSetup) {
-            console.log("📝 Annotation event handlers already set up, skipping...");
-            return;
-        }
+        if (this._eventHandlersSetup) return;
 
-        console.log("📝 Setting up annotation event handlers...");
-
-        // Listen for tool change events
-        document.addEventListener('annotationToolChanged', (event: any) => {
-            this.setActiveTool(event.detail.tool);
+        // Listen for highlight events from ModernHighlightManager
+        document.addEventListener('highlightCreated', (event: any) => {
+            console.log('📝 Highlight created:', event.detail.highlight);
+            // Emit unified annotation event
+            const unifiedEvent = new CustomEvent('annotationCreated', {
+                detail: {
+                    type: 'highlight',
+                    annotation: event.detail.highlight
+                }
+            });
+            document.dispatchEvent(unifiedEvent);
         });
 
-        // Listen for page render events
-        document.addEventListener('pageRendered', (event: any) => {
-            const { pageNum, pageElement, viewport } = event.detail;
-            this.setupPageAnnotations(pageNum, pageElement, viewport);
+        document.addEventListener('highlightDeleted', (event: any) => {
+            console.log('📝 Highlight deleted:', event.detail.highlightId);
+            // Emit unified annotation event
+            const unifiedEvent = new CustomEvent('annotationDeleted', {
+                detail: {
+                    type: 'highlight',
+                    annotationId: event.detail.highlightId
+                }
+            });
+            document.dispatchEvent(unifiedEvent);
         });
 
-        // Listen for page cleanup events
-        document.addEventListener('pageCleanup', (event: any) => {
-            const { pageNum } = event.detail;
-            this.cleanupPageAnnotations(pageNum);
+        document.addEventListener('highlightClicked', (event: any) => {
+            console.log('📝 Highlight clicked:', event.detail.highlight);
         });
 
-        // Listen for annotation selection events
-        document.addEventListener('highlightSelected', (event: any) => {
-            this.handleAnnotationSelection('highlight', event.detail);
+        document.addEventListener('highlightNoteRequested', (event: any) => {
+            console.log('📝 Note requested for highlight:', event.detail.highlight);
+            // Could integrate with note manager here
         });
 
-        // Listen for real-time annotation updates
-        document.addEventListener('annotationUpdate', (event: any) => {
-            this.handleRemoteAnnotationUpdate(event.detail);
-        });
-
-        // Mark event handlers as set up
         this._eventHandlersSetup = true;
-        console.log("✅ Annotation event handlers set up successfully");
     }
 
     /**
-     * Setup annotations for a specific page
+     * Enable text layer for a specific page
      */
-    async setupPageAnnotations(pageNum: number, pageElement: HTMLElement, viewport: any): Promise<void> {
-        try {
-            // Set page number attribute for easy identification
-            pageElement.setAttribute('data-page-number', pageNum.toString());
-
-            // Enable text layer for text selection and highlighting
-            await this.textLayerManager.enableTextLayer(pageNum, pageElement, viewport);
-
-            // Create ink canvas overlay
-            this.inkManager.createCanvasForPage(pageNum, pageElement);
-
-            console.log(`📄 Page ${pageNum} annotations setup complete`);
-
-        } catch (error) {
-            console.error(`Failed to setup annotations for page ${pageNum}:`, error);
-        }
+    async enableTextLayerForPage(pageNum: number, pageElement: HTMLElement, viewport: any): Promise<void> {
+        await this.pdfJsTextLayerManager.enableTextLayer(pageNum, pageElement, viewport);
     }
 
     /**
-     * Cleanup annotations for a specific page
+     * Enable annotation layer for a specific page
      */
-    cleanupPageAnnotations(pageNum: number): void {
-        // Remove text layer
-        this.textLayerManager.removeTextLayer(pageNum);
-
-        // Remove ink canvas
-        this.inkManager.removeCanvasForPage(pageNum);
-    }
-
-    /**
-     * Load all annotations for the document
-     */
-    async loadAllAnnotations(): Promise<void> {
-        if (!this.documentId) {
-            return;
-        }
-
-        try {
-            // Load annotations in parallel
-            await Promise.all([
-                this.highlightManager.loadHighlights(this.documentId),
-                this.noteManager.loadNotes(this.documentId),
-                this.inkManager.loadDrawings(this.documentId)
-            ]);
-
-            console.log('📚 All annotations loaded');
-
-        } catch (error) {
-            console.error('Failed to load annotations:', error);
-        }
+    async enableAnnotationLayerForPage(pageNum: number, pageElement: HTMLElement, viewport: any): Promise<void> {
+        await this.pdfJsAnnotationManager.enableAnnotationLayer(pageNum, pageElement, viewport);
     }
 
     /**
      * Set active annotation tool
      */
     setActiveTool(tool: AnnotationTool): void {
+        if (this.currentTool === tool) return;
+
         // Deactivate current tool
         this.deactivateCurrentTool();
 
-        // Set new tool
         this.currentTool = tool;
 
         // Activate new tool
         this.activateCurrentTool();
 
-        // Dispatch tool change event
+        // Emit event
         const event = new CustomEvent('activeToolChanged', {
             detail: { tool: this.currentTool }
         });
@@ -242,9 +189,7 @@ export class AnnotationManager {
     private deactivateCurrentTool(): void {
         switch (this.currentTool) {
             case 'highlight':
-                if (this.highlightManager.isHighlightModeActive()) {
-                    this.highlightManager.toggleHighlightMode();
-                }
+                this.modernHighlightManager.setEnabled(false);
                 break;
             case 'note':
                 if (this.noteManager.isNoteModeActive()) {
@@ -265,7 +210,7 @@ export class AnnotationManager {
     private activateCurrentTool(): void {
         switch (this.currentTool) {
             case 'highlight':
-                this.highlightManager.toggleHighlightMode();
+                this.modernHighlightManager.setEnabled(true);
                 break;
             case 'note':
                 this.noteManager.toggleNoteMode();
@@ -281,25 +226,24 @@ export class AnnotationManager {
     }
 
     /**
-     * Get all annotations
+     * Get all annotations (Note: highlights now managed by ModernHighlightManager)
      */
     getAllAnnotations(): Annotation[] {
-        const highlights = this.highlightManager.getAllHighlights();
+        // ModernHighlightManager highlights are accessed separately
         const notes = this.noteManager.getAllNotes();
         const drawings = this.inkManager.getAllDrawings();
 
-        return [...highlights, ...notes, ...drawings];
+        return [...notes, ...drawings];
     }
 
     /**
      * Get annotations for specific page
      */
     getAnnotationsForPage(pageNum: number): Annotation[] {
-        const highlights = this.highlightManager.getHighlightsForPage(pageNum);
         const notes = this.noteManager.getNotesForPage(pageNum);
         const drawings = this.inkManager.getDrawingsForPage(pageNum);
 
-        return [...highlights, ...notes, ...drawings];
+        return [...notes, ...drawings];
     }
 
     /**
@@ -311,7 +255,6 @@ export class AnnotationManager {
         // Filter by type
         if (filter.type && filter.type.length > 0) {
             annotations = annotations.filter(annotation => {
-                if ('selectedText' in annotation) return filter.type!.includes('highlight');
                 if ('content' in annotation && 'coordinates' in annotation && !('strokes' in annotation)) {
                     return filter.type!.includes('note');
                 }
@@ -322,12 +265,18 @@ export class AnnotationManager {
 
         // Filter by page
         if (filter.page !== undefined) {
-            annotations = annotations.filter(annotation => annotation.page === filter.page);
+            annotations = annotations.filter(annotation => {
+                if ('pageNumber' in annotation) return annotation.pageNumber === filter.page;
+                if ('page' in annotation) return annotation.page === filter.page;
+                return false;
+            });
         }
 
-        // Filter by user
+        // Filter by user ID
         if (filter.userId) {
-            annotations = annotations.filter(annotation => annotation.userId === filter.userId);
+            annotations = annotations.filter(annotation => {
+                return 'userId' in annotation && annotation.userId === filter.userId;
+            });
         }
 
         // Filter by date range
@@ -345,33 +294,30 @@ export class AnnotationManager {
     }
 
     /**
-     * Search annotations by content
+     * Search annotations by text content
      */
     searchAnnotations(query: string): Annotation[] {
-        const lowercaseQuery = query.toLowerCase();
-        const results: Annotation[] = [];
+        if (!query.trim()) return [];
 
-        // Search highlights
-        const highlights = this.highlightManager.getAllHighlights();
-        results.push(...highlights.filter(h => 
-            h.selectedText.toLowerCase().includes(lowercaseQuery)
-        ));
+        const searchTerm = query.toLowerCase();
+        const allAnnotations = this.getAllAnnotations();
 
-        // Search notes
-        const notes = this.noteManager.searchNotes(query);
-        results.push(...notes);
-
-        return results;
+        return allAnnotations.filter(annotation => {
+            if ('content' in annotation) {
+                return annotation.content.toLowerCase().includes(searchTerm);
+            }
+            return false;
+        });
     }
 
     /**
-     * Delete annotation by ID
+     * Delete annotation by ID and type
      */
     async deleteAnnotation(annotationId: string, type: string): Promise<void> {
         try {
             switch (type) {
                 case 'highlight':
-                    await this.highlightManager.deleteHighlight(annotationId);
+                    await this.modernHighlightManager.deleteHighlight(annotationId);
                     break;
                 case 'note':
                     await this.noteManager.deleteNote(annotationId);
@@ -391,13 +337,16 @@ export class AnnotationManager {
      * Clear all annotations
      */
     async clearAllAnnotations(): Promise<void> {
-        // Clear from UI
-        this.highlightManager.clearAllHighlights();
+        // Clear highlights
+        this.modernHighlightManager.clearAllHighlights();
+        
+        // Clear other annotations
+        this.pdfJsAnnotationManager.clearAllAnnotations();
         this.noteManager.clearAllNotes();
         this.inkManager.clearAllDrawings();
 
         // Clear text layers
-        this.textLayerManager.clearAllTextLayers();
+        this.pdfJsTextLayerManager.clearAllTextLayers();
 
         console.log('🗑️ All annotations cleared');
     }
@@ -410,222 +359,118 @@ export class AnnotationManager {
 
         for (const annotation of pageAnnotations) {
             let type: string;
-            if ('selectedText' in annotation) type = 'highlight';
-            else if ('content' in annotation && !('strokes' in annotation)) type = 'note';
+            if ('content' in annotation && !('strokes' in annotation)) type = 'note';
             else if ('strokes' in annotation) type = 'drawing';
             else continue;
 
             await this.deleteAnnotation(annotation.id, type);
         }
 
+        // Also clear highlights for this page
+        const highlights = this.modernHighlightManager.getHighlightsForPage(pageNum);
+        for (const highlight of highlights) {
+            await this.modernHighlightManager.deleteHighlight(highlight.id);
+        }
+
         console.log(`🗑️ Page ${pageNum} annotations cleared`);
     }
 
     /**
-     * Export annotations
+     * Export all annotations including highlights
      */
-    exportAnnotations(format: 'json' | 'csv' = 'json'): string {
-        const annotations = this.getAllAnnotations();
-
-        if (format === 'json') {
-            return JSON.stringify(annotations, null, 2);
-        } else if (format === 'csv') {
-            return this.exportAnnotationsAsCSV(annotations);
-        }
-
-        return '';
-    }
-
-    /**
-     * Export annotations as CSV
-     */
-    private exportAnnotationsAsCSV(annotations: Annotation[]): string {
-        const csvRows = [];
-        csvRows.push('Type,Page,Content,Created,Updated,User');
-
-        annotations.forEach(annotation => {
-            let type: string;
-            let content: string;
-
-            if ('selectedText' in annotation) {
-                type = 'Highlight';
-                content = annotation.selectedText;
-            } else if ('content' in annotation && !('strokes' in annotation)) {
-                type = 'Note';
-                content = (annotation as Note).content;
-            } else if ('strokes' in annotation) {
-                type = 'Drawing';
-                content = `${(annotation as Drawing).strokes.length} strokes`;
-            } else {
-                return;
-            }
-
-            const row = [
-                type,
-                annotation.page,
-                `"${content.replace(/"/g, '""')}"`,
-                annotation.createdAt,
-                'updatedAt' in annotation ? annotation.updatedAt : '',
-                annotation.userId || ''
-            ];
-            csvRows.push(row.join(','));
-        });
-
-        return csvRows.join('\n');
-    }
-
-    /**
-     * Handle remote annotation updates
-     */
-    private handleRemoteAnnotationUpdate(updateData: any): void {
-        const { type, action, annotation } = updateData;
-
-        switch (action) {
-            case 'added':
-                this.handleRemoteAnnotationAdded(type, annotation);
-                break;
-            case 'updated':
-                this.handleRemoteAnnotationUpdated(type, annotation);
-                break;
-            case 'deleted':
-                this.handleRemoteAnnotationDeleted(type, annotation.id);
-                break;
-        }
-    }
-
-    /**
-     * Handle remote annotation added
-     */
-    private handleRemoteAnnotationAdded(type: string, annotation: any): void {
-        // For now, just reload all annotations to keep it simple
-        // In a more sophisticated implementation, we would add the specific annotation
-        this.loadAllAnnotations();
-    }
-
-    /**
-     * Handle remote annotation updated
-     */
-    private handleRemoteAnnotationUpdated(type: string, annotation: any): void {
-        // For now, just reload all annotations
-        this.loadAllAnnotations();
-    }
-
-    /**
-     * Handle remote annotation deleted
-     */
-    private handleRemoteAnnotationDeleted(type: string, annotationId: string): void {
-        // Remove from appropriate manager
-        switch (type) {
-            case 'highlight':
-                this.highlightManager.deleteHighlight(annotationId);
-                break;
-            case 'note':
-                this.noteManager.deleteNote(annotationId);
-                break;
-            case 'drawing':
-                this.inkManager.deleteDrawing(annotationId);
-                break;
-        }
-    }
-
-    /**
-     * Handle annotation selection
-     */
-    private handleAnnotationSelection(type: string, annotation: any): void {
-        // Dispatch unified selection event
-        const event = new CustomEvent('annotationSelected', {
-            detail: { type, annotation }
-        });
-        document.dispatchEvent(event);
-    }
-
-    /**
-     * Get annotation statistics
-     */
-    getAnnotationStats(): {
-        total: number;
-        highlights: number;
-        notes: number;
-        drawings: number;
-        byPage: Map<number, number>;
-    } {
-        const highlights = this.highlightManager.getAllHighlights();
+    exportAnnotations(): any {
+        const highlights = this.modernHighlightManager.getAllHighlights();
         const notes = this.noteManager.getAllNotes();
         const drawings = this.inkManager.getAllDrawings();
 
-        const byPage = new Map<number, number>();
-        
-        [...highlights, ...notes, ...drawings].forEach(annotation => {
-            const count = byPage.get(annotation.page) || 0;
-            byPage.set(annotation.page, count + 1);
-        });
-
         return {
-            total: highlights.length + notes.length + drawings.length,
-            highlights: highlights.length,
-            notes: notes.length,
-            drawings: drawings.length,
-            byPage
+            highlights,
+            notes,
+            drawings,
+            exportedAt: new Date().toISOString(),
+            documentId: this.documentId
         };
     }
 
     /**
-     * Set highlight color
+     * Import annotations including highlights
      */
-    setHighlightColor(color: string): void {
-        this.highlightManager.setHighlightColor(color);
+    async importAnnotations(data: any): Promise<void> {
+        try {
+            if (data.highlights) {
+                await this.modernHighlightManager.importHighlights(JSON.stringify(data.highlights));
+            }
+
+            if (data.notes) {
+                for (const note of data.notes) {
+                    await this.noteManager.addNote(note);
+                }
+            }
+
+            if (data.drawings) {
+                for (const drawing of data.drawings) {
+                    await this.inkManager.addDrawing(drawing);
+                }
+            }
+
+            console.log('📥 Annotations imported successfully');
+        } catch (error) {
+            console.error('❌ Failed to import annotations:', error);
+        }
     }
 
     /**
-     * Set ink color and thickness
+     * Get manager instances for direct access
      */
-    setInkProperties(color: string, thickness: number): void {
-        this.inkManager.setInkColor(color);
-        this.inkManager.setInkThickness(thickness);
+    getPdfJsTextLayerManager(): PdfJsTextLayerManager {
+        return this.pdfJsTextLayerManager;
     }
 
-    /**
-     * Get current highlight color
-     */
-    getCurrentHighlightColor(): string {
-        return this.highlightManager.getCurrentColor();
+    getPdfJsAnnotationManager(): PdfJsAnnotationManager {
+        return this.pdfJsAnnotationManager;
     }
 
-    /**
-     * Get current ink properties
-     */
-    getCurrentInkProperties(): { color: string; thickness: number } {
-        return {
-            color: this.inkManager.getCurrentColor(),
-            thickness: this.inkManager.getCurrentThickness()
-        };
+    getModernHighlightManager(): ModernHighlightManager {
+        return this.modernHighlightManager;
     }
 
-    /**
-     * Get highlight manager instance
-     */
-    getHighlightManager(): HighlightManager {
-        return this.highlightManager;
-    }
-
-    /**
-     * Get note manager instance
-     */
     getNoteManager(): NoteManager {
         return this.noteManager;
     }
 
-    /**
-     * Get ink manager instance
-     */
     getInkManager(): InkManager {
         return this.inkManager;
     }
 
     /**
-     * Get text layer manager instance
+     * Legacy compatibility method - redirects to ModernHighlightManager
      */
-    getTextLayerManager(): TextLayerManager {
-        return this.textLayerManager;
+    getHighlightManager(): ModernHighlightManager {
+        return this.modernHighlightManager;
+    }
+
+    /**
+     * Check if manager is initialized
+     */
+    isInitialized(): boolean {
+        return this._isInitialized;
+    }
+
+    /**
+     * Clean up resources
+     */
+    cleanup(): void {
+        console.log('📝 Cleaning up Annotation Manager...');
+
+        this.modernHighlightManager.cleanup();
+        this.pdfJsTextLayerManager.clearAllTextLayers();
+        this.noteManager.clearAllNotes();
+        this.inkManager.clearAllDrawings();
+
+        this.documentId = null;
+        this._isInitialized = false;
+        this._eventHandlersSetup = false;
+
+        console.log('📝 Annotation Manager cleanup complete');
     }
 }

@@ -756,14 +756,6 @@ export class NoteManager {
         }
 
         if (useMarkdownEditor) {
-            // Format selected text as markdown blockquote
-            const blockquote = selectedText
-                .split('\n')
-                .map(line => `> ${line}`)
-                .join('\n');
-            
-            const initialContent = `${blockquote}\n\n`;
-            
             // Get selection position for note placement
             const selection = window.getSelection();
             let coordinates = { x: 100, y: 100 }; // Default position
@@ -778,13 +770,14 @@ export class NoteManager {
                 };
             }
 
-            // Emit event for markdown editor to handle
+            // Let the markdown editor handle the blockquote formatting
+            // Pass selectedText for the editor to format, don't pre-format it
             const event = new CustomEvent('show-markdown-editor', {
                 detail: {
                     pageNumber: pageNum,
                     position: coordinates,
-                    initialContent: initialContent,
-                    selectedText: selectedText
+                    initialContent: '', // Empty initial content
+                    selectedText: selectedText // Let editor format this as blockquote
                 }
             });
             document.dispatchEvent(event);

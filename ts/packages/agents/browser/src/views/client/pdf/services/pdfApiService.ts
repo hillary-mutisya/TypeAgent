@@ -287,6 +287,8 @@ export class PDFApiService {
             }
         };
 
+        console.log(`🔧 API: Sending highlight with ${highlight.coordinates?.length || 0} coordinates to server`);
+
         const response = await fetch(`${this.baseUrl}/${documentId}/annotations`, {
             method: 'POST',
             headers: {
@@ -299,7 +301,26 @@ export class PDFApiService {
             throw new Error(`Failed to add highlight: ${response.statusText}`);
         }
 
-        return response.json();
+        const serverResponse = await response.json();
+        console.log(`🔧 API: Received server response:`, serverResponse);
+
+        // Transform server response back to frontend highlight format
+        // Ensure we preserve the full coordinates array
+        const transformedHighlight = {
+            id: serverResponse.id,
+            documentId: documentId,
+            page: serverResponse.page || highlight.page,
+            color: serverResponse.color || highlight.color,
+            selectedText: serverResponse.content || highlight.selectedText,
+            coordinates: highlight.coordinates, // Use original coordinates array
+            textRange: highlight.textRange,
+            createdAt: serverResponse.createdAt || new Date().toISOString(),
+            userId: serverResponse.userId
+        };
+
+        console.log(`🔧 API: Returning transformed highlight with ${transformedHighlight.coordinates?.length || 0} coordinates`);
+
+        return transformedHighlight;
     }
 
     async updateHighlight(documentId: string, highlightId: string, highlight: any): Promise<any> {

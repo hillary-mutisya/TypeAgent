@@ -478,7 +478,10 @@ export class TypeAgentPDFViewerApp {
 
                 // Initialize annotation system
                 if (this.documentId) {
-                    await this.annotationManager.initialize(this.documentId, this.pdfDoc);
+                    const viewerContainer = document.getElementById('viewerContainer');
+                    if (viewerContainer) {
+                        await this.annotationManager.initialize(this.documentId, this.pdfDoc, this, viewerContainer);
+                    }
                 }
 
                 // Setup scroll tracking for page navigation
@@ -645,7 +648,10 @@ export class TypeAgentPDFViewerApp {
 
                 // Initialize annotation system
                 if (this.documentId) {
-                    await this.annotationManager.initialize(this.documentId, this.pdfDoc);
+                    const viewerContainer = document.getElementById('viewerContainer');
+                    if (viewerContainer) {
+                        await this.annotationManager.initialize(this.documentId, this.pdfDoc, this, viewerContainer);
+                    }
                 }
 
                 // Setup scroll tracking for page navigation
@@ -688,7 +694,10 @@ export class TypeAgentPDFViewerApp {
 
                 // Initialize annotation system
                 if (this.documentId) {
-                    await this.annotationManager.initialize(this.documentId, this.pdfDoc);
+                    const viewerContainer = document.getElementById('viewerContainer');
+                    if (viewerContainer) {
+                        await this.annotationManager.initialize(this.documentId, this.pdfDoc, this, viewerContainer);
+                    }
                 }
 
                 // Setup scroll tracking for page navigation
@@ -912,24 +921,24 @@ export class TypeAgentPDFViewerApp {
                     // Move the text down by the font size to position the baseline correctly
                     const y = (baseY * scaleY) - fontSize;
                     
-                    // Calculate text width more accurately with padding for complete text capture
+                    // Calculate text width more precisely to avoid over-extension
                     // Use the actual text item width if available, otherwise estimate based on font metrics
                     let textWidth;
                     if (textItem.width && textItem.width > 0) {
-                        // Use PDF-provided width, scaled appropriately, with extra padding
-                        textWidth = Math.abs(textItem.width * transform[0] * scaleX) * 1.1; // 10% padding
+                        // Use PDF-provided width, scaled appropriately, with minimal padding
+                        textWidth = Math.abs(textItem.width * transform[0] * scaleX) * 1.02; // Reduced from 1.1 to 1.02
                     } else {
-                        // Fallback estimation - be more generous to avoid cut-off
-                        const avgCharWidth = fontSize * 0.7; // Increased from 0.6 to 0.7
+                        // More precise fallback estimation
+                        const avgCharWidth = fontSize * 0.65; // Reduced from 0.7 to 0.65
                         textWidth = textItem.str.length * avgCharWidth;
                     }
                     
-                    // Ensure minimum width and add extra padding for edge cases
-                    const minWidth = fontSize * 0.4; // Increased minimum width
+                    // Ensure minimum width but don't over-pad
+                    const minWidth = fontSize * 0.3; // Reduced back to 0.3
                     textWidth = Math.max(textWidth, minWidth);
                     
-                    // Add extra padding for the last few characters (common truncation issue)
-                    textWidth += fontSize * 0.2; // Add 20% of font size as padding
+                    // Reduce end-of-text padding to prevent over-extension
+                    textWidth += fontSize * 0.1; // Reduced from 0.2 to 0.1
                     
                     textSpan.style.cssText = `
                         position: absolute;
@@ -1132,6 +1141,13 @@ export class TypeAgentPDFViewerApp {
         setTimeout(() => {
             this.restoreScrollPosition(scrollPosition);
         }, 100);
+
+        // Refresh PDF.js annotations for new scale
+        if (this.annotationManager) {
+            setTimeout(() => {
+                this.annotationManager.refreshAllAnnotations();
+            }, 150); // Small delay after scroll position restoration
+        }
     }
 
     /**
@@ -1160,6 +1176,13 @@ export class TypeAgentPDFViewerApp {
         setTimeout(() => {
             this.restoreScrollPosition(scrollPosition);
         }, 100);
+
+        // Refresh PDF.js annotations for new scale
+        if (this.annotationManager) {
+            setTimeout(() => {
+                this.annotationManager.refreshAllAnnotations();
+            }, 150); // Small delay after scroll position restoration
+        }
     }
 
     /**
@@ -1651,11 +1674,19 @@ export class TypeAgentPDFViewerApp {
 
         // Context Menu Integration
         this.contextMenu.on('highlight-selected', (data) => {
-            this.annotationManager.getHighlightManager().createHighlightFromSelection(
-                data.selection,
-                data.color,
-                data.pageElement
-            );
+            // Get page number from page element
+            const pageNumber = parseInt(data.pageElement.getAttribute('data-page-number') || '1', 10);
+            
+            const highlightData = {
+                selectedText: data.selection.toString(),
+                selection: data.selection,
+                color: data.color,
+                pageElement: data.pageElement,
+                pageNumber: pageNumber,
+                // PDF coordinates will be provided by PDF.js native selection if available
+            };
+            
+            this.annotationManager.getPdfJsAnnotationManager().createHighlightFromSelection(highlightData);
         });
 
         this.contextMenu.on('note-create', (data) => {
@@ -1693,11 +1724,19 @@ export class TypeAgentPDFViewerApp {
 
         // Text Selection Toolbar Integration
         this.textSelectionToolbar.on('highlight-created', (data) => {
-            this.annotationManager.getHighlightManager().createHighlightFromSelection(
-                data.selection,
-                data.color,
-                data.pageElement
-            );
+            // Get page number from page element
+            const pageNumber = parseInt(data.pageElement.getAttribute('data-page-number') || '1', 10);
+            
+            const highlightData = {
+                selectedText: data.selection.toString(),
+                selection: data.selection,
+                color: data.color,
+                pageElement: data.pageElement,
+                pageNumber: pageNumber,
+                // PDF coordinates will be provided by PDF.js native selection if available
+            };
+            
+            this.annotationManager.getPdfJsAnnotationManager().createHighlightFromSelection(highlightData);
         });
 
         this.textSelectionToolbar.on('note-created', (data) => {
@@ -1817,6 +1856,8 @@ export class TypeAgentPDFViewerApp {
 
             console.log(`🔍 Zoom to fit: ${this.scale.toFixed(2)} → ${newScale.toFixed(2)}`);
             
+            const oldScale = this.scale;
+            
             // Update scale and re-render
             this.scale = newScale;
             
@@ -1834,6 +1875,13 @@ export class TypeAgentPDFViewerApp {
             setTimeout(() => {
                 this.restoreScrollPosition(scrollPosition);
             }, 100);
+
+            // Refresh PDF.js annotations for new scale
+            if (this.annotationManager) {
+                setTimeout(() => {
+                    this.annotationManager.refreshAllAnnotations();
+                }, 150); // Small delay after scroll position restoration
+            }
 
         } catch (error) {
             console.error('Failed to zoom to fit:', error);
@@ -1870,6 +1918,8 @@ export class TypeAgentPDFViewerApp {
 
             console.log(`🔍 Zoom to width: ${this.scale.toFixed(2)} → ${newScale.toFixed(2)}`);
             
+            const oldScale = this.scale;
+            
             // Update scale and re-render
             this.scale = newScale;
             
@@ -1887,6 +1937,13 @@ export class TypeAgentPDFViewerApp {
             setTimeout(() => {
                 this.restoreScrollPosition(scrollPosition);
             }, 100);
+
+            // Refresh PDF.js annotations for new scale
+            if (this.annotationManager) {
+                setTimeout(() => {
+                    this.annotationManager.refreshAllAnnotations();
+                }, 150); // Small delay after scroll position restoration
+            }
 
         } catch (error) {
             console.error('Failed to zoom to width:', error);
@@ -2161,6 +2218,13 @@ export class TypeAgentPDFViewerApp {
         setTimeout(() => {
             this.restoreScrollPosition(scrollPosition);
         }, 100);
+
+        // Refresh PDF.js annotations for new scale
+        if (this.annotationManager) {
+            setTimeout(() => {
+                this.annotationManager.refreshAllAnnotations();
+            }, 150); // Small delay after scroll position restoration
+        }
     }
 
     /**

@@ -1,0 +1,300 @@
+/* PDF.js Native Text Selection and Highlighting Styles */
+
+/* Enhanced Text Layer Styles */
+.textLayer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+    opacity: 0.0001; /* Nearly invisible but selectable */
+    line-height: 1.0;
+    pointer-events: auto;
+    z-index: 2;
+    user-select: text;
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+}
+
+.textLayer .pdf-text-div {
+    color: transparent;
+    position: absolute;
+    white-space: pre;
+    cursor: text;
+    transform-origin: 0% 0%;
+    user-select: text;
+    -webkit-user-select: text;
+    pointer-events: auto;
+}
+
+/* Highlight Overlay Styles */
+.pdf-highlight-overlay {
+    position: absolute;
+    pointer-events: auto;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: opacity 0.2s ease;
+    z-index: 1;
+    opacity: 0.3;
+}
+
+.pdf-highlight-overlay:hover {
+    opacity: 0.5;
+}
+
+/* Highlight Mode Styling */
+.highlight-mode {
+    cursor: crosshair !important;
+}
+
+.highlight-mode .textLayer {
+    cursor: crosshair;
+}
+
+.highlight-mode .pdf-highlight-overlay {
+    cursor: crosshair;
+}
+
+/* Disable native selection highlighting during highlight creation */
+.highlight-creation-mode .textLayer {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
+/* Context Menu Styles */
+.highlight-context-menu {
+    position: fixed;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 10000;
+    min-width: 160px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 14px;
+    overflow: hidden;
+}
+
+.highlight-context-menu > div {
+    padding: 10px 16px;
+    cursor: pointer;
+    border-bottom: 1px solid #eee;
+    transition: background-color 0.2s ease;
+}
+
+.highlight-context-menu > div:last-child {
+    border-bottom: none;
+}
+
+.highlight-context-menu > div:hover {
+    background-color: #f5f5f5;
+}
+
+.highlight-context-menu > div[style*="color: #dc3545"]:hover {
+    background-color: #fff5f5;
+}
+
+/* Color Picker Styles */
+.highlight-color-picker {
+    position: fixed;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 10000;
+    padding: 12px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+.highlight-color-picker > div {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 2px solid transparent;
+}
+
+.highlight-color-picker > div:hover {
+    transform: scale(1.1);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.highlight-color-picker > div[style*="border: 2px solid #333"] {
+    border: 2px solid #333 !important;
+    transform: scale(1.05);
+}
+
+/* Copy Feedback Styles */
+.copy-feedback {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #4caf50;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 10000;
+    pointer-events: none;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* Page Layout Adjustments for Better Text Selection */
+.page-wrapper {
+    position: relative;
+}
+
+.page-wrapper canvas {
+    display: block;
+}
+
+/* Ensure text layers work well with existing PDF layout */
+.page {
+    position: relative;
+}
+
+/* Selection Styles */
+.textLayer ::selection {
+    background: rgba(0, 123, 255, 0.3);
+}
+
+.textLayer ::-moz-selection {
+    background: rgba(0, 123, 255, 0.3);
+}
+
+/* Keyboard Shortcut Indicators */
+.highlight-mode::after {
+    content: "Highlight Mode (Ctrl+H)";
+    position: fixed;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 12px;
+    z-index: 10001;
+    pointer-events: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* Highlight Color Classes for Quick Reference */
+.highlight-yellow { background-color: #ffff00; }
+.highlight-green { background-color: #00ff00; }
+.highlight-blue { background-color: #0080ff; }
+.highlight-red { background-color: #ff0000; }
+.highlight-pink { background-color: #ff00ff; }
+.highlight-orange { background-color: #ffa500; }
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+    .highlight-context-menu {
+        min-width: 140px;
+        font-size: 16px; /* Larger touch targets */
+    }
+    
+    .highlight-context-menu > div {
+        padding: 12px 16px;
+    }
+    
+    .highlight-color-picker {
+        padding: 16px;
+        gap: 12px;
+    }
+    
+    .highlight-color-picker > div {
+        width: 32px;
+        height: 32px;
+    }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+    .highlight-context-menu {
+        background: #2d2d2d;
+        border-color: #555;
+        color: white;
+    }
+    
+    .highlight-context-menu > div {
+        border-bottom-color: #444;
+    }
+    
+    .highlight-context-menu > div:hover {
+        background-color: #3d3d3d;
+    }
+    
+    .highlight-color-picker {
+        background: #2d2d2d;
+        border-color: #555;
+    }
+}
+
+/* Accessibility Improvements */
+.pdf-highlight-overlay:focus {
+    outline: 2px solid #007bff;
+    outline-offset: 2px;
+}
+
+.highlight-context-menu > div:focus,
+.highlight-color-picker > div:focus {
+    outline: 2px solid #007bff;
+    outline-offset: -2px;
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+    .pdf-highlight-overlay {
+        border: 1px solid #000;
+    }
+    
+    .highlight-context-menu {
+        border: 2px solid #000;
+    }
+    
+    .highlight-color-picker > div {
+        border: 1px solid #000;
+    }
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+    .pdf-highlight-overlay,
+    .highlight-context-menu > div,
+    .highlight-color-picker > div,
+    .copy-feedback {
+        transition: none;
+    }
+    
+    .highlight-color-picker > div:hover {
+        transform: none;
+    }
+}
+
+/* Print Styles */
+@media print {
+    .highlight-context-menu,
+    .highlight-color-picker,
+    .copy-feedback {
+        display: none !important;
+    }
+    
+    .pdf-highlight-overlay {
+        opacity: 0.2 !important;
+        -webkit-print-color-adjust: exact;
+        color-adjust: exact;
+    }
+}

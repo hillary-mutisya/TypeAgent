@@ -41,6 +41,7 @@ export class HighlightManager {
     constructor(pdfApiService: PDFApiService) {
         this.pdfApiService = pdfApiService;
         this.setupEventHandlers();
+        this.setupZoomEventHandlers();
     }
 
     /**
@@ -115,12 +116,53 @@ export class HighlightManager {
         const previousColor = this.currentColor;
         this.currentColor = color;
 
+        // Add class to disable native selection highlighting during highlight creation
+        const viewerContainer = document.getElementById('viewerContainer');
+        if (viewerContainer) {
+            viewerContainer.classList.add('highlight-creation-mode');
+        }
+
         // Create highlight using the range and provided page element
         const range = selection.getRangeAt(0);
         this.createHighlightFromRangeAndPage(selectedText, range, pageElement);
 
+        // Clear the selection to prevent double highlighting
+        selection.removeAllRanges();
+
+        // Remove the highlight creation mode class after a brief delay
+        setTimeout(() => {
+            if (viewerContainer) {
+                viewerContainer.classList.remove('highlight-creation-mode');
+            }
+        }, 100);
+
         // Restore previous color
         this.currentColor = previousColor;
+    }
+
+    /**
+     * Setup zoom/scale event handlers
+     */
+    private setupZoomEventHandlers(): void {
+        // Listen for custom zoom events from the PDF app
+        document.addEventListener('pdfZoomChanged', () => {
+            console.log('📏 Zoom changed, refreshing highlights...');
+            this.refreshAllHighlights();
+        });
+
+        // Listen for scale changes 
+        document.addEventListener('pdfScaleChanged', () => {
+            console.log('📏 Scale changed, refreshing highlights...');
+            this.refreshAllHighlights();
+        });
+
+        // Listen for page re-rendering (which happens on zoom)
+        document.addEventListener('pdfPageRerendered', () => {
+            console.log('📄 Page re-rendered, refreshing highlights...');
+            setTimeout(() => {
+                this.refreshAllHighlights();
+            }, 100); // Small delay to ensure text layers are ready
+        });
     }
 
     /**
@@ -130,7 +172,7 @@ export class HighlightManager {
         // Listen for text selection events
         document.addEventListener('pdfTextSelected', (event: any) => {
             if (this.isHighlightMode && event.detail) {
-                this.createHighlightFromRange(event.detail.text, event.detail.range);
+                this.handlePdfTextSelection(event.detail.text, event.detail.range);
             }
         });
 
@@ -173,7 +215,23 @@ export class HighlightManager {
         // Check if selection is in text layer
         const textLayer = this.findTextLayerParent(range.commonAncestorContainer);
         if (textLayer) {
-            this.createHighlightFromRange(selectedText, range);
+            // Add class to disable native selection highlighting during highlight creation
+            const viewerContainer = document.getElementById('viewerContainer');
+            if (viewerContainer) {
+                viewerContainer.classList.add('highlight-creation-mode');
+            }
+
+            this.handlePdfTextSelection(selectedText, range);
+
+            // Clear the selection immediately to prevent double highlighting
+            selection.removeAllRanges();
+
+            // Remove the highlight creation mode class after a brief delay
+            setTimeout(() => {
+                if (viewerContainer) {
+                    viewerContainer.classList.remove('highlight-creation-mode');
+                }
+            }, 100);
         }
     }
 
@@ -285,9 +343,13 @@ export class HighlightManager {
             coordinates: coordinates
         };
 
+        console.log(`💾 Saving highlight data with ${coordinates.length} coordinates:`, highlightData);
+
         try {
             // Save via API
             const savedHighlight = await this.pdfApiService.addHighlight(this.documentId, highlightData);
+            
+            console.log(`📥 Received saved highlight with ${Array.isArray(savedHighlight.coordinates) ? savedHighlight.coordinates.length : 'non-array'} coordinates:`, savedHighlight);
 
             // Store locally
             this.highlights.set(savedHighlight.id, savedHighlight);
@@ -336,28 +398,61 @@ export class HighlightManager {
     }
 
     /**
-     * Get selection coordinates for a specific page element
+     * Get selection coordinates for a specific page element (aligned with text layer)
      */
     private getSelectionCoordinatesForPage(range: Range, pageElement: HTMLElement): Array<{x: number, y: number, width: number, height: number}> {
         const coordinates: Array<{x: number, y: number, width: number, height: number}> = [];
         
         try {
-            const pageRect = pageElement.getBoundingClientRect();
+            // Find the text layer within the page element
+            const textLayer = pageElement.querySelector('.textLayer') as HTMLElement;
+            if (!textLayer) {
+                console.error('No text layer found in page element');
+                return coordinates;
+            }
+
+            // Get the canvas element to understand the scaling
+            const canvas = pageElement.querySelector('canvas') as HTMLCanvasElement;
+            if (!canvas) {
+                console.error('No canvas found in page element');
+                return coordinates;
+            }
+
+            // Get the actual dimensions
+            const textLayerRect = textLayer.getBoundingClientRect();
+            const canvasStyle = window.getComputedStyle(canvas);
+            const canvasWidth = parseFloat(canvasStyle.width);
+            const canvasHeight = parseFloat(canvasStyle.height);
+
+            // Get selection rectangles
             const rects = range.getClientRects();
+            console.log(`🎯 Processing ${rects.length} selection rectangles for highlight`);
             
             for (let i = 0; i < rects.length; i++) {
                 const rect = rects[i];
                 
-                // Convert to page-relative coordinates
+                // Skip very small rectangles that might be selection artifacts
+                if (rect.width < 1 || rect.height < 1) {
+                    console.log(`⚠️ Skipping small rectangle ${i}: ${rect.width}x${rect.height}`);
+                    continue;
+                }
+                
+                // Convert to text layer relative coordinates
                 const relativeRect = {
-                    x: rect.left - pageRect.left,
-                    y: rect.top - pageRect.top,
+                    x: rect.left - textLayerRect.left,
+                    y: rect.top - textLayerRect.top,
                     width: rect.width,
                     height: rect.height
                 };
                 
+                console.log(`📍 Rectangle ${i}: (${relativeRect.x.toFixed(1)}, ${relativeRect.y.toFixed(1)}) ${relativeRect.width.toFixed(1)}x${relativeRect.height.toFixed(1)}`);
+                
+                // The highlight coordinates should match the text layer coordinate system
+                // which is already scaled to match the canvas display
                 coordinates.push(relativeRect);
             }
+            
+            console.log(`✅ Generated ${coordinates.length} highlight coordinates`);
         } catch (error) {
             console.error('Error getting selection coordinates:', error);
         }
@@ -366,39 +461,56 @@ export class HighlightManager {
     }
 
     /**
-     * Render highlight on specific page element
+     * Render highlight on specific page element (aligned with text layer)
      */
     private renderHighlightOnPage(highlight: Highlight, pageElement: HTMLElement): void {
-        // Create highlight container
-        const container = document.createElement('div');
-        container.className = 'highlight-container';
-        container.setAttribute('data-highlight-id', highlight.id);
-        container.style.cssText = `
-            position: absolute;
-            pointer-events: none;
-            z-index: 10;
-        `;
+        // Find the text layer to position highlights correctly
+        const textLayer = pageElement.querySelector('.textLayer') as HTMLElement;
+        if (!textLayer) {
+            console.error('No text layer found for highlight rendering');
+            return;
+        }
 
-        // Create overlays for each coordinate rectangle
         // Ensure coordinates is always an array
         const coordinates = Array.isArray(highlight.coordinates) 
             ? highlight.coordinates 
             : [highlight.coordinates];
             
+        console.log(`🎨 Rendering highlight ${highlight.id} with ${coordinates.length} rectangles`);
+
+        // Create a separate container for each highlight rectangle
+        // This ensures each overlay is independently positioned
         coordinates.forEach((coord, index) => {
-            const overlay = document.createElement('div');
-            overlay.className = 'highlight-overlay';
-            overlay.style.cssText = `
+            const container = document.createElement('div');
+            container.className = 'highlight-container';
+            container.setAttribute('data-highlight-id', highlight.id);
+            container.setAttribute('data-highlight-rect', index.toString());
+            container.style.cssText = `
                 position: absolute;
                 left: ${coord.x}px;
                 top: ${coord.y}px;
                 width: ${coord.width}px;
                 height: ${coord.height}px;
+                pointer-events: none;
+                z-index: 1;
+            `;
+
+            const overlay = document.createElement('div');
+            overlay.className = 'highlight-overlay';
+            overlay.style.cssText = `
+                position: absolute;
+                left: 0px;
+                top: 0px;
+                width: 100%;
+                height: 100%;
                 background-color: ${highlight.color || '#ffff00'};
                 opacity: 0.3;
                 pointer-events: auto;
                 cursor: pointer;
+                z-index: 1;
             `;
+            
+            console.log(`🖼️ Creating overlay ${index}: (${coord.x}, ${coord.y}) ${coord.width}x${coord.height} color: ${highlight.color}`);
 
             // Add interaction handlers
             overlay.addEventListener('click', (e) => {
@@ -413,10 +525,11 @@ export class HighlightManager {
             });
 
             container.appendChild(overlay);
+            // Add each container directly to text layer
+            textLayer.appendChild(container);
+            
+            console.log(`✅ Added highlight overlay ${index} to text layer`);
         });
-
-        // Add to page
-        pageElement.appendChild(container);
     }
 
     /**
@@ -444,9 +557,9 @@ export class HighlightManager {
     }
 
     /**
-     * Original method renamed to avoid conflict
+     * Handle PDF text selection for highlighting (from events)
      */
-    private async createHighlightFromRange(selectedText: string, range: Range): Promise<void> {
+    private async handlePdfTextSelection(selectedText: string, range: Range): Promise<void> {
         if (!this.documentId) {
             console.error('No document ID set for highlight creation');
             return;
@@ -1074,6 +1187,24 @@ export class HighlightManager {
         
         // Clear local storage
         this.highlights.clear();
+    }
+
+    /**
+     * Refresh all highlights (re-render them with current scale/positioning)
+     */
+    private refreshAllHighlights(): void {
+        // Remove all existing highlight DOM elements
+        document.querySelectorAll('.highlight-container').forEach(el => el.remove());
+        
+        // Re-render all highlights
+        this.highlights.forEach((highlight) => {
+            const pageElement = this.getPageElement(highlight.page);
+            if (pageElement) {
+                this.renderHighlightOnPage(highlight, pageElement);
+            }
+        });
+        
+        console.log(`🎨 Refreshed ${this.highlights.size} highlights`);
     }
 
     /**

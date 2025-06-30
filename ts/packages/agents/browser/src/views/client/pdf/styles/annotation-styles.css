@@ -114,6 +114,179 @@
   transform: scale(1.1);
 }
 
+/* Question status states */
+.question-icon.pending i {
+  color: #ffb74d; /* Orange for pending */
+  animation: pulse 2s infinite;
+}
+
+.question-icon.error i {
+  color: #e57373; /* Red for error */
+}
+
+.question-icon.complete i {
+  color: #66bb6a; /* Green for complete */
+}
+
+/* Unread response indicator */
+.question-icon .unread-indicator {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  background: #f44336;
+  border-radius: 50%;
+  border: 2px solid white;
+  animation: unreadPulse 1.5s infinite;
+}
+
+.question-icon.has-unread {
+  transform: scale(1.1);
+}
+
+/* Question tooltip */
+.question-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(42, 42, 42, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 12px;
+  max-width: 320px;
+  min-width: 200px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  color: #e8eaed;
+  font-size: 13px;
+  line-height: 1.4;
+  pointer-events: auto;
+  margin-bottom: 8px;
+}
+
+.question-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 8px solid rgba(42, 42, 42, 0.95);
+}
+
+/* Question tooltip content sections */
+.tooltip-question h4 {
+  margin: 0 0 6px 0;
+  color: #8ab4f8;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tooltip-question p {
+  margin: 0;
+  color: #e8eaed;
+  font-weight: 500;
+}
+
+.tooltip-context {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.context-info {
+  color: #9aa0a6;
+  font-style: italic;
+}
+
+.tooltip-response {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.tooltip-response h4 {
+  margin: 0 0 8px 0;
+  color: #8ab4f8;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tooltip-response.pending .processing-message {
+  color: #ffb74d;
+  font-style: italic;
+  margin: 0;
+}
+
+.tooltip-response.error .error-message {
+  color: #f48fb1;
+  margin: 0;
+}
+
+.tooltip-response.complete .response-content {
+  color: #e8eaed;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.tooltip-response.complete .response-content h1,
+.tooltip-response.complete .response-content h2,
+.tooltip-response.complete .response-content h3 {
+  color: #8ab4f8;
+  margin: 12px 0 6px 0;
+  font-size: 14px;
+}
+
+.tooltip-response.complete .response-content p {
+  margin: 6px 0;
+  line-height: 1.5;
+}
+
+.tooltip-response.complete .response-content code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 12px;
+}
+
+.tooltip-response.complete .response-content blockquote {
+  border-left: 3px solid #8ab4f8;
+  margin: 8px 0;
+  padding-left: 12px;
+  color: #9aa0a6;
+  font-style: italic;
+}
+
+/* Animations */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes unreadPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.8;
+  }
+}
+
 /* Animation keyframes */
 /* Note: Removed noteAppear and questionAppear animations since we no longer use click flyouts */
 

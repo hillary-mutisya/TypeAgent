@@ -60,6 +60,30 @@ export interface PDFAnnotation {
     createdAt: string;
     updatedAt: string;
     userId?: string;
+    questionData?: QuestionAnnotationData;
+}
+
+export interface QuestionAnnotationData {
+    question: string;
+    context: QuestionContext;
+    response?: QuestionResponse;
+}
+
+export interface QuestionContext {
+    type: "text" | "screenshot";
+    textContent?: string;
+    pageText?: string;
+    screenshot?: string; // base64 encoded
+    pageScreenshot?: string; // base64 encoded
+    pageNumber: number;
+}
+
+export interface QuestionResponse {
+    content: string; // markdown response
+    status: "pending" | "complete" | "error";
+    timestamp: string;
+    hasUnreadResponse?: boolean;
+    notificationMessage?: string; // For error notifications
 }
 
 export interface PDFBookmark {
@@ -86,7 +110,10 @@ export interface PDFSSEEvent {
         | "user-joined"
         | "user-left"
         | "view-state-changed"
-        | "document-loaded";
+        | "document-loaded"
+        | "question-response"
+        | "question-error"
+        | "user-notification";
     data: any;
     timestamp: string;
     documentId: string;

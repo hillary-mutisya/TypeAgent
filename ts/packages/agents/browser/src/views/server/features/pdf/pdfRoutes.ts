@@ -8,11 +8,13 @@ import { SSEManager, FeatureConfig } from "../../core/types.js";
 import { SSEManagerImpl } from "../../core/sseManager.js";
 import { PDFService } from "./pdfService.js";
 import { UrlDocumentMappingService } from "./urlDocumentMappingService.js";
+import { QuestionService } from "./questionService.js";
 import {
     PDFSSEEvent,
     PDFAnnotation,
     PDFBookmark,
     UserPresence,
+    QuestionContext,
 } from "./pdfTypes.js";
 import registerDebug from "debug";
 
@@ -28,11 +30,13 @@ const __dirname = path.dirname(__filename);
 export class PDFRoutes {
     private pdfService: PDFService;
     private urlMappingService: UrlDocumentMappingService;
+    private questionService: QuestionService;
     private sseManager?: SSEManager;
 
     constructor() {
         this.pdfService = new PDFService();
         this.urlMappingService = new UrlDocumentMappingService();
+        this.questionService = new QuestionService();
     }
 
     /**
@@ -137,6 +141,16 @@ export class PDFRoutes {
         app.delete(
             "/api/pdf/:documentId/annotations/:annotationId",
             this.deleteAnnotation.bind(this),
+        );
+
+        // Question processing
+        app.post(
+            "/api/pdf/:documentId/questions/:annotationId/ask",
+            this.processQuestion.bind(this),
+        );
+        app.post(
+            "/api/pdf/:documentId/questions/:annotationId/mark-read",
+            this.markQuestionRead.bind(this),
         );
 
         // Bookmarks
@@ -570,6 +584,122 @@ export class PDFRoutes {
         } catch (error) {
             debug("Error getting mapping stats:", error);
             res.status(500).json({ error: "Failed to get mapping stats" });
+        }
+    }
+
+    /**
+     * Process a question for an annotation
+     */
+    private async processQuestion(req: Request, res: Response): Promise<void> {
+        try {
+            const documentId = req.params.documentId;
+            const annotationId = req.params.annotationId;
+            const { question, context }: { question: string; context: QuestionContext } = req.body;
+
+            debug(`Processing question for annotation ${annotationId}: "${question.substring(0, 50)}..."`);
+
+            // Validate input
+            if (!question || !context) {
+                res.status(400).json({ error: "Question and context are required" });
+                return;
+            }
+
+            // Verify annotation exists and is a question type
+            const annotation = this.pdfService.getQuestionAnnotation(documentId, annotationId);
+            if (!annotation) {
+                res.status(404).json({ error: "Question annotation not found" });
+                return;
+            }
+
+            // Process the question
+            const result = await this.questionService.processQuestion(
+                documentId,
+                annotationId,
+                question,
+                context
+            );
+
+            if (result.success && result.response) {
+                // Update the annotation with the response
+                const updatedAnnotation = this.pdfService.updateQuestionResponse(
+                    documentId,
+                    annotationId,
+                    result.response
+                );
+
+                if (updatedAnnotation) {
+                    // Broadcast the update
+                    this.broadcastUpdate(documentId, "question-response", updatedAnnotation);
+                    
+                    res.json({ 
+                        success: true, 
+                        annotation: updatedAnnotation,
+                        response: result.response 
+                    });
+                } else {
+                    res.status(500).json({ error: "Failed to update annotation" });
+                }
+            } else {
+                // Handle error case
+                if (result.response) {
+                    // Update annotation with error response
+                    const updatedAnnotation = this.pdfService.updateQuestionResponse(
+                        documentId,
+                        annotationId,
+                        result.response
+                    );
+
+                    if (updatedAnnotation) {
+                        // Broadcast error with notification
+                        this.broadcastUpdate(documentId, "question-error", updatedAnnotation);
+                        
+                        // Send user notification if specified
+                        if (result.response.notificationMessage) {
+                            this.broadcastUpdate(documentId, "user-notification", {
+                                message: result.response.notificationMessage,
+                                type: "error"
+                            });
+                        }
+                    }
+                }
+
+                res.status(500).json({ 
+                    error: result.error || "Failed to process question",
+                    response: result.response 
+                });
+            }
+        } catch (error) {
+            debug("Error processing question:", error);
+            res.status(500).json({ error: "Failed to process question" });
+        }
+    }
+
+    /**
+     * Mark a question response as read
+     */
+    private markQuestionRead(req: Request, res: Response): void {
+        try {
+            const documentId = req.params.documentId;
+            const annotationId = req.params.annotationId;
+
+            const success = this.pdfService.markQuestionResponseAsRead(documentId, annotationId);
+
+            if (success) {
+                // Get the updated annotation
+                const annotation = this.pdfService.getQuestionAnnotation(documentId, annotationId);
+                
+                if (annotation) {
+                    // Broadcast the update to clear unread indicators
+                    this.broadcastUpdate(documentId, "annotation-updated", annotation);
+                }
+
+                res.json({ success: true });
+            } else {
+                res.status(404).json({ error: "Question annotation not found" });
+            }
+        } catch (error) {
+            debug("Error marking question as read:", error);
+            res.status(500).json({ error: "Failed to mark question as read" });
         }
     }
 }

@@ -4,6 +4,7 @@
 import { PDFAnnotation } from "../../server/features/pdf/pdfTypes";
 import { SelectionInfo } from "./textSelectionManager";
 import { PDFApiService } from "../services/pdfApiService";
+import { QuestionService } from "../services/questionService";
 import { HighlightColor } from "../components/ColorPicker";
 
 /**
@@ -18,6 +19,8 @@ export interface AnnotationCreationData {
     content?: string;
     blockquoteContent?: string; // For notes with blockquote content
     screenshotData?: any; // For screenshot-based annotations
+    question?: string; // For question annotations
+    questionContext?: any; // Question context data
 }
 
 export interface RenderedAnnotation {
@@ -30,6 +33,7 @@ export class AnnotationManager {
     private pdfViewer: any;
     private eventBus: any;
     private apiService: PDFApiService;
+    private questionService: QuestionService;
     private documentId: string | null = null;
     private annotations: Map<string, RenderedAnnotation> = new Map();
     private annotationLayer: HTMLElement | null = null;
@@ -38,6 +42,7 @@ export class AnnotationManager {
         this.pdfViewer = pdfViewer;
         this.eventBus = eventBus;
         this.apiService = apiService;
+        this.questionService = new QuestionService(apiService);
 
         // Set up event listeners for scale changes if event bus is available
         if (this.eventBus) {
@@ -500,22 +505,201 @@ export class AnnotationManager {
         element.className = "pdf-question";
         element.setAttribute("data-annotation-id", annotation.id);
 
-        // Create tooltip content for hover (similar to notes)
-        const tooltipContent = this.createNoteTooltipContent(annotation);
+        // Check if there's an unread response
+        const hasUnreadResponse = this.questionService.hasUnreadResponse(annotation);
+        const responseStatus = this.questionService.getResponseStatus(annotation);
 
-        element.innerHTML = `
-            <div class="question-icon">
-                <i class="fas fa-comments"></i>
-            </div>
-            <div class="note-tooltip" style="display: none;">
-                ${tooltipContent}
-            </div>
+        // Create the question icon with optional unread indicator
+        const questionIcon = document.createElement("div");
+        questionIcon.className = "question-icon";
+        
+        if (hasUnreadResponse) {
+            questionIcon.classList.add("has-unread");
+        }
+        
+        if (responseStatus === "pending") {
+            questionIcon.classList.add("pending");
+        } else if (responseStatus === "error") {
+            questionIcon.classList.add("error");
+        }
+
+        questionIcon.innerHTML = `
+            <i class="fas fa-question-circle"></i>
+            ${hasUnreadResponse ? '<div class="unread-indicator"></div>' : ''}
         `;
 
-        // Add hover handlers for tooltip (consistent with notes)
-        this.addNoteHoverHandlers(element, annotation);
+        // Create tooltip content for hover
+        const tooltipContent = this.createQuestionTooltipContent(annotation);
+
+        const tooltip = document.createElement("div");
+        tooltip.className = "question-tooltip";
+        tooltip.style.display = "none";
+        tooltip.innerHTML = tooltipContent;
+
+        element.appendChild(questionIcon);
+        element.appendChild(tooltip);
+
+        // Add interaction handlers
+        this.addQuestionInteractionHandlers(element, annotation);
 
         return element;
+    }
+
+    /**
+     * Create tooltip content specifically for questions
+     */
+    private createQuestionTooltipContent(annotation: PDFAnnotation): string {
+        let content = "";
+
+        // Add question text
+        const question = this.questionService.formatQuestionForDisplay(annotation);
+        if (question) {
+            content += `
+                <div class="tooltip-question">
+                    <h4>Question</h4>
+                    <p>${this.escapeHtml(question)}</p>
+                </div>
+            `;
+        }
+
+        // Add context information
+        const contextType = this.questionService.getContextType(annotation);
+        const contextDescription = this.questionService.getContextDescription(annotation);
+        if (contextDescription) {
+            content += `
+                <div class="tooltip-context">
+                    <small class="context-info">${this.escapeHtml(contextDescription)}</small>
+                </div>
+            `;
+        }
+
+        // Add response if available
+        const responseContent = this.questionService.getResponseContent(annotation);
+        const responseStatus = this.questionService.getResponseStatus(annotation);
+        
+        if (responseStatus === "pending") {
+            content += `
+                <div class="tooltip-response pending">
+                    <h4>Response</h4>
+                    <p class="processing-message">
+                        <i class="fas fa-spinner fa-spin"></i> Processing your question...
+                    </p>
+                </div>
+            `;
+        } else if (responseStatus === "error") {
+            content += `
+                <div class="tooltip-response error">
+                    <h4>Response</h4>
+                    <p class="error-message">
+                        <i class="fas fa-exclamation-triangle"></i> ${this.escapeHtml(responseContent)}
+                    </p>
+                </div>
+            `;
+        } else if (responseStatus === "complete" && responseContent) {
+            // Parse and render markdown response
+            const parsedResponse = this.questionService.parseMarkdownResponse(responseContent);
+            content += `
+                <div class="tooltip-response complete">
+                    <h4>AI Response</h4>
+                    <div class="response-content">${parsedResponse}</div>
+                </div>
+            `;
+        }
+
+        return content;
+    }
+
+    /**
+     * Add interaction handlers for question annotations
+     */
+    private addQuestionInteractionHandlers(element: HTMLElement, annotation: PDFAnnotation): void {
+        const tooltip = element.querySelector(".question-tooltip") as HTMLElement;
+        const icon = element.querySelector(".question-icon") as HTMLElement;
+
+        if (!tooltip || !icon) return;
+
+        let hoverTimeout: NodeJS.Timeout;
+
+        // Show tooltip on hover
+        icon.addEventListener("mouseenter", () => {
+            clearTimeout(hoverTimeout);
+            
+            // Update tooltip content in case status changed
+            tooltip.innerHTML = this.createQuestionTooltipContent(annotation);
+            tooltip.style.display = "block";
+            
+            // Mark as read if there's an unread response
+            if (this.questionService.hasUnreadResponse(annotation)) {
+                this.markQuestionAsRead(annotation.id);
+            }
+        });
+
+        // Hide tooltip when leaving
+        icon.addEventListener("mouseleave", () => {
+            hoverTimeout = setTimeout(() => {
+                tooltip.style.display = "none";
+            }, 100);
+        });
+
+        // Keep tooltip visible when hovering over it
+        tooltip.addEventListener("mouseenter", () => {
+            clearTimeout(hoverTimeout);
+        });
+
+        tooltip.addEventListener("mouseleave", () => {
+            hoverTimeout = setTimeout(() => {
+                tooltip.style.display = "none";
+            }, 100);
+        });
+
+        // Handle click for editing/detailed view
+        icon.addEventListener("click", (e) => {
+            e.stopPropagation();
+            this.openQuestionEditor(annotation);
+        });
+    }
+
+    /**
+     * Mark a question response as read
+     */
+    private async markQuestionAsRead(annotationId: string): Promise<void> {
+        if (!this.documentId) return;
+
+        try {
+            await this.questionService.markQuestionRead(this.documentId, annotationId);
+            
+            // Update the visual indicator
+            const element = document.querySelector(`[data-annotation-id="${annotationId}"]`);
+            if (element) {
+                const icon = element.querySelector(".question-icon");
+                if (icon) {
+                    icon.classList.remove("has-unread");
+                    const unreadIndicator = icon.querySelector(".unread-indicator");
+                    if (unreadIndicator) {
+                        unreadIndicator.remove();
+                    }
+                }
+            }
+        } catch (error) {
+            console.error("Failed to mark question as read:", error);
+        }
+    }
+
+    /**
+     * Open question editor/detail view
+     */
+    private openQuestionEditor(annotation: PDFAnnotation): void {
+        // This would open a modal or side panel for editing the question
+        // For now, just log that it would open
+        console.log("Opening question editor for:", annotation.id);
+        
+        // TODO: Implement question editor modal
+        // This would show:
+        // - The original question
+        // - Context information  
+        // - Full response with proper markdown rendering
+        // - Option to ask follow-up questions
+        // - Edit/delete options
     }
 
     /**
@@ -717,6 +901,181 @@ export class AnnotationManager {
 
         // Update the rendered annotation to clear elements array
         rendered.elements = [];
+    }
+
+    /**
+     * Create and submit a question annotation
+     */
+    async createQuestionAnnotation(
+        data: AnnotationCreationData,
+        question: string,
+    ): Promise<PDFAnnotation | null> {
+        if (!this.documentId || !question.trim()) {
+            console.error("Missing document ID or question text");
+            return null;
+        }
+
+        try {
+            // First create the annotation
+            const annotationData = this.selectionToAnnotation({
+                ...data,
+                type: "question",
+                question,
+            });
+
+            // Add question-specific data
+            const questionContext = this.createQuestionContext(data);
+            annotationData.questionData = {
+                question: question.trim(),
+                context: questionContext,
+                response: {
+                    content: "",
+                    status: "pending",
+                    timestamp: new Date().toISOString(),
+                    hasUnreadResponse: false,
+                },
+            };
+
+            // Save annotation via API
+            const savedAnnotation = await this.apiService.addAnnotation(
+                this.documentId,
+                annotationData,
+            );
+
+            // Render the annotation with pending status
+            await this.renderAnnotation(savedAnnotation);
+
+            // Submit the question for processing
+            await this.submitQuestion(savedAnnotation.id, question, questionContext);
+
+            console.log("✅ Created question annotation:", savedAnnotation.id);
+            return savedAnnotation;
+        } catch (error) {
+            console.error("❌ Failed to create question annotation:", error);
+            return null;
+        }
+    }
+
+    /**
+     * Create question context from annotation data
+     */
+    private createQuestionContext(data: AnnotationCreationData): any {
+        if (data.screenshotData) {
+            // Screenshot-based question
+            return this.questionService.createScreenshotQuestionContext(
+                data.screenshotData.imageData,
+                data.screenshotData.pageScreenshot || "",
+                data.selection.pageNumber,
+            );
+        } else {
+            // Text-based question
+            const selectedText = data.selection.text || "";
+            const pageText = this.getPageTextContent(data.selection.pageNumber);
+            
+            return this.questionService.createTextQuestionContext(
+                selectedText,
+                pageText,
+                data.selection.pageNumber,
+            );
+        }
+    }
+
+    /**
+     * Submit question for processing
+     */
+    private async submitQuestion(
+        annotationId: string,
+        question: string,
+        context: any,
+    ): Promise<void> {
+        if (!this.documentId) return;
+
+        try {
+            const result = await this.questionService.submitQuestion(
+                this.documentId,
+                annotationId,
+                question,
+                context,
+            );
+
+            console.log("✅ Question submitted:", result);
+        } catch (error) {
+            console.error("❌ Failed to submit question:", error);
+            
+            // Update annotation to show error status
+            this.updateQuestionStatus(annotationId, "error");
+        }
+    }
+
+    /**
+     * Update question annotation status
+     */
+    private updateQuestionStatus(annotationId: string, status: "pending" | "complete" | "error"): void {
+        const element = document.querySelector(`[data-annotation-id="${annotationId}"]`);
+        if (element) {
+            const icon = element.querySelector(".question-icon");
+            if (icon) {
+                icon.classList.remove("pending", "complete", "error");
+                icon.classList.add(status);
+            }
+        }
+    }
+
+    /**
+     * Get text content for a page (for question context)
+     */
+    private getPageTextContent(pageNumber: number): string {
+        // This would extract text content from the PDF page
+        // For now, return a placeholder
+        // In a full implementation, this would use PDF.js text extraction
+        return `Page ${pageNumber} text content would be extracted here using PDF.js text layer.`;
+    }
+
+    /**
+     * Handle SSE updates for question responses
+     */
+    handleQuestionUpdate(annotation: PDFAnnotation): void {
+        const rendered = this.annotations.get(annotation.id);
+        if (!rendered) return;
+
+        // Update the stored annotation data
+        rendered.annotation = annotation;
+
+        // Update visual indicators
+        const element = rendered.elements[0];
+        if (element) {
+            const icon = element.querySelector(".question-icon");
+            const tooltip = element.querySelector(".question-tooltip");
+            
+            if (icon && tooltip) {
+                // Update status classes
+                const status = this.questionService.getResponseStatus(annotation);
+                icon.classList.remove("pending", "complete", "error");
+                if (status) {
+                    icon.classList.add(status);
+                }
+
+                // Update unread indicator
+                const hasUnread = this.questionService.hasUnreadResponse(annotation);
+                if (hasUnread) {
+                    icon.classList.add("has-unread");
+                    if (!icon.querySelector(".unread-indicator")) {
+                        const indicator = document.createElement("div");
+                        indicator.className = "unread-indicator";
+                        icon.appendChild(indicator);
+                    }
+                } else {
+                    icon.classList.remove("has-unread");
+                    const indicator = icon.querySelector(".unread-indicator");
+                    if (indicator) {
+                        indicator.remove();
+                    }
+                }
+
+                // Update tooltip content
+                tooltip.innerHTML = this.createQuestionTooltipContent(annotation);
+            }
+        }
     }
 
     /**

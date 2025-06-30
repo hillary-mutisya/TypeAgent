@@ -238,4 +238,59 @@ export class PDFApiService {
 
         return response.json();
     }
+
+    /**
+     * Submit a question for processing
+     */
+    async submitQuestion(
+        documentId: string,
+        annotationId: string,
+        question: string,
+        context: any,
+    ): Promise<any> {
+        const response = await fetch(
+            `${this.baseUrl}/${documentId}/questions/${annotationId}/ask`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ question, context }),
+            },
+        );
+
+        if (!response.ok) {
+            throw new Error(
+                `Failed to submit question: ${response.statusText}`,
+            );
+        }
+
+        return response.json();
+    }
+
+    /**
+     * Mark a question response as read
+     */
+    async markQuestionRead(
+        documentId: string,
+        annotationId: string,
+    ): Promise<any> {
+        const response = await fetch(
+            `${this.baseUrl}/${documentId}/questions/${annotationId}/mark-read`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+            },
+        );
+
+        if (!response.ok) {
+            throw new Error(
+                `Failed to mark question as read: ${response.statusText}`,
+            );
+        }
+
+        return response.json();
+    }
 }

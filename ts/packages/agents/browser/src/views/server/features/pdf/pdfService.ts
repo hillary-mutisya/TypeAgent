@@ -203,6 +203,59 @@ export class PDFService {
     }
 
     /**
+     * Get question annotation by ID
+     */
+    getQuestionAnnotation(documentId: string, annotationId: string): PDFAnnotation | null {
+        const annotations = this.getAnnotations(documentId);
+        const annotation = annotations.find(a => a.id === annotationId);
+        return annotation && annotation.type === "question" ? annotation : null;
+    }
+
+    /**
+     * Update question annotation with response
+     */
+    updateQuestionResponse(
+        documentId: string,
+        annotationId: string,
+        response: any
+    ): PDFAnnotation | null {
+        const docAnnotations = this.annotations.get(documentId) || [];
+        const index = docAnnotations.findIndex(a => a.id === annotationId);
+
+        if (index !== -1 && docAnnotations[index].type === "question") {
+            const annotation = docAnnotations[index];
+            
+            // Update the question response data
+            if (annotation.questionData) {
+                annotation.questionData.response = response;
+            }
+            
+            annotation.updatedAt = new Date().toISOString();
+            
+            debug(`Updated question response for annotation ${annotationId}`);
+            return annotation;
+        }
+
+        return null;
+    }
+
+    /**
+     * Mark question response as read
+     */
+    markQuestionResponseAsRead(documentId: string, annotationId: string): boolean {
+        const annotation = this.getQuestionAnnotation(documentId, annotationId);
+        
+        if (annotation && annotation.questionData?.response) {
+            annotation.questionData.response.hasUnreadResponse = false;
+            annotation.updatedAt = new Date().toISOString();
+            debug(`Marked question response as read for annotation ${annotationId}`);
+            return true;
+        }
+        
+        return false;
+    }
+
+    /**
      * Generate unique ID
      */
     generateId(): string {

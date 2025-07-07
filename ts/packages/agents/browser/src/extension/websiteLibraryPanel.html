@@ -57,19 +57,19 @@
         <div class="quick-actions">
           <h3 class="section-title">Quick Actions</h3>
           <div class="action-buttons">
-            <button class="action-btn" onclick="libraryPanel.showImportModal()">
+            <button class="action-btn" data-action="showImportModal">
               <i class="bi bi-plus-circle"></i>
               <span>Import Data</span>
             </button>
-            <button class="action-btn" onclick="libraryPanel.exploreRecentBookmarks()">
+            <button class="action-btn" data-action="exploreRecentBookmarks">
               <i class="bi bi-bookmark-star"></i>
               <span>Recent Bookmarks</span>
             </button>
-            <button class="action-btn" onclick="libraryPanel.exploreMostVisited()">
+            <button class="action-btn" data-action="exploreMostVisited">
               <i class="bi bi-graph-up"></i>
               <span>Most Visited</span>
             </button>
-            <button class="action-btn" onclick="libraryPanel.exploreByDomain()">
+            <button class="action-btn" data-action="exploreByDomain">
               <i class="bi bi-globe"></i>
               <span>Browse Domains</span>
             </button>
@@ -300,7 +300,7 @@
             <p class="mb-3">
               Import your bookmarks or browsing history to see content trends and reading patterns.
             </p>
-            <button class="action-btn primary" onclick="libraryPanel.showImportModal()">
+            <button class="action-btn primary" data-action="showImportModal">
               <i class="bi bi-plus-circle"></i>Import Data
             </button>
           </div>
@@ -530,7 +530,7 @@
             <p class="mb-3">
               Import and analyze your web data to see detailed usage analytics and insights.
             </p>
-            <button class="action-btn primary" onclick="libraryPanel.showImportModal()">
+            <button class="action-btn primary" data-action="showImportModal">
               <i class="bi bi-plus-circle"></i>Import Data
             </button>
           </div>

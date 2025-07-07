@@ -310,7 +310,7 @@ class WebsiteLibraryPanelFullPage {
                     <i class="bi bi-wifi-off"></i>
                     <h3>Connection Required</h3>
                     <p>The Website Library requires an active connection to the TypeAgent service.</p>
-                    <button class="btn btn-primary" onclick="libraryPanel.reconnect()">
+                    <button class="btn btn-primary" data-action="reconnect">
                         <i class="bi bi-arrow-repeat"></i> Reconnect
                     </button>
                 </div>
@@ -473,17 +473,41 @@ class WebsiteLibraryPanelFullPage {
             });
         }
 
-        // Quick action buttons
-        document.querySelectorAll('.action-btn').forEach(btn => {
-            const onclick = btn.getAttribute('onclick');
-            if (onclick && !btn.hasAttribute('data-handler-set')) {
-                btn.setAttribute('data-handler-set', 'true');
-                btn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    this.handleQuickAction(btn);
-                });
+        // Event delegation for data-action buttons
+        document.addEventListener('click', (e) => {
+            const target = e.target as HTMLElement;
+            const actionButton = target.closest('[data-action]') as HTMLElement;
+            
+            if (actionButton) {
+                e.preventDefault();
+                const action = actionButton.getAttribute('data-action');
+                this.handleAction(action, actionButton);
             }
         });
+    }
+
+    private handleAction(action: string | null, button: HTMLElement) {
+        if (!action) return;
+        
+        switch (action) {
+            case 'showImportModal':
+                this.showImportModal();
+                break;
+            case 'exploreRecentBookmarks':
+                this.exploreRecentBookmarks();
+                break;
+            case 'exploreMostVisited':
+                this.exploreMostVisited();
+                break;
+            case 'exploreByDomain':
+                this.exploreByDomain();
+                break;
+            case 'reconnect':
+                this.reconnect();
+                break;
+            default:
+                console.warn('Unknown action:', action);
+        }
     }
 
     private handleQuickAction(button: Element) {
@@ -1048,10 +1072,20 @@ class WebsiteLibraryPanelFullPage {
         }
         
         container.innerHTML = this.recentSearches.map(query => `
-            <span class="recent-search-tag" onclick="libraryPanel.performSearchWithQuery('${query}')">
+            <span class="recent-search-tag" data-query="${query}">
                 ${query}
             </span>
         `).join('');
+        
+        // Add event listeners to recent search tags
+        container.querySelectorAll('.recent-search-tag').forEach(tag => {
+            tag.addEventListener('click', () => {
+                const query = tag.getAttribute('data-query');
+                if (query) {
+                    this.performSearchWithQuery(query);
+                }
+            });
+        });
     }
 
     public performSearchWithQuery(query: string) {
@@ -1091,7 +1125,7 @@ class WebsiteLibraryPanelFullPage {
                         <i class="bi bi-wifi-off"></i>
                         <h3>Connection Required</h3>
                         <p>The Discover page requires an active connection to the TypeAgent service.</p>
-                        <button class="btn btn-primary" onclick="libraryPanel.reconnect()">
+                        <button class="btn btn-primary" data-action="reconnect">
                             <i class="bi bi-arrow-repeat"></i> Reconnect
                         </button>
                     </div>
@@ -1189,7 +1223,7 @@ class WebsiteLibraryPanelFullPage {
                         <i class="bi bi-wifi-off"></i>
                         <h3>Connection Required</h3>
                         <p>The Analytics page requires an active connection to the TypeAgent service.</p>
-                        <button class="btn btn-primary" onclick="libraryPanel.reconnect()">
+                        <button class="btn btn-primary" data-action="reconnect">
                             <i class="bi bi-arrow-repeat"></i> Reconnect
                         </button>
                     </div>
@@ -2135,7 +2169,7 @@ class NotificationManagerImpl implements NotificationManager {
 
         const actionsHtml = actions ? actions.map(action => 
             `<button class="btn btn-sm btn-${action.style || 'secondary'} me-2" 
-                     onclick="window.libraryPanel?.handleNotificationAction('${id}', '${action.label}')">${action.label}</button>`
+                     data-notification-id="${id}" data-action="${action.label}">${action.label}</button>`
         ).join('') : '';
 
         const progressHtml = progress !== undefined ? `
@@ -2153,7 +2187,7 @@ class NotificationManagerImpl implements NotificationManager {
                         ${progressHtml}
                         ${actionsHtml ? `<div class="mt-2">${actionsHtml}</div>` : ''}
                     </div>
-                    <button type="button" class="btn-close" onclick="window.libraryPanel?.hideNotification('${id}')"></button>
+                    <button type="button" class="btn-close" data-notification-id="${id}" data-action="close"></button>
                 </div>
             </div>
         `;
@@ -2163,6 +2197,24 @@ class NotificationManagerImpl implements NotificationManager {
         const notification = container.querySelector(`[data-id="${id}"]`) as HTMLElement;
         if (notification) {
             this.notifications.set(id, notification);
+            
+            // Add event listeners for notification actions
+            notification.querySelectorAll('[data-action]').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const target = e.target as HTMLElement;
+                    const action = target.getAttribute('data-action');
+                    const notificationId = target.getAttribute('data-notification-id');
+                    
+                    if (action === 'close' && notificationId) {
+                        this.hide(notificationId);
+                    } else if (action && notificationId && actions) {
+                        const actionHandler = actions.find(a => a.label === action);
+                        if (actionHandler) {
+                            actionHandler.action();
+                        }
+                    }
+                });
+            });
             
             // Store action handlers for later use
             if (actions) {
@@ -2323,4 +2375,24 @@ class ChromeExtensionServiceImpl implements ChromeExtensionService {
             }
         }
     }
+}
+
+// Create global instance for compatibility
+let libraryPanel: WebsiteLibraryPanelFullPage;
+
+// Initialize when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        libraryPanel = new WebsiteLibraryPanelFullPage();
+        libraryPanel.initialize();
+        
+        // Make available globally for any remaining references
+        (window as any).libraryPanel = libraryPanel;
+    });
+} else {
+    libraryPanel = new WebsiteLibraryPanelFullPage();
+    libraryPanel.initialize();
+    
+    // Make available globally for any remaining references
+    (window as any).libraryPanel = libraryPanel;
 }

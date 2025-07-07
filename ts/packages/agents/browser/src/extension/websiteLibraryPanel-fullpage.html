@@ -250,17 +250,21 @@
               <h2 class="results-title">Search Results</h2>
               <div class="view-controls">
                 <div class="view-modes">
-                  <button class="view-btn active" data-view="list">
+                  <button class="view-btn active" data-view="list" title="List View">
                     <i class="bi bi-list"></i>
+                    <span>List</span>
                   </button>
-                  <button class="view-btn" data-view="grid">
+                  <button class="view-btn" data-view="grid" title="Grid View">
                     <i class="bi bi-grid"></i>
+                    <span>Grid</span>
                   </button>
-                  <button class="view-btn" data-view="timeline">
+                  <button class="view-btn" data-view="timeline" title="Timeline View">
                     <i class="bi bi-clock"></i>
+                    <span>Timeline</span>
                   </button>
-                  <button class="view-btn" data-view="domain">
+                  <button class="view-btn" data-view="domain" title="Domain View">
                     <i class="bi bi-globe"></i>
+                    <span>Domain</span>
                   </button>
                 </div>
               </div>
@@ -401,6 +405,102 @@
             
             <div class="discovery-grid" id="knowledgeInsights">
               <!-- Knowledge insights will be populated here -->
+            </div>
+          </div>
+
+          <!-- Knowledge Visualization Dashboard -->
+          <div class="content-section">
+            <div class="section-header">
+              <h2 class="section-title">
+                <i class="bi bi-diagram-3"></i>Knowledge Visualization
+              </h2>
+            </div>
+            
+            <div class="knowledge-dashboard">
+              <div class="knowledge-overview-cards">
+                <div class="knowledge-card entities">
+                  <div class="knowledge-card-header">
+                    <i class="bi bi-diagram-2"></i>
+                    <h3>Entities</h3>
+                  </div>
+                  <div class="knowledge-card-body">
+                    <div class="knowledge-metric" id="totalEntitiesMetric">245</div>
+                    <div class="knowledge-label">Total Entities Extracted</div>
+                    <div class="knowledge-breakdown">
+                      <div class="breakdown-item">
+                        <span class="breakdown-type">Companies</span>
+                        <span class="breakdown-count">89</span>
+                      </div>
+                      <div class="breakdown-item">
+                        <span class="breakdown-type">Technologies</span>
+                        <span class="breakdown-count">67</span>
+                      </div>
+                      <div class="breakdown-item">
+                        <span class="breakdown-type">People</span>
+                        <span class="breakdown-count">43</span>
+                      </div>
+                      <div class="breakdown-item">
+                        <span class="breakdown-type">Other</span>
+                        <span class="breakdown-count">46</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="knowledge-card topics">
+                  <div class="knowledge-card-header">
+                    <i class="bi bi-tags"></i>
+                    <h3>Topics</h3>
+                  </div>
+                  <div class="knowledge-card-body">
+                    <div class="knowledge-metric" id="totalTopicsMetric">128</div>
+                    <div class="knowledge-label">Topics Identified</div>
+                    <div class="topic-cloud">
+                      <span class="topic-tag size-large">JavaScript</span>
+                      <span class="topic-tag size-medium">React</span>
+                      <span class="topic-tag size-medium">TypeScript</span>
+                      <span class="topic-tag size-small">Node.js</span>
+                      <span class="topic-tag size-small">API</span>
+                      <span class="topic-tag size-large">Web Development</span>
+                      <span class="topic-tag size-medium">Database</span>
+                      <span class="topic-tag size-small">CSS</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="knowledge-card actions">
+                  <div class="knowledge-card-header">
+                    <i class="bi bi-lightning"></i>
+                    <h3>Actions</h3>
+                  </div>
+                  <div class="knowledge-card-body">
+                    <div class="knowledge-metric" id="totalActionsMetric">156</div>
+                    <div class="knowledge-label">Actionable Items Found</div>
+                    <div class="action-breakdown">
+                      <div class="action-type">
+                        <i class="bi bi-download"></i>
+                        <span>Downloads</span>
+                        <span class="action-count">42</span>
+                      </div>
+                      <div class="action-type">
+                        <i class="bi bi-link-45deg"></i>
+                        <span>Links to Follow</span>
+                        <span class="action-count">38</span>
+                      </div>
+                      <div class="action-type">
+                        <i class="bi bi-bookmark"></i>
+                        <span>Save for Later</span>
+                        <span class="action-count">29</span>
+                      </div>
+                      <div class="action-type">
+                        <i class="bi bi-share"></i>
+                        <span>Share Items</span>
+                        <span class="action-count">47</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 

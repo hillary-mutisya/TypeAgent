@@ -152,11 +152,12 @@ class WebsiteLibraryPanelFullPage {
     private analyticsData: AnalyticsData | null = null;
 
     async initialize() {
-        console.log("Initializing Full-Page Website Library Panel");
+        console.log("Initializing Full-Page Website Library Panel with Enhanced Features");
         
         this.setupNavigation();
         this.setupSearchInterface();
         this.setupEventListeners();
+        this.setupKnowledgeInteractions();
         await this.checkConnectionStatus();
         await this.loadLibraryStats();
         await this.loadRecentSearches();
@@ -426,22 +427,75 @@ class WebsiteLibraryPanelFullPage {
     }
 
     private setViewMode(view: "list" | "grid" | "timeline" | "domain") {
+        if (this.currentViewMode === view) return;
+        
         this.currentViewMode = view;
         
-        // Update UI
+        // Update UI with smooth transition
+        this.updateViewModeButtons();
+        
+        // Animate the transition if results are visible
+        if (this.currentResults.length > 0) {
+            this.animateViewModeTransition(view);
+        }
+    }
+
+    private updateViewModeButtons() {
         document.querySelectorAll('.view-btn').forEach(btn => {
             btn.classList.remove('active');
         });
         
-        const activeBtn = document.querySelector(`[data-view="${view}"]`);
+        const activeBtn = document.querySelector(`[data-view="${this.currentViewMode}"]`);
         if (activeBtn) {
             activeBtn.classList.add('active');
         }
+    }
+
+    private async animateViewModeTransition(newView: "list" | "grid" | "timeline" | "domain") {
+        const container = document.getElementById('resultsContainer');
+        if (!container) return;
         
-        // Re-render results with new view
-        if (this.currentResults.length > 0) {
-            this.renderSearchResults(this.currentResults);
+        // Add transitioning class to prevent interactions
+        container.classList.add('transitioning');
+        
+        // Get current content
+        const currentContent = container.querySelector('.results-content');
+        if (currentContent) {
+            // Fade out current content
+            currentContent.classList.add('fade-out');
+            
+            // Wait for fade out animation
+            await new Promise(resolve => setTimeout(resolve, 200));
         }
+        
+        // Update view class on container
+        container.className = 'results-container';
+        container.classList.add(`${newView}-view`, 'transitioning');
+        
+        // Render new content
+        this.renderSearchResults(this.currentResults);
+        
+        // Get new content and animate in
+        const newContent = container.querySelector('.results-content');
+        if (newContent) {
+            newContent.classList.add('fade-out'); // Start hidden
+            
+            // Force layout
+            (newContent as HTMLElement).offsetHeight;
+            
+            // Fade in new content
+            newContent.classList.remove('fade-out');
+            newContent.classList.add('fade-in');
+            
+            // Wait for fade in animation
+            await new Promise(resolve => setTimeout(resolve, 200));
+            
+            // Clean up classes
+            newContent.classList.remove('fade-in');
+        }
+        
+        // Remove transitioning class
+        container.classList.remove('transitioning');
     }
 
     private handleSearchInput(query: string) {
@@ -514,29 +568,102 @@ class WebsiteLibraryPanelFullPage {
     }
 
     private async searchWebsites(query: string, filters: SearchFilters): Promise<SearchResult> {
-        // Mock search implementation - replace with actual API call
+        // Mock search implementation with enhanced knowledge data
         const mockResults: Website[] = [
             {
-                url: "https://example.com",
-                title: "Example Website",
-                domain: "example.com",
+                url: "https://docs.microsoft.com/typescript",
+                title: "TypeScript Documentation - Microsoft Docs",
+                domain: "docs.microsoft.com",
                 source: "bookmarks",
                 score: 0.95,
-                snippet: "This is a sample search result...",
+                snippet: "TypeScript is a strongly typed programming language that builds on JavaScript...",
+                lastVisited: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), // 2 hours ago
                 knowledge: {
                     hasKnowledge: true,
                     status: "extracted",
-                    entityCount: 5,
-                    topicCount: 3,
-                    confidence: 0.8
+                    entityCount: 12,
+                    topicCount: 8,
+                    suggestionCount: 5,
+                    confidence: 0.92
+                }
+            },
+            {
+                url: "https://github.com/microsoft/TypeScript",
+                title: "Microsoft TypeScript GitHub Repository",
+                domain: "github.com",
+                source: "history",
+                score: 0.88,
+                snippet: "TypeScript is a superset of JavaScript that compiles to clean JavaScript output...",
+                lastVisited: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), // 1 day ago
+                knowledge: {
+                    hasKnowledge: true,
+                    status: "extracted",
+                    entityCount: 25,
+                    topicCount: 15,
+                    suggestionCount: 12,
+                    confidence: 0.87
+                }
+            },
+            {
+                url: "https://stackoverflow.com/questions/typescript",
+                title: "TypeScript Questions - Stack Overflow",
+                domain: "stackoverflow.com",
+                source: "history",
+                score: 0.76,
+                snippet: "Get answers to your TypeScript questions on Stack Overflow...",
+                lastVisited: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString(), // 6 hours ago
+                knowledge: {
+                    hasKnowledge: true,
+                    status: "extracted",
+                    entityCount: 8,
+                    topicCount: 12,
+                    suggestionCount: 18,
+                    confidence: 0.73
+                }
+            },
+            {
+                url: "https://blog.logrocket.com/typescript-tutorial",
+                title: "Complete TypeScript Tutorial for Beginners",
+                domain: "blog.logrocket.com",
+                source: "bookmarks",
+                score: 0.82,
+                snippet: "Learn TypeScript from scratch with this comprehensive tutorial...",
+                lastVisited: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(), // 2 days ago
+                knowledge: {
+                    hasKnowledge: true,
+                    status: "extracted",
+                    entityCount: 6,
+                    topicCount: 10,
+                    suggestionCount: 8,
+                    confidence: 0.68
+                }
+            },
+            {
+                url: "https://www.typescriptlang.org/docs/",
+                title: "TypeScript: Documentation",
+                domain: "typescriptlang.org",
+                source: "bookmarks",
+                score: 0.93,
+                snippet: "TypeScript extends JavaScript by adding type definitions...",
+                lastVisited: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 minutes ago
+                knowledge: {
+                    hasKnowledge: true,
+                    status: "extracted",
+                    entityCount: 15,
+                    topicCount: 6,
+                    suggestionCount: 3,
+                    confidence: 0.95
                 }
             }
         ];
         
+        // Simulate processing time
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
         return {
             websites: mockResults,
             summary: {
-                text: `Found ${mockResults.length} results for "${query}"`,
+                text: `Found ${mockResults.length} results for "${query}" with comprehensive knowledge extraction`,
                 totalFound: mockResults.length,
                 searchTime: 0.15,
                 sources: [],
@@ -598,6 +725,10 @@ class WebsiteLibraryPanelFullPage {
         const container = document.getElementById('resultsContainer');
         if (!container) return;
         
+        // Add view-specific class to container
+        container.className = 'results-container';
+        container.classList.add(`${this.currentViewMode}-view`);
+        
         let html = '';
         
         switch (this.currentViewMode) {
@@ -615,7 +746,7 @@ class WebsiteLibraryPanelFullPage {
                 break;
         }
         
-        container.innerHTML = html;
+        container.innerHTML = `<div class="results-content">${html}</div>`;
     }
 
     private renderListView(websites: Website[]): string {
@@ -632,15 +763,15 @@ class WebsiteLibraryPanelFullPage {
                         </h6>
                         <div class="result-domain text-muted mb-1">${website.domain}</div>
                         ${website.snippet ? `<p class="mb-2 text-muted small">${website.snippet}</p>` : ''}
-                        <div class="d-flex align-items-center gap-2">
-                            ${website.knowledge?.hasKnowledge ? `
-                                <span class="entity-badge">
-                                    <i class="bi bi-lightbulb me-1"></i>Knowledge
-                                </span>
-                            ` : ''}
-                            ${website.score ? `
-                                <span class="result-score">${Math.round(website.score * 100)}%</span>
-                            ` : ''}
+                        
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div class="knowledge-badges">
+                                ${this.renderKnowledgeBadges(website.knowledge)}
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                ${website.knowledge?.confidence ? this.renderConfidenceIndicator(website.knowledge.confidence) : ''}
+                                ${website.score ? `<span class="result-score">${Math.round(website.score * 100)}%</span>` : ''}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -655,34 +786,35 @@ class WebsiteLibraryPanelFullPage {
                     <div class="d-flex align-items-center mb-2">
                         <img src="https://www.google.com/s2/favicons?domain=${website.domain}" 
                              class="result-favicon me-2" alt="Favicon">
-                        <h6 class="card-title mb-0">${website.title}</h6>
+                        <h6 class="card-title mb-0 flex-grow-1">${website.title}</h6>
+                        ${website.score ? `<span class="result-score">${Math.round(website.score * 100)}%</span>` : ''}
                     </div>
+                    
                     <div class="result-domain text-muted mb-2">${website.domain}</div>
-                    ${website.snippet ? `<p class="card-text small">${website.snippet}</p>` : ''}
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            ${website.knowledge?.hasKnowledge ? `
-                                <span class="entity-badge small">
-                                    <i class="bi bi-lightbulb"></i>
-                                </span>
-                            ` : ''}
+                    ${website.snippet ? `<p class="card-text small mb-3">${website.snippet}</p>` : ''}
+                    
+                    ${website.knowledge?.confidence ? `
+                        <div class="mb-2">
+                            ${this.renderConfidenceIndicator(website.knowledge.confidence)}
                         </div>
-                        ${website.score ? `
-                            <span class="result-score">${Math.round(website.score * 100)}%</span>
-                        ` : ''}
+                    ` : ''}
+                    
+                    <div class="knowledge-badges">
+                        ${this.renderKnowledgeBadges(website.knowledge)}
                     </div>
+                    
                     <a href="${website.url}" target="_blank" class="stretched-link"></a>
                 </div>
             </div>
         `).join('');
         
-        return `<div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">${gridHtml}</div>`;
+        return gridHtml;
     }
 
     private renderTimelineView(websites: Website[]): string {
         // Group by date for timeline view
         const grouped = websites.reduce((acc, website) => {
-            const date = website.lastVisited ? new Date(website.lastVisited).toDateString() : 'Unknown';
+            const date = website.lastVisited ? new Date(website.lastVisited).toDateString() : 'Unknown Date';
             if (!acc[date]) acc[date] = [];
             acc[date].push(website);
             return acc;
@@ -690,17 +822,40 @@ class WebsiteLibraryPanelFullPage {
 
         return Object.entries(grouped).map(([date, sites]) => `
             <div class="timeline-item">
-                <div class="timeline-date fw-semibold text-primary mb-2">${date}</div>
+                <div class="timeline-date">${date === 'Unknown Date' ? 'Recently Added' : date}</div>
+                
                 ${sites.map(website => `
-                    <div class="search-result-item mb-2">
-                        <div class="d-flex align-items-center">
+                    <div class="search-result-item mb-3 border-0 p-0">
+                        <div class="d-flex align-items-start">
                             <img src="https://www.google.com/s2/favicons?domain=${website.domain}" 
                                  class="result-favicon me-2" alt="Favicon">
-                            <div>
-                                <a href="${website.url}" target="_blank" class="text-decoration-none">
-                                    ${website.title}
-                                </a>
-                                <div class="result-domain text-muted small">${website.domain}</div>
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1">
+                                    <a href="${website.url}" target="_blank" class="text-decoration-none">
+                                        ${website.title}
+                                    </a>
+                                </h6>
+                                <div class="result-domain text-muted mb-1">${website.domain}</div>
+                                ${website.snippet ? `<p class="mb-2 text-muted small">${website.snippet}</p>` : ''}
+                                
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div class="knowledge-badges">
+                                        ${this.renderKnowledgeBadges(website.knowledge)}
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        ${website.knowledge?.confidence ? this.renderConfidenceIndicator(website.knowledge.confidence) : ''}
+                                        ${website.score ? `<span class="result-score">${Math.round(website.score * 100)}%</span>` : ''}
+                                    </div>
+                                </div>
+                                
+                                ${website.lastVisited ? `
+                                    <div class="mt-1">
+                                        <small class="text-muted">
+                                            <i class="bi bi-clock me-1"></i>
+                                            ${new Date(website.lastVisited).toLocaleTimeString()}
+                                        </small>
+                                    </div>
+                                ` : ''}
                             </div>
                         </div>
                     </div>
@@ -710,33 +865,86 @@ class WebsiteLibraryPanelFullPage {
     }
 
     private renderDomainView(websites: Website[]): string {
-        // Group by domain
+        // Group by domain and calculate knowledge stats
         const grouped = websites.reduce((acc, website) => {
-            if (!acc[website.domain]) acc[website.domain] = [];
-            acc[website.domain].push(website);
+            if (!acc[website.domain]) {
+                acc[website.domain] = {
+                    sites: [],
+                    totalEntities: 0,
+                    totalTopics: 0,
+                    totalActions: 0,
+                    extractedCount: 0
+                };
+            }
+            acc[website.domain].sites.push(website);
+            
+            if (website.knowledge?.entityCount) {
+                acc[website.domain].totalEntities += website.knowledge.entityCount;
+            }
+            if (website.knowledge?.topicCount) {
+                acc[website.domain].totalTopics += website.knowledge.topicCount;
+            }
+            if (website.knowledge?.suggestionCount) {
+                acc[website.domain].totalActions += website.knowledge.suggestionCount;
+            }
+            if (website.knowledge?.status === 'extracted') {
+                acc[website.domain].extractedCount++;
+            }
+            
             return acc;
-        }, {} as Record<string, Website[]>);
+        }, {} as Record<string, {sites: Website[], totalEntities: number, totalTopics: number, totalActions: number, extractedCount: number}>);
 
-        return Object.entries(grouped).map(([domain, sites]) => `
+        return Object.entries(grouped).map(([domain, data]) => `
             <div class="domain-group">
                 <div class="domain-header">
-                    <div class="d-flex align-items-center">
-                        <img src="https://www.google.com/s2/favicons?domain=${domain}" 
-                             class="result-favicon me-2" alt="Favicon">
-                        <strong>${domain}</strong>
-                        <span class="badge bg-secondary ms-2">${sites.length}</span>
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center">
+                            <img src="https://www.google.com/s2/favicons?domain=${domain}" 
+                                 class="result-favicon me-2" alt="Favicon">
+                            <div>
+                                <strong>${domain}</strong>
+                                <div class="small text-muted">${data.sites.length} pages</div>
+                            </div>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <span class="badge">${data.sites.length}</span>
+                            ${data.extractedCount > 0 ? `<span class="knowledge-badge extracted small">${data.extractedCount} extracted</span>` : ''}
+                        </div>
                     </div>
+                    
+                    ${(data.totalEntities > 0 || data.totalTopics > 0 || data.totalActions > 0) ? `
+                        <div class="domain-knowledge-summary mt-2">
+                            <div class="knowledge-badges">
+                                ${data.totalEntities > 0 ? `<span class="knowledge-badge entity small">${data.totalEntities} Entities</span>` : ''}
+                                ${data.totalTopics > 0 ? `<span class="knowledge-badge topic small">${data.totalTopics} Topics</span>` : ''}
+                                ${data.totalActions > 0 ? `<span class="knowledge-badge action small">${data.totalActions} Actions</span>` : ''}
+                            </div>
+                        </div>
+                    ` : ''}
                 </div>
-                ${sites.map(website => `
-                    <div class="search-result-item">
-                        <h6 class="mb-1">
-                            <a href="${website.url}" target="_blank" class="text-decoration-none">
-                                ${website.title}
-                            </a>
-                        </h6>
-                        ${website.snippet ? `<p class="mb-0 text-muted small">${website.snippet}</p>` : ''}
-                    </div>
-                `).join('')}
+                
+                <div class="domain-content">
+                    ${data.sites.map(website => `
+                        <div class="search-result-item">
+                            <h6 class="mb-1">
+                                <a href="${website.url}" target="_blank" class="text-decoration-none">
+                                    ${website.title}
+                                </a>
+                            </h6>
+                            ${website.snippet ? `<p class="mb-2 text-muted small">${website.snippet}</p>` : ''}
+                            
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div class="knowledge-badges">
+                                    ${this.renderKnowledgeBadges(website.knowledge)}
+                                </div>
+                                <div class="d-flex align-items-center gap-2">
+                                    ${website.knowledge?.confidence ? this.renderConfidenceIndicator(website.knowledge.confidence) : ''}
+                                    ${website.score ? `<span class="result-score">${Math.round(website.score * 100)}%</span>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
             </div>
         `).join('');
     }
@@ -965,6 +1173,246 @@ class WebsiteLibraryPanelFullPage {
         this.renderKnowledgeInsights();
     }
 
+    private renderKnowledgeInsights() {
+        const container = document.getElementById('knowledgeInsights');
+        if (!container || !this.analyticsData) return;
+        
+        // Enhanced knowledge insights with visualizations
+        const knowledgeStats = this.calculateKnowledgeStats();
+        
+        container.innerHTML = `
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Knowledge Extraction Overview</h6>
+                    <div class="knowledge-progress-grid">
+                        <div class="progress-item">
+                            <div class="progress-label">
+                                <i class="bi bi-diagram-2 text-info"></i>
+                                <span>Entity Extraction</span>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: ${knowledgeStats.entityProgress}%; background: linear-gradient(90deg, #17a2b8, #20c997);"></div>
+                                </div>
+                                <span class="progress-percentage">${knowledgeStats.entityProgress}%</span>
+                            </div>
+                        </div>
+                        
+                        <div class="progress-item">
+                            <div class="progress-label">
+                                <i class="bi bi-tags text-purple"></i>
+                                <span>Topic Analysis</span>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: ${knowledgeStats.topicProgress}%; background: linear-gradient(90deg, #6f42c1, #e83e8c);"></div>
+                                </div>
+                                <span class="progress-percentage">${knowledgeStats.topicProgress}%</span>
+                            </div>
+                        </div>
+                        
+                        <div class="progress-item">
+                            <div class="progress-label">
+                                <i class="bi bi-lightning text-warning"></i>
+                                <span>Action Detection</span>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: ${knowledgeStats.actionProgress}%; background: linear-gradient(90deg, #fd7e14, #ffc107);"></div>
+                                </div>
+                                <span class="progress-percentage">${knowledgeStats.actionProgress}%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Knowledge Quality Distribution</h6>
+                    <div class="quality-distribution">
+                        <div class="quality-segment high" style="width: ${knowledgeStats.highQuality}%;" title="High Quality: ${knowledgeStats.highQuality}%">
+                            <span class="quality-label">High</span>
+                        </div>
+                        <div class="quality-segment medium" style="width: ${knowledgeStats.mediumQuality}%;" title="Medium Quality: ${knowledgeStats.mediumQuality}%">
+                            <span class="quality-label">Medium</span>
+                        </div>
+                        <div class="quality-segment low" style="width: ${knowledgeStats.lowQuality}%;" title="Low Quality: ${knowledgeStats.lowQuality}%">
+                            <span class="quality-label">Low</span>
+                        </div>
+                    </div>
+                    <div class="quality-legend">
+                        <div class="legend-item">
+                            <div class="legend-color high"></div>
+                            <span>High Confidence (≥80%)</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color medium"></div>
+                            <span>Medium Confidence (50-79%)</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color low"></div>
+                            <span>Low Confidence (<50%)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    private calculateKnowledgeStats() {
+        // Mock calculation - replace with actual data processing
+        return {
+            entityProgress: 78,
+            topicProgress: 65,
+            actionProgress: 82,
+            highQuality: 45,
+            mediumQuality: 35,
+            lowQuality: 20
+        };
+    }
+
+    private setupKnowledgeInteractions() {
+        // Add click handlers for knowledge badges
+        document.addEventListener('click', (e) => {
+            const target = e.target as HTMLElement;
+            
+            if (target.classList.contains('knowledge-badge')) {
+                this.handleKnowledgeBadgeClick(target);
+            }
+            
+            if (target.classList.contains('topic-tag')) {
+                this.handleTopicTagClick(target);
+            }
+        });
+    }
+
+    private handleKnowledgeBadgeClick(badge: HTMLElement) {
+        // Add visual feedback
+        badge.style.transform = 'scale(0.95)';
+        setTimeout(() => {
+            badge.style.transform = '';
+        }, 150);
+        
+        // Get badge type and show details
+        const badgeType = Array.from(badge.classList).find(cls => 
+            ['entity', 'topic', 'action', 'extracted'].includes(cls)
+        );
+        
+        if (badgeType) {
+            this.showKnowledgeDetails(badgeType, badge);
+        }
+    }
+
+    private handleTopicTagClick(tag: HTMLElement) {
+        const topic = tag.textContent?.trim();
+        if (topic) {
+            // Simulate search for this topic
+            const searchInput = document.getElementById('searchInput') as HTMLInputElement;
+            if (searchInput) {
+                searchInput.value = topic;
+                this.currentQuery = topic;
+                this.performSearch();
+                this.navigateToPage('search');
+            }
+        }
+    }
+
+    private showKnowledgeDetails(type: string, element: HTMLElement) {
+        // Create a temporary tooltip showing knowledge details
+        const tooltip = document.createElement('div');
+        tooltip.className = 'knowledge-tooltip';
+        tooltip.innerHTML = this.getKnowledgeTooltipContent(type);
+        
+        document.body.appendChild(tooltip);
+        
+        // Position tooltip
+        const rect = element.getBoundingClientRect();
+        tooltip.style.position = 'fixed';
+        tooltip.style.top = `${rect.bottom + 8}px`;
+        tooltip.style.left = `${rect.left}px`;
+        tooltip.style.zIndex = '9999';
+        
+        // Remove tooltip after delay
+        setTimeout(() => {
+            tooltip.remove();
+        }, 3000);
+        
+        // Remove on click outside
+        const removeTooltip = (e: Event) => {
+            if (!tooltip.contains(e.target as Node)) {
+                tooltip.remove();
+                document.removeEventListener('click', removeTooltip);
+            }
+        };
+        
+        setTimeout(() => {
+            document.addEventListener('click', removeTooltip);
+        }, 100);
+    }
+
+    private getKnowledgeTooltipContent(type: string): string {
+        const tooltips = {
+            entity: `
+                <div class="tooltip-header">
+                    <i class="bi bi-diagram-2"></i>
+                    <strong>Entities Extracted</strong>
+                </div>
+                <div class="tooltip-content">
+                    <p>Companies, technologies, people, and organizations identified in this content.</p>
+                    <div class="tooltip-examples">
+                        <span class="example-tag">Microsoft</span>
+                        <span class="example-tag">TypeScript</span>
+                        <span class="example-tag">React</span>
+                    </div>
+                </div>
+            `,
+            topic: `
+                <div class="tooltip-header">
+                    <i class="bi bi-tags"></i>
+                    <strong>Topics Identified</strong>
+                </div>
+                <div class="tooltip-content">
+                    <p>Main themes and subjects covered in this content.</p>
+                    <div class="tooltip-examples">
+                        <span class="example-tag">Web Development</span>
+                        <span class="example-tag">Programming</span>
+                        <span class="example-tag">Documentation</span>
+                    </div>
+                </div>
+            `,
+            action: `
+                <div class="tooltip-header">
+                    <i class="bi bi-lightning"></i>
+                    <strong>Actions Detected</strong>
+                </div>
+                <div class="tooltip-content">
+                    <p>Actionable items and next steps found in this content.</p>
+                    <div class="tooltip-examples">
+                        <span class="example-tag">Download</span>
+                        <span class="example-tag">Install</span>
+                        <span class="example-tag">Configure</span>
+                    </div>
+                </div>
+            `,
+            extracted: `
+                <div class="tooltip-header">
+                    <i class="bi bi-check-circle"></i>
+                    <strong>Knowledge Extracted</strong>
+                </div>
+                <div class="tooltip-content">
+                    <p>This content has been successfully processed and knowledge has been extracted.</p>
+                    <div class="status-indicator success">
+                        <i class="bi bi-check"></i>
+                        Processing Complete
+                    </div>
+                </div>
+            `
+        };
+        
+        return tooltips[type as keyof typeof tooltips] || '';
+    }
+
     private renderAnalyticsOverview() {
         const container = document.getElementById('analyticsOverview');
         if (!container || !this.analyticsData) return;
@@ -1009,27 +1457,69 @@ class WebsiteLibraryPanelFullPage {
         `;
     }
 
-    private renderKnowledgeInsights() {
-        const container = document.getElementById('knowledgeInsights');
-        if (!container || !this.analyticsData) return;
+    private renderKnowledgeBadges(knowledge?: KnowledgeStatus): string {
+        if (!knowledge?.hasKnowledge) return '';
         
-        container.innerHTML = this.analyticsData.insights.map(insight => `
-            <div class="card">
-                <div class="card-body">
-                    <h6 class="card-title">${insight.category}</h6>
-                    <div class="d-flex align-items-center justify-content-between">
-                        <span class="h4 mb-0">${insight.value}${insight.category.includes('Time') ? 'min' : insight.category.includes('Coverage') ? '%' : ''}</span>
-                        <div class="d-flex align-items-center">
-                            <i class="bi bi-arrow-${insight.change > 0 ? 'up' : 'down'} 
-                               text-${insight.change > 0 ? 'success' : 'danger'}"></i>
-                            <span class="text-${insight.change > 0 ? 'success' : 'danger'} small ms-1">
-                                ${Math.abs(insight.change)}%
-                            </span>
-                        </div>
-                    </div>
+        const badges = [];
+        
+        if (knowledge.entityCount && knowledge.entityCount > 0) {
+            badges.push(`
+                <span class="knowledge-badge entity" title="${knowledge.entityCount} entities extracted">
+                    <i class="bi bi-diagram-2"></i>
+                    ${knowledge.entityCount} Entities
+                </span>
+            `);
+        }
+        
+        if (knowledge.topicCount && knowledge.topicCount > 0) {
+            badges.push(`
+                <span class="knowledge-badge topic" title="${knowledge.topicCount} topics identified">
+                    <i class="bi bi-tags"></i>
+                    ${knowledge.topicCount} Topics
+                </span>
+            `);
+        }
+        
+        if (knowledge.suggestionCount && knowledge.suggestionCount > 0) {
+            badges.push(`
+                <span class="knowledge-badge action" title="${knowledge.suggestionCount} actions detected">
+                    <i class="bi bi-lightning"></i>
+                    ${knowledge.suggestionCount} Actions
+                </span>
+            `);
+        }
+        
+        if (knowledge.status === 'extracted') {
+            badges.push(`
+                <span class="knowledge-badge extracted" title="Knowledge successfully extracted">
+                    <i class="bi bi-check-circle"></i>
+                    Extracted
+                </span>
+            `);
+        }
+        
+        return badges.join('');
+    }
+
+    private renderConfidenceIndicator(confidence: number): string {
+        const percentage = Math.round(confidence * 100);
+        let color = '#dc3545'; // Red for low confidence
+        
+        if (confidence >= 0.7) {
+            color = '#28a745'; // Green for high confidence
+        } else if (confidence >= 0.4) {
+            color = '#ffc107'; // Yellow for medium confidence
+        }
+        
+        return `
+            <div class="confidence-indicator" title="Confidence: ${percentage}%">
+                <span class="text-muted small">Confidence:</span>
+                <div class="confidence-bar">
+                    <div class="confidence-fill" style="width: ${percentage}%; background-color: ${color}"></div>
                 </div>
+                <span class="small">${percentage}%</span>
             </div>
-        `).join('');
+        `;
     }
 
     // Storage methods

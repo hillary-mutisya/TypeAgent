@@ -53,29 +53,6 @@
           </button>
         </nav>
 
-        <!-- Quick Stats -->
-        <div class="quick-stats">
-          <h3 class="section-title">Quick Stats</h3>
-          <div class="stats-grid">
-            <div class="stat-item">
-              <div class="stat-number" id="totalWebsites">0</div>
-              <div class="stat-label">Total Sites</div>
-            </div>
-            <div class="stat-item">
-              <div class="stat-number" id="totalBookmarks">0</div>
-              <div class="stat-label">Bookmarks</div>
-            </div>
-            <div class="stat-item">
-              <div class="stat-number" id="totalHistory">0</div>
-              <div class="stat-label">History</div>
-            </div>
-            <div class="stat-item">
-              <div class="stat-number" id="topDomains">0</div>
-              <div class="stat-label">Domains</div>
-            </div>
-          </div>
-        </div>
-
         <!-- Quick Actions -->
         <div class="quick-actions">
           <h3 class="section-title">Quick Actions</h3>
@@ -96,37 +73,6 @@
               <i class="bi bi-globe"></i>
               <span>Browse Domains</span>
             </button>
-          </div>
-        </div>
-
-        <!-- Top Domains -->
-        <div class="top-domains">
-          <h3 class="section-title">Top Domains</h3>
-          <div id="topDomainsList" class="domain-list">
-            <div class="empty-message">No data available</div>
-          </div>
-        </div>
-
-        <!-- AI Insights -->
-        <div class="ai-insights">
-          <h3 class="section-title">AI Insights</h3>
-          <div class="insights-grid">
-            <div class="insight-item">
-              <div class="insight-number" id="knowledgeExtracted">0</div>
-              <div class="insight-label">Knowledge Extracted</div>
-            </div>
-            <div class="insight-item">
-              <div class="insight-number" id="totalEntities">0</div>
-              <div class="insight-label">Entities</div>
-            </div>
-            <div class="insight-item">
-              <div class="insight-number" id="totalTopics">0</div>
-              <div class="insight-label">Topics</div>
-            </div>
-            <div class="insight-item">
-              <div class="insight-number" id="totalActions">0</div>
-              <div class="insight-label">Actions</div>
-            </div>
           </div>
         </div>
       </aside>
@@ -369,11 +315,39 @@
             <p class="page-subtitle">Detailed insights into your browsing patterns and content consumption</p>
           </div>
 
+          <!-- Quick Stats Overview -->
+          <div class="content-section">
+            <div class="section-header">
+              <h2 class="section-title">
+                <i class="bi bi-speedometer2"></i>Quick Stats
+              </h2>
+            </div>
+            
+            <div class="quick-stats" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 2rem;">
+              <div class="stat-item">
+                <div class="stat-number" id="totalWebsites">0</div>
+                <div class="stat-label">Total Sites</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-number" id="totalBookmarks">0</div>
+                <div class="stat-label">Bookmarks</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-number" id="totalHistory">0</div>
+                <div class="stat-label">History</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-number" id="topDomains">0</div>
+                <div class="stat-label">Domains</div>
+              </div>
+            </div>
+          </div>
+
           <!-- Overview Stats -->
           <div class="content-section">
             <div class="section-header">
               <h2 class="section-title">
-                <i class="bi bi-speedometer2"></i>Overview Dashboard
+                <i class="bi bi-graph-up"></i>Overview Dashboard
               </h2>
             </div>
             
@@ -395,11 +369,56 @@
             </div>
           </div>
 
+          <!-- Top Domains -->
+          <div class="content-section">
+            <div class="section-header">
+              <h2 class="section-title">
+                <i class="bi bi-globe"></i>Top Domains
+              </h2>
+            </div>
+            
+            <div class="top-domains">
+              <div id="topDomainsList" class="domain-list">
+                <div class="empty-message">No data available</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- AI Insights -->
+          <div class="content-section">
+            <div class="section-header">
+              <h2 class="section-title">
+                <i class="bi bi-brain"></i>AI Insights
+              </h2>
+            </div>
+            
+            <div class="ai-insights">
+              <div class="insights-grid">
+                <div class="insight-item">
+                  <div class="insight-number" id="knowledgeExtracted">0</div>
+                  <div class="insight-label">Knowledge Extracted</div>
+                </div>
+                <div class="insight-item">
+                  <div class="insight-number" id="totalEntities">0</div>
+                  <div class="insight-label">Entities</div>
+                </div>
+                <div class="insight-item">
+                  <div class="insight-number" id="totalTopics">0</div>
+                  <div class="insight-label">Topics</div>
+                </div>
+                <div class="insight-item">
+                  <div class="insight-number" id="totalActions">0</div>
+                  <div class="insight-label">Actions</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Knowledge Insights -->
           <div class="content-section">
             <div class="section-header">
               <h2 class="section-title">
-                <i class="bi bi-brain"></i>Knowledge Insights
+                <i class="bi bi-lightbulb"></i>Advanced Knowledge Insights
               </h2>
             </div>
             

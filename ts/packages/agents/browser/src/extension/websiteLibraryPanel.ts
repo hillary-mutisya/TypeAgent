@@ -262,10 +262,26 @@ class WebsiteLibraryPanelFullPage {
         console.log("Knowledge interactions initialized");
     }
 
-    private async checkConnectionStatus() {
-        // Mock implementation - replace with actual connection check
-        this.isConnected = true;
-        this.updateConnectionStatus();
+    private async checkConnectionStatus(): Promise<boolean> {
+        try {
+            if (typeof chrome === 'undefined' || !chrome.runtime) {
+                this.isConnected = false;
+                return false;
+            }
+            
+            const response = await chrome.runtime.sendMessage({
+                action: 'checkWebSocketConnection'
+            });
+            
+            this.isConnected = response?.connected === true;
+            return this.isConnected;
+        } catch (error) {
+            console.error("Connection check failed:", error);
+            this.isConnected = false;
+            return false;
+        } finally {
+            this.updateConnectionStatus();
+        }
     }
 
     private updateConnectionStatus() {
@@ -286,15 +302,52 @@ class WebsiteLibraryPanelFullPage {
         }
     }
 
+    private showConnectionRequired() {
+        const container = document.getElementById('searchResults');
+        if (container) {
+            container.innerHTML = `
+                <div class="connection-required">
+                    <i class="bi bi-wifi-off"></i>
+                    <h3>Connection Required</h3>
+                    <p>The Website Library requires an active connection to the TypeAgent service.</p>
+                    <button class="btn btn-primary" onclick="libraryPanel.reconnect()">
+                        <i class="bi bi-arrow-repeat"></i> Reconnect
+                    </button>
+                </div>
+            `;
+        }
+    }
+
+    private async reconnect() {
+        this.notificationManager.showInfo("Attempting to reconnect...");
+        const connected = await this.checkConnectionStatus();
+        
+        if (connected) {
+            this.notificationManager.showSuccess("Reconnected successfully!");
+            await this.loadLibraryStats();
+            await this.performSearch();
+        } else {
+            this.notificationManager.showError("Failed to reconnect. Please check your connection.", 
+                () => this.reconnect());
+        }
+    }
+
     private async loadLibraryStats() {
-        // Mock implementation - replace with actual data loading
-        this.libraryStats = {
-            totalWebsites: 1247,
-            totalBookmarks: 324,
-            totalHistory: 923,
-            topDomains: 45
-        };
-        this.updateStatsDisplay();
+        if (!this.isConnected) {
+            this.showConnectionRequired();
+            return;
+        }
+        
+        try {
+            this.libraryStats = await this.chromeExtensionService.getLibraryStats();
+            this.updateStatsDisplay();
+        } catch (error) {
+            console.error("Failed to load library stats:", error);
+            this.notificationManager.showError(
+                "Failed to load library statistics", 
+                () => this.loadLibraryStats()
+            );
+        }
     }
 
     private updateStatsDisplay() {
@@ -614,8 +667,12 @@ class WebsiteLibraryPanelFullPage {
                     website.knowledge = knowledge;
                     this.knowledgeCache.set(website.url, knowledge);
                 } else {
-                    // Enhanced mock knowledge data
-                    website.knowledge = this.generateMockKnowledge(website);
+                    // No connection - skip knowledge check
+                    website.knowledge = {
+                        hasKnowledge: false,
+                        status: "none",
+                        confidence: 0
+                    };
                 }
             } catch (error) {
                 console.error(`Failed to check knowledge for ${website.url}:`, error);
@@ -651,110 +708,17 @@ class WebsiteLibraryPanelFullPage {
     }
 
     private async searchWebsites(query: string, filters: SearchFilters): Promise<SearchResult> {
-        // Mock search implementation with enhanced knowledge data
-        const mockResults: Website[] = [
-            {
-                url: "https://docs.microsoft.com/typescript",
-                title: "TypeScript Documentation - Microsoft Docs",
-                domain: "docs.microsoft.com",
-                source: "bookmarks",
-                score: 0.95,
-                snippet: "TypeScript is a strongly typed programming language that builds on JavaScript...",
-                lastVisited: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), // 2 hours ago
-                knowledge: {
-                    hasKnowledge: true,
-                    status: "extracted",
-                    entityCount: 12,
-                    topicCount: 8,
-                    suggestionCount: 5,
-                    confidence: 0.92
-                }
-            },
-            {
-                url: "https://github.com/microsoft/TypeScript",
-                title: "Microsoft TypeScript GitHub Repository",
-                domain: "github.com",
-                source: "history",
-                score: 0.88,
-                snippet: "TypeScript is a superset of JavaScript that compiles to clean JavaScript output...",
-                lastVisited: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), // 1 day ago
-                knowledge: {
-                    hasKnowledge: true,
-                    status: "extracted",
-                    entityCount: 25,
-                    topicCount: 15,
-                    suggestionCount: 12,
-                    confidence: 0.87
-                }
-            },
-            {
-                url: "https://stackoverflow.com/questions/typescript",
-                title: "TypeScript Questions - Stack Overflow",
-                domain: "stackoverflow.com",
-                source: "history",
-                score: 0.76,
-                snippet: "Get answers to your TypeScript questions on Stack Overflow...",
-                lastVisited: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString(), // 6 hours ago
-                knowledge: {
-                    hasKnowledge: true,
-                    status: "extracted",
-                    entityCount: 8,
-                    topicCount: 12,
-                    suggestionCount: 18,
-                    confidence: 0.73
-                }
-            },
-            {
-                url: "https://blog.logrocket.com/typescript-tutorial",
-                title: "Complete TypeScript Tutorial for Beginners",
-                domain: "blog.logrocket.com",
-                source: "bookmarks",
-                score: 0.82,
-                snippet: "Learn TypeScript from scratch with this comprehensive tutorial...",
-                lastVisited: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(), // 2 days ago
-                knowledge: {
-                    hasKnowledge: true,
-                    status: "extracted",
-                    entityCount: 6,
-                    topicCount: 10,
-                    suggestionCount: 8,
-                    confidence: 0.68
-                }
-            },
-            {
-                url: "https://www.typescriptlang.org/docs/",
-                title: "TypeScript: Documentation",
-                domain: "typescriptlang.org",
-                source: "bookmarks",
-                score: 0.93,
-                snippet: "TypeScript extends JavaScript by adding type definitions...",
-                lastVisited: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 minutes ago
-                knowledge: {
-                    hasKnowledge: true,
-                    status: "extracted",
-                    entityCount: 15,
-                    topicCount: 6,
-                    suggestionCount: 3,
-                    confidence: 0.95
-                }
-            }
-        ];
+        if (!this.isConnected) {
+            this.showConnectionRequired();
+            throw new Error("Connection required");
+        }
         
-        // Simulate processing time
-        await new Promise(resolve => setTimeout(resolve, 300));
-        
-        return {
-            websites: mockResults,
-            summary: {
-                text: `Found ${mockResults.length} results for "${query}" with comprehensive knowledge extraction`,
-                totalFound: mockResults.length,
-                searchTime: 0.15,
-                sources: [],
-                entities: []
-            },
-            query,
-            filters
-        };
+        try {
+            return await this.chromeExtensionService.searchWebsites(query, filters);
+        } catch (error) {
+            console.error("Search failed:", error);
+            throw error;
+        }
     }
 
     private showSearchLoading() {
@@ -1119,24 +1083,30 @@ class WebsiteLibraryPanelFullPage {
     }
 
     private async loadDiscoverData() {
-        // Mock data - replace with actual API call
+        if (!this.isConnected) {
+            const container = document.getElementById('discoverContent');
+            if (container) {
+                container.innerHTML = `
+                    <div class="connection-required">
+                        <i class="bi bi-wifi-off"></i>
+                        <h3>Connection Required</h3>
+                        <p>The Discover page requires an active connection to the TypeAgent service.</p>
+                        <button class="btn btn-primary" onclick="libraryPanel.reconnect()">
+                            <i class="bi bi-arrow-repeat"></i> Reconnect
+                        </button>
+                    </div>
+                `;
+            }
+            return;
+        }
+        
+        // TODO: Implement actual API call to get discover data
+        // For now, return empty data
         this.discoverData = {
-            trendingTopics: [
-                { topic: "JavaScript", count: 45, trend: "up", percentage: 15 },
-                { topic: "React", count: 32, trend: "up", percentage: 8 },
-                { topic: "TypeScript", count: 28, trend: "stable", percentage: 0 }
-            ],
-            readingPatterns: [
-                { timeframe: "9 AM", activity: 25, peak: false },
-                { timeframe: "2 PM", activity: 45, peak: true },
-                { timeframe: "7 PM", activity: 30, peak: false }
-            ],
+            trendingTopics: [],
+            readingPatterns: [],
             popularPages: [],
-            topDomains: [
-                { domain: "github.com", count: 156 },
-                { domain: "stackoverflow.com", count: 89 },
-                { domain: "medium.com", count: 67 }
-            ]
+            topDomains: []
         };
     }
 
@@ -1211,7 +1181,25 @@ class WebsiteLibraryPanelFullPage {
     }
 
     private async loadAnalyticsData() {
-        // Mock data - replace with actual API call
+        if (!this.isConnected) {
+            const container = document.getElementById('analyticsContent');
+            if (container) {
+                container.innerHTML = `
+                    <div class="connection-required">
+                        <i class="bi bi-wifi-off"></i>
+                        <h3>Connection Required</h3>
+                        <p>The Analytics page requires an active connection to the TypeAgent service.</p>
+                        <button class="btn btn-primary" onclick="libraryPanel.reconnect()">
+                            <i class="bi bi-arrow-repeat"></i> Reconnect
+                        </button>
+                    </div>
+                `;
+            }
+            return;
+        }
+        
+        // TODO: Implement actual API call to get analytics data
+        // For now, return basic data based on library stats
         this.analyticsData = {
             overview: {
                 totalSites: this.libraryStats.totalWebsites,
@@ -1219,16 +1207,8 @@ class WebsiteLibraryPanelFullPage {
                 totalHistory: this.libraryStats.totalHistory,
                 knowledgeExtracted: 0
             },
-            trends: [
-                { date: "2024-01-01", visits: 45, bookmarks: 5 },
-                { date: "2024-01-02", visits: 52, bookmarks: 8 },
-                { date: "2024-01-03", visits: 38, bookmarks: 3 }
-            ],
-            insights: [
-                { category: "Most Active Day", value: 52, change: 15 },
-                { category: "Avg. Session Time", value: 25, change: -5 },
-                { category: "Knowledge Coverage", value: 78, change: 12 }
-            ]
+            trends: [],
+            insights: []
         };
     }
 
@@ -1328,14 +1308,26 @@ class WebsiteLibraryPanelFullPage {
     }
 
     private calculateKnowledgeStats() {
-        // Mock calculation - replace with actual data processing
+        // Return default values when not connected
+        if (!this.isConnected) {
+            return {
+                entityProgress: 0,
+                topicProgress: 0,
+                actionProgress: 0,
+                highQuality: 0,
+                mediumQuality: 0,
+                lowQuality: 0
+            };
+        }
+        
+        // TODO: Implement actual calculation based on real data
         return {
-            entityProgress: 78,
-            topicProgress: 65,
-            actionProgress: 82,
-            highQuality: 45,
-            mediumQuality: 35,
-            lowQuality: 20
+            entityProgress: 0,
+            topicProgress: 0,
+            actionProgress: 0,
+            highQuality: 0,
+            mediumQuality: 0,
+            lowQuality: 0
         };
     }
 
@@ -1608,8 +1600,8 @@ class WebsiteLibraryPanelFullPage {
                     metadata: {}
                 }));
             } else {
-                // Enhanced mock suggestions with types and metadata
-                suggestions = this.generateMockSuggestions(query);
+                // No connection - return empty suggestions array
+                suggestions = [];
             }
             
             // Add recent searches if they match
@@ -1630,24 +1622,8 @@ class WebsiteLibraryPanelFullPage {
             
         } catch (error) {
             console.error("Failed to load search suggestions:", error);
-            this.searchSuggestions = this.generateMockSuggestions(query);
+            this.searchSuggestions = [];
         }
-    }
-
-    private generateMockSuggestions(query: string): SearchSuggestion[] {
-        const baseSuggestions = [
-            { text: `${query} typescript`, type: 'topic' as const, metadata: { count: 45 } },
-            { text: `${query} documentation`, type: 'topic' as const, metadata: { count: 32 } },
-            { text: `${query} tutorial`, type: 'topic' as const, metadata: { count: 28 } },
-            { text: `${query} github`, type: 'domain' as const, metadata: { count: 156 } },
-            { text: `${query} stackoverflow`, type: 'domain' as const, metadata: { count: 89 } },
-            { text: `${query} this week`, type: 'auto' as const, metadata: {} },
-            { text: `${query} bookmarks only`, type: 'auto' as const, metadata: {} }
-        ];
-        
-        return baseSuggestions.filter(s => 
-            s.text.toLowerCase() !== query.toLowerCase()
-        ).slice(0, 6);
     }
 
     private showSearchSuggestions(query: string) {
@@ -1785,15 +1761,13 @@ class WebsiteLibraryPanelFullPage {
                 website.knowledge = knowledge;
                 this.knowledgeCache.set(website.url, knowledge);
             } else {
-                // Simulate extraction process
-                website.knowledge = { ...this.generateMockKnowledge(website), status: "extracting" };
-                
-                await new Promise(resolve => setTimeout(resolve, 500)); // Simulate processing
-                
-                if (website.knowledge) {
-                    website.knowledge.status = "extracted";
-                    this.knowledgeCache.set(website.url, website.knowledge);
-                }
+                // No connection - cannot extract knowledge
+                website.knowledge = {
+                    hasKnowledge: false,
+                    status: "error",
+                    confidence: 0
+                };
+                this.notificationManager.showError("Connection required to extract knowledge");
             }
         } catch (error) {
             console.error(`Failed to extract knowledge for ${website.url}:`, error);
@@ -1809,33 +1783,7 @@ class WebsiteLibraryPanelFullPage {
         }
     }
 
-    private generateMockKnowledge(website: Website): KnowledgeStatus {
-        const random = Math.random();
-        const hasKnowledge = random > 0.3;
-        
-        if (!hasKnowledge) {
-            return {
-                hasKnowledge: false,
-                status: "none",
-                confidence: 0
-            };
-        }
-        
-        const entityCount = Math.floor(Math.random() * 20) + 3;
-        const topicCount = Math.floor(Math.random() * 15) + 2;
-        const suggestionCount = Math.floor(Math.random() * 10) + 1;
-        const confidence = 0.5 + Math.random() * 0.5;
-        
-        return {
-            hasKnowledge: true,
-            status: "extracted",
-            entityCount,
-            topicCount,
-            suggestionCount,
-            confidence,
-            extractionDate: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString()
-        };
-    }
+
 
     // User preferences management
     private loadUserPreferences(): UserPreferences {
@@ -2066,6 +2014,7 @@ interface NotificationManager {
     showSuccess(message: string, actions?: NotificationAction[]): void;
     showError(message: string, retry?: () => void): void;
     showWarning(message: string): void;
+    showInfo(message: string): void;
     showProgress(message: string, progress?: number): void;
     hide(id: string): void;
     clear(): void;
@@ -2125,6 +2074,10 @@ class NotificationManagerImpl implements NotificationManager {
 
     showWarning(message: string): void {
         this.showNotification('warning', message);
+    }
+
+    showInfo(message: string): void {
+        this.showNotification('info', message);
     }
 
     showProgress(message: string, progress?: number): void {
@@ -2254,7 +2207,12 @@ class ChromeExtensionServiceImpl implements ChromeExtensionService {
                     action: 'getLibraryStats',
                     includeKnowledge: true
                 });
-                return response;
+                
+                if (response.success) {
+                    return response.stats;
+                } else {
+                    throw new Error(response.error || "Failed to get library stats");
+                }
             } catch (error) {
                 console.error("Chrome extension not available:", error);
                 throw error;
@@ -2268,10 +2226,19 @@ class ChromeExtensionServiceImpl implements ChromeExtensionService {
             try {
                 const response = await chrome.runtime.sendMessage({
                     action: 'searchWebsites',
-                    query,
-                    filters
+                    parameters: {
+                        query,
+                        filters,
+                        includeSummary: true,
+                        limit: 50
+                    }
                 });
-                return response;
+                
+                if (response.success) {
+                    return response.results;
+                } else {
+                    throw new Error(response.error || "Search failed");
+                }
             } catch (error) {
                 console.error("Search request failed:", error);
                 throw error;

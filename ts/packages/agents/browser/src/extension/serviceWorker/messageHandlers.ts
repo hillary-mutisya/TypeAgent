@@ -24,6 +24,63 @@ export async function handleMessage(
     message: any,
     sender: chrome.runtime.MessageSender,
 ): Promise<any> {
+    // Handle action-based messages (from websiteLibraryPanel)
+    if (message.action) {
+        switch (message.action) {
+            case "checkWebSocketConnection": {
+                try {
+                    const websocket = getWebSocket();
+                    return {
+                        connected: websocket && websocket.readyState === WebSocket.OPEN,
+                    };
+                } catch (error) {
+                    return { connected: false };
+                }
+            }
+            
+            case "getLibraryStats": {
+                return await handleGetWebsiteLibraryStats();
+            }
+            
+            case "searchWebsites": {
+                return await handleSearchWebsitesEnhanced(message);
+            }
+            
+            case "extractKnowledge": {
+                // TODO: Implement knowledge extraction
+                return {
+                    hasKnowledge: false,
+                    status: "none",
+                    error: "Knowledge extraction not implemented"
+                };
+            }
+            
+            case "checkKnowledgeStatus": {
+                // TODO: Implement knowledge status check
+                return {
+                    hasKnowledge: false,
+                    status: "none"
+                };
+            }
+            
+            case "getSearchSuggestions": {
+                return await handleGetSearchSuggestions(message);
+            }
+            
+            case "getRecentSearches": {
+                return await handleGetSearchHistory();
+            }
+            
+            case "saveSearch": {
+                return await handleSaveSearchHistory({
+                    query: message.query,
+                    results: message.results
+                });
+            }
+        }
+    }
+    
+    // Handle type-based messages (existing code)
     switch (message.type) {
         case "initialize": {
             console.log("Browser Agent Service Worker started");

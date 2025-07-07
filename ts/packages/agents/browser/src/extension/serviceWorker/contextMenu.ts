@@ -139,13 +139,25 @@ export async function handleContextMenuClick(
         }
 
         case "showWebsiteLibrary": {
-            await chrome.sidePanel.open({ tabId: tab.id! });
-
-            await chrome.sidePanel.setOptions({
-                tabId: tab.id!,
-                path: "websiteLibraryPanel.html",
-                enabled: true,
-            });
+            const websiteLibraryUrl = chrome.runtime.getURL("websiteLibraryPanel.html");
+            
+            // Check if website library tab is already open
+            const existingTabs = await chrome.tabs.query({ url: websiteLibraryUrl });
+            
+            if (existingTabs.length > 0) {
+                // Switch to existing tab
+                await chrome.tabs.update(existingTabs[0].id!, { active: true });
+                // Focus the window containing the tab
+                if (existingTabs[0].windowId) {
+                    await chrome.windows.update(existingTabs[0].windowId, { focused: true });
+                }
+            } else {
+                // Create new tab
+                await chrome.tabs.create({
+                    url: websiteLibraryUrl,
+                    active: true
+                });
+            }
 
             break;
         }

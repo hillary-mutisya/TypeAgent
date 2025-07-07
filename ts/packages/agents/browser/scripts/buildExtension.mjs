@@ -59,6 +59,7 @@ const sharedScripts = {
     sidepanel: "sidepanel.ts",
     knowledgePanel: "knowledgePanel.ts",
     websiteLibraryPanel: "websiteLibraryPanel.ts",
+    "websiteLibraryPanel-fullpage": "websiteLibraryPanel-fullpage.ts",
     uiEventsDispatcher: "uiEventsDispatcher.ts",
     "sites/paleobiodb": "sites/paleobiodb.ts",
 };
@@ -148,6 +149,14 @@ copyFileSync(`${srcDir}/options.html`, `${chromeOutDir}/options.html`);
 copyFileSync(
     `${srcDir}/websiteLibraryPanel.html`,
     `${chromeOutDir}/websiteLibraryPanel.html`,
+);
+copyFileSync(
+    `${srcDir}/websiteLibraryPanel-fullpage.html`,
+    `${chromeOutDir}/websiteLibraryPanel-fullpage.html`,
+);
+copyFileSync(
+    `${srcDir}/websiteLibraryPanel-fullpage.css`,
+    `${chromeOutDir}/websiteLibraryPanel-fullpage.css`,
 );
 mkdirSync(`${chromeOutDir}/sites`, { recursive: true });
 copyFileSync(

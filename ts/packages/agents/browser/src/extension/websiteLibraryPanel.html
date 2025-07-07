@@ -1284,3 +1284,177 @@
     <script src="websiteLibraryPanel.js"></script>
   </body>
 </html>
+            <!-- Pagination -->
+            <div class="d-flex justify-content-between align-items-center mt-4 pt-3 border-top" id="pagination" style="display: none !important;">
+              <div class="text-muted small" id="paginationInfo">
+                Showing 0-0 of 0 results
+              </div>
+              <nav>
+                <ul class="pagination pagination-sm mb-0" id="paginationControls">
+                  <!-- Pagination controls will be populated here -->
+                </ul>
+              </nav>
+            </div>
+          </div>
+
+          <!-- Empty State -->
+          <div class="empty-state" id="searchEmptyState">
+            <i class="bi bi-search"></i>
+            <h6>Search Your Library</h6>
+            <p class="mb-3">
+              Enter a search term above to find websites, bookmarks, and pages using AI-powered search.
+            </p>
+          </div>
+        </div>
+
+        <!-- Discover Page -->
+        <div id="discover-page" class="page-content">
+          <div class="page-header">
+            <h1 class="page-title">
+              <i class="bi bi-lightbulb text-primary"></i>Discover Content Trends
+            </h1>
+            <p class="page-subtitle">Explore your reading patterns, popular topics, and content insights</p>
+          </div>
+
+          <!-- Trending Topics -->
+          <div class="content-section">
+            <div class="section-header">
+              <h2 class="section-title">
+                <i class="bi bi-trending-up"></i>Trending in Your Library
+              </h2>
+            </div>
+            
+            <div class="discovery-grid" id="trendingContent">
+              <!-- Trending content will be populated here -->
+            </div>
+          </div>
+
+          <!-- Reading Patterns -->
+          <div class="content-section">
+            <div class="section-header">
+              <h2 class="section-title">
+                <i class="bi bi-clock-history"></i>Your Reading Patterns
+              </h2>
+            </div>
+            
+            <div class="discovery-grid" id="readingPatterns">
+              <!-- Reading patterns will be populated here -->
+            </div>
+          </div>
+
+          <!-- Recently Popular -->
+          <div class="content-section">
+            <div class="section-header">
+              <h2 class="section-title">
+                <i class="bi bi-fire"></i>Recently Popular Pages
+              </h2>
+            </div>
+            
+            <div class="results-grid" id="popularPages">
+              <!-- Popular pages will be populated here -->
+            </div>
+          </div>
+
+          <!-- Empty State -->
+          <div class="empty-state" id="discoverEmptyState">
+            <i class="bi bi-lightbulb"></i>
+            <h6>No Data to Discover</h6>
+            <p class="mb-3">
+              Import your bookmarks or browsing history to see content trends and reading patterns.
+            </p>
+            <button class="action-btn primary" onclick="libraryPanel.showImportModal()">
+              <i class="bi bi-plus-circle"></i>Import Data
+            </button>
+          </div>
+        </div>
+
+        <!-- Analytics Page -->
+        <div id="analytics-page" class="page-content">
+          <div class="page-header">
+            <h1 class="page-title">
+              <i class="bi bi-graph-up text-primary"></i>Library Analytics
+            </h1>
+            <p class="page-subtitle">Detailed insights into your browsing patterns and content consumption</p>
+          </div>
+
+          <!-- Overview Stats -->
+          <div class="content-section">
+            <div class="section-header">
+              <h2 class="section-title">
+                <i class="bi bi-speedometer2"></i>Overview Dashboard
+              </h2>
+            </div>
+            
+            <div class="quick-stats" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 2rem;" id="analyticsOverview">
+              <!-- Analytics overview will be populated here -->
+            </div>
+          </div>
+
+          <!-- Activity Charts -->
+          <div class="content-section">
+            <div class="section-header">
+              <h2 class="section-title">
+                <i class="bi bi-bar-chart"></i>Activity Trends
+              </h2>
+            </div>
+            
+            <div class="analytics-grid" id="activityCharts">
+              <!-- Activity charts will be populated here -->
+            </div>
+          </div>
+
+          <!-- Knowledge Insights -->
+          <div class="content-section">
+            <div class="section-header">
+              <h2 class="section-title">
+                <i class="bi bi-brain"></i>Knowledge Insights
+              </h2>
+            </div>
+            
+            <div class="discovery-grid" id="knowledgeInsights">
+              <!-- Knowledge insights will be populated here -->
+            </div>
+          </div>
+
+          <!-- Empty State -->
+          <div class="empty-state" id="analyticsEmptyState">
+            <i class="bi bi-graph-up"></i>
+            <h6>No Analytics Data</h6>
+            <p class="mb-3">
+              Import and analyze your web data to see detailed usage analytics and insights.
+            </p>
+            <button class="action-btn primary" onclick="libraryPanel.showImportModal()">
+              <i class="bi bi-plus-circle"></i>Import Data
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Modal (keeping existing functionality) -->
+    <div class="modal fade" id="settingsModal" tabindex="-1" aria-labelledby="settingsModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+            <h5 class="modal-title" id="settingsModalLabel">
+              <i class="bi bi-gear me-2"></i>Settings & Import
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="filter: invert(1);"></button>
+          </div>
+          <div class="modal-body">
+            <!-- Import interface will be populated here -->
+            <div id="importInterface">
+              <p class="text-muted">Import settings and data management options will be available here.</p>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="vendor/bootstrap/bootstrap.bundle.min.js"></script>
+    <script src="websiteLibraryPanel.js"></script>
+  </body>
+</html>

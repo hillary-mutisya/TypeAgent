@@ -148,8 +148,6 @@ class WebsiteLibraryPanelFullPage {
     private searchDebounceTimer: number | null = null;
     private recentSearches: string[] = [];
     private currentQuery: string = "";
-    private currentSearchMode: string = "auto";
-
     // Data storage
     private libraryStats: LibraryStats = {
         totalWebsites: 0,
@@ -252,17 +250,6 @@ class WebsiteLibraryPanelFullPage {
                 this.performSearch();
             });
         }
-
-        // Search mode buttons
-        document.querySelectorAll(".mode-btn").forEach((btn) => {
-            btn.addEventListener("click", (e) => {
-                const target = e.currentTarget as HTMLElement;
-                const mode = target.getAttribute("data-mode");
-                if (mode) {
-                    this.setSearchMode(mode);
-                }
-            });
-        });
 
         // View mode buttons
         document.querySelectorAll(".view-btn").forEach((btn) => {
@@ -635,20 +622,6 @@ class WebsiteLibraryPanelFullPage {
         }
     }
 
-    private setSearchMode(mode: string) {
-        this.currentSearchMode = mode;
-
-        // Update UI
-        document.querySelectorAll(".mode-btn").forEach((btn) => {
-            btn.classList.remove("active");
-        });
-
-        const activeBtn = document.querySelector(`[data-mode="${mode}"]`);
-        if (activeBtn) {
-            activeBtn.classList.add("active");
-        }
-    }
-
     private setViewMode(view: "list" | "grid" | "timeline" | "domain") {
         if (this.currentViewMode === view) return;
 
@@ -755,7 +728,7 @@ class WebsiteLibraryPanelFullPage {
         try {
             // Check cache first for improved performance
             const filters = this.getSearchFilters();
-            const cacheKey = `${query}-${JSON.stringify(filters)}-${this.currentSearchMode}`;
+            const cacheKey = `${query}-${JSON.stringify(filters)}`;
 
             if (this.searchCache.has(cacheKey)) {
                 const cachedResults = this.searchCache.get(cacheKey)!;
@@ -2106,7 +2079,6 @@ class WebsiteLibraryPanelFullPage {
 
         // Default preferences
         return {
-            searchMode: "auto",
             viewMode: "list",
             autoExtractKnowledge: false,
             showConfidenceScores: true,
@@ -2264,16 +2236,6 @@ class WebsiteLibraryPanelFullPage {
                                 <div class="col-md-6">
                                     <h6>Search Preferences</h6>
                                     <div class="mb-3">
-                                        <label class="form-label">Default Search Mode</label>
-                                        <select class="form-select" id="defaultSearchMode">
-                                            <option value="auto">Auto</option>
-                                            <option value="hybrid">Hybrid</option>
-                                            <option value="entity">Entity</option>
-                                            <option value="topic">Topic</option>
-                                            <option value="semantic">Semantic</option>
-                                        </select>
-                                    </div>
-                                    <div class="mb-3">
                                         <label class="form-label">Default View Mode</label>
                                         <select class="form-select" id="defaultViewMode">
                                             <option value="list">List</option>
@@ -2337,9 +2299,6 @@ class WebsiteLibraryPanelFullPage {
     private populateSettingsModal() {
         const prefs = this.userPreferences;
 
-        const defaultSearchMode = document.getElementById(
-            "defaultSearchMode",
-        ) as HTMLSelectElement;
         const defaultViewMode = document.getElementById(
             "defaultViewMode",
         ) as HTMLSelectElement;
@@ -2353,7 +2312,6 @@ class WebsiteLibraryPanelFullPage {
             "enableNotifications",
         ) as HTMLInputElement;
 
-        if (defaultSearchMode) defaultSearchMode.value = prefs.searchMode;
         if (defaultViewMode) defaultViewMode.value = prefs.viewMode;
         if (autoExtractKnowledge)
             autoExtractKnowledge.checked = prefs.autoExtractKnowledge;
@@ -2364,9 +2322,6 @@ class WebsiteLibraryPanelFullPage {
     }
 
     private saveUserPreferences() {
-        const defaultSearchMode = document.getElementById(
-            "defaultSearchMode",
-        ) as HTMLSelectElement;
         const defaultViewMode = document.getElementById(
             "defaultViewMode",
         ) as HTMLSelectElement;
@@ -2381,7 +2336,6 @@ class WebsiteLibraryPanelFullPage {
         ) as HTMLInputElement;
 
         this.userPreferences = {
-            searchMode: defaultSearchMode?.value || "auto",
             viewMode: defaultViewMode?.value || "list",
             autoExtractKnowledge: autoExtractKnowledge?.checked || false,
             showConfidenceScores: showConfidenceScores?.checked || true,
@@ -2398,7 +2352,6 @@ class WebsiteLibraryPanelFullPage {
             this.notificationManager.showSuccess("Settings saved successfully");
 
             // Apply preferences immediately
-            this.setSearchMode(this.userPreferences.searchMode);
             this.setViewMode(this.userPreferences.viewMode as any);
 
             // Hide modal
@@ -2461,7 +2414,6 @@ interface SearchSuggestion {
 }
 
 interface UserPreferences {
-    searchMode: string;
     viewMode: string;
     autoExtractKnowledge: boolean;
     showConfidenceScores: boolean;

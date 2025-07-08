@@ -4,10 +4,6 @@
 /**
  * Shared HTML processing module for consolidating HTML import logic
  * between bookmark/history import and HTML file import flows.
- *
- * This module extracts and consolidates the HTML processing logic from
- * the website-memory package's ContentExtractor to provide a unified
- * processing pipeline for both import types.
  */
 
 import * as cheerio from "cheerio";
@@ -55,9 +51,6 @@ export interface ProcessingOptions {
     maxCharsPerChunk?: number;
 }
 
-/**
- * Simple parsed HTML content structure for file processing
- */
 export interface ParsedHtmlContent {
     title: string;
     content: string;
@@ -69,9 +62,6 @@ export interface ParsedHtmlContent {
     readingTime: number;
 }
 
-/**
- * File metadata structure for HTML files
- */
 export interface FileMetadata {
     filename: string;
     filePath: string;
@@ -80,9 +70,6 @@ export interface FileMetadata {
     fileUrl: string;
 }
 
-/**
- * Website data result from HTML processing
- */
 export interface WebsiteData {
     url: string;
     title: string;
@@ -110,17 +97,12 @@ export interface WebsiteData {
     enhancedContent?: EnhancedContent;
 }
 
-/**
- * Main shared HTML processing function
- * Processes HTML content and returns website data structure
- */
 export async function processHtmlContent(
     html: string,
     sourceIdentifier: string, // URL or file path
     options: ProcessingOptions = {},
     fileMetadata?: FileMetadata,
 ): Promise<WebsiteData> {
-    // Create ContentExtractor with options
     const extractorOptions: any = {};
     if (options.contentTimeout !== undefined)
         extractorOptions.timeout = options.contentTimeout;
@@ -140,23 +122,18 @@ export async function processHtmlContent(
 
     const extractor = new ContentExtractor(extractorOptions);
 
-    // Extract enhanced content from HTML
     const enhancedContent = (await extractor.extractFromHtml(
         html,
         options.extractionMode || "content",
     )) as EnhancedContent;
 
-    // Parse basic HTML structure
     const parsedContent = await parseHtmlStructure(html);
 
-    // Extract published date
     const publishedDate = await extractPublishedDate(html);
 
-    // Determine URL and domain
     const url = fileMetadata?.fileUrl || sourceIdentifier;
     const domain = extractDomainFromUrl(url);
 
-    // Create website data structure
     const websiteData: WebsiteData = {
         url,
         title:
@@ -193,14 +170,12 @@ export async function processHtmlContent(
         enhancedContent,
     };
 
-    // Add file-specific metadata if available
     if (fileMetadata) {
         websiteData.metadata.filename = fileMetadata.filename;
         websiteData.metadata.fileSize = fileMetadata.fileSize;
         websiteData.metadata.filePath = fileMetadata.filePath;
     }
 
-    // Add published date if found
     if (publishedDate) {
         websiteData.metadata.publishedDate = publishedDate.toISOString();
         websiteData.lastVisited = publishedDate;
@@ -209,33 +184,18 @@ export async function processHtmlContent(
     return websiteData;
 }
 
-/**
- * Parse HTML structure using Cheerio (basic parsing)
- */
 export async function parseHtmlStructure(
     html: string,
 ): Promise<ParsedHtmlContent> {
     const $ = cheerio.load(html);
 
-    // Extract title
     const title = extractTitle($);
-
-    // Extract main content
     const content = extractTextContent($);
-
-    // Extract links
     const links = extractLinks($);
-
-    // Extract images
     const images = extractImages($);
-
-    // Extract metadata
     const metadata = extractBasicMetadata($);
-
-    // Extract published date
     const publishedDate = extractPublishedDateFromMeta($);
 
-    // Calculate word count and reading time
     const wordCount = calculateWordCount(content);
     const readingTime = calculateReadingTime(wordCount);
 
@@ -256,9 +216,6 @@ export async function parseHtmlStructure(
     return result;
 }
 
-/**
- * Extract basic text content from HTML using simple selectors
- */
 export function extractTextContent($: cheerio.CheerioAPI): string {
     // Remove unwanted elements
     $(
@@ -522,10 +479,6 @@ export function parsePublishedDateString(dateString: string): Date | null {
 }
 
 /**
- * Utility functions
- */
-
-/**
  * Clean text content by normalizing whitespace
  */
 export function cleanText(text: string): string {
@@ -535,9 +488,6 @@ export function cleanText(text: string): string {
         .trim();
 }
 
-/**
- * Calculate word count from text
- */
 export function calculateWordCount(text: string): number {
     return text
         .trim()
@@ -545,17 +495,11 @@ export function calculateWordCount(text: string): number {
         .filter((word) => word.length > 0).length;
 }
 
-/**
- * Calculate reading time based on word count
- */
 export function calculateReadingTime(wordCount: number): number {
     // Average reading speed: 200-250 words per minute
     return Math.ceil(wordCount / 225);
 }
 
-/**
- * Extract domain from URL or file path
- */
 export function extractDomainFromUrl(url: string): string {
     if (url.startsWith("file://") || !url.includes("://")) {
         return "local_files";
@@ -569,9 +513,6 @@ export function extractDomainFromUrl(url: string): string {
     }
 }
 
-/**
- * Determine page type based on content analysis
- */
 export function determinePageType(
     enhancedContent: Partial<EnhancedContent>,
     parsedContent: ParsedHtmlContent,

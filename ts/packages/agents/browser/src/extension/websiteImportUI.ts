@@ -3,7 +3,9 @@
 
 import {
     ImportOptions,
-    FileImportOptions,
+    FolderImportOptions,
+    FolderImportProgress,
+    FolderValidationResult,
     ImportProgress,
     ImportResult,
     ImportError,
@@ -18,7 +20,7 @@ import {
  */
 export class WebsiteImportUI {
     private webActivityModalId = 'webActivityImportModal';
-    private fileImportModalId = 'fileImportModal';
+    private folderImportModalId = 'folderImportModal';
     private activeModal: string | null = null;
     private progressCallback: ((progress: ImportProgress) => void) | null = null;
     private completionCallback: ((result: ImportResult) => void) | null = null;
@@ -39,13 +41,13 @@ export class WebsiteImportUI {
     }
 
     /**
-     * Show file import modal (HTML files)
+     * Show folder import modal (HTML folder)
      */
-    public showFileImportModal(): void {
+    public showFolderImportModal(): void {
         this.hideActiveModal();
-        this.createFileImportModal();
-        this.showModal(this.fileImportModalId);
-        this.activeModal = this.fileImportModalId;
+        this.createFolderImportModal();
+        this.showModal(this.folderImportModalId);
+        this.activeModal = this.folderImportModalId;
     }
 
     /**
@@ -60,7 +62,7 @@ export class WebsiteImportUI {
     }
 
     /**
-     * Show import progress in the active modal
+     * Show import progress in the active modal with smooth transitions
      */
     public showImportProgress(progress: ImportProgress): void {
         const modalElement = document.getElementById(this.activeModal || '');
@@ -70,14 +72,33 @@ export class WebsiteImportUI {
         const formContainer = modalElement.querySelector('#importForm');
         
         if (progressContainer && formContainer) {
-            formContainer.classList.add('d-none');
-            progressContainer.classList.remove('d-none');
+            this.transitionToProgress(formContainer as HTMLElement, progressContainer as HTMLElement);
             this.updateImportProgress(progress);
         }
     }
 
     /**
-     * Update import progress display
+     * Enhanced form state transitions with animations
+     */
+    private transitionToProgress(formContainer: HTMLElement, progressContainer: HTMLElement): void {
+        // Fade out form
+        formContainer.classList.add('fade-out');
+        
+        setTimeout(() => {
+            formContainer.classList.add('d-none');
+            progressContainer.classList.remove('d-none');
+            progressContainer.classList.add('fade-in');
+            
+            // Clean up animation classes
+            setTimeout(() => {
+                formContainer.classList.remove('fade-out');
+                progressContainer.classList.remove('fade-in');
+            }, 300);
+        }, 300);
+    }
+
+    /**
+     * Update import progress display with enhanced animations
      */
     public updateImportProgress(progress: ImportProgress): void {
         const modalElement = document.getElementById(this.activeModal || '');
@@ -87,6 +108,7 @@ export class WebsiteImportUI {
         const progressBar = modalElement.querySelector('#importProgressBar') as HTMLElement;
         const progressText = modalElement.querySelector('#importProgressText');
         
+        // Animate status text changes
         if (statusElement) {
             const phaseMessages: Record<string, string> = {
                 'initializing': 'Preparing import...',
@@ -97,18 +119,35 @@ export class WebsiteImportUI {
                 'error': 'Import failed'
             };
             
-            statusElement.textContent = phaseMessages[progress.phase] || progress.phase;
-            
+            let newMessage = phaseMessages[progress.phase] || progress.phase;
             if (progress.currentItem) {
-                statusElement.textContent += ` (${progress.currentItem})`;
+                newMessage += ` (${progress.currentItem.substring(0, 50)}...)`;
             }
+            
+            // Animate text update
+            statusElement.classList.add('status-updating');
+            statusElement.textContent = newMessage;
+            
+            setTimeout(() => {
+                statusElement.classList.remove('status-updating');
+            }, 200);
         }
 
-        // Update progress bar
+        // Enhanced progress bar animation
         if (progressBar && progress.totalItems > 0) {
             const percentage = Math.round((progress.processedItems / progress.totalItems) * 100);
+            
+            // Smooth progress bar animation
+            progressBar.style.transition = 'width 0.3s ease-in-out';
             progressBar.style.width = `${percentage}%`;
             progressBar.setAttribute('aria-valuenow', percentage.toString());
+            
+            // Add pulse effect for active progress
+            if (progress.phase === 'processing' || progress.phase === 'extracting') {
+                progressBar.classList.add('progress-pulse');
+            } else {
+                progressBar.classList.remove('progress-pulse');
+            }
         }
 
         // Update progress text
@@ -135,9 +174,9 @@ export class WebsiteImportUI {
 
         const progressContainer = modalElement.querySelector('#importProgress');
         if (progressContainer) {
-            const isFileImport = this.activeModal === this.fileImportModalId;
-            const iconClass = isFileImport ? 'bi-check2-circle' : 'bi-check-circle';
-            const successColor = isFileImport ? 'success' : 'primary';
+            const isFolderImport = this.activeModal === this.folderImportModalId;
+            const iconClass = isFolderImport ? 'bi-check2-circle' : 'bi-check-circle';
+            const successColor = isFolderImport ? 'success' : 'primary';
             
             const successHtml = `
                 <div class="text-center">
@@ -216,24 +255,44 @@ export class WebsiteImportUI {
 
         const progressContainer = modalElement.querySelector('#importProgress');
         if (progressContainer) {
+            const isFolderImport = this.activeModal === this.folderImportModalId;
+            
             const errorTypeMessages: Record<string, string> = {
-                'validation': 'Please check your import settings and try again.',
+                'validation': isFolderImport 
+                    ? 'Please check your folder path and import settings, then try again.'
+                    : 'Please check your import settings and try again.',
                 'network': 'Please check your internet connection and try again.',
-                'processing': 'There was an issue processing the data.',
-                'extraction': 'Content extraction failed for some items.'
+                'processing': isFolderImport
+                    ? 'There was an issue processing files in the folder. Some files may be corrupted or in an unsupported format.'
+                    : 'There was an issue processing the data.',
+                'extraction': isFolderImport
+                    ? 'Content extraction failed for some HTML files. The files may be corrupted or have unusual formatting.'
+                    : 'Content extraction failed for some items.'
             };
 
             const suggestion = errorTypeMessages[error.type] || 'Please try again or contact support if the issue persists.';
+            
+            // Provide specific suggestions for folder import errors
+            let additionalHelp = '';
+            if (isFolderImport) {
+                if (error.message.includes('permission') || error.message.includes('access')) {
+                    additionalHelp = '<br><small><strong>Tip:</strong> Ensure the folder is not read-only and you have permission to access it.</small>';
+                } else if (error.message.includes('not found') || error.message.includes('does not exist')) {
+                    additionalHelp = '<br><small><strong>Tip:</strong> Verify the folder path exists and is spelled correctly.</small>';
+                } else if (error.message.includes('HTML') || error.message.includes('file')) {
+                    additionalHelp = '<br><small><strong>Tip:</strong> Ensure the folder contains valid HTML files (.html, .htm, .mhtml).</small>';
+                }
+            }
             
             const errorHtml = `
                 <div class="text-center">
                     <div class="text-danger mb-3">
                         <i class="bi bi-x-circle fs-1"></i>
                     </div>
-                    <h5 class="text-danger">Import Failed</h5>
+                    <h5 class="text-danger">${isFolderImport ? 'Folder Import Failed' : 'Import Failed'}</h5>
                     <div class="alert alert-danger text-start" role="alert">
                         <strong>Error:</strong> ${error.message}<br>
-                        <small class="text-muted">${suggestion}</small>
+                        <small class="text-muted">${suggestion}${additionalHelp}</small>
                     </div>
                     <div class="d-flex gap-2 justify-content-center">
                         <button id="retryImport" class="btn btn-outline-danger">
@@ -333,34 +392,48 @@ export class WebsiteImportUI {
     }
 
     /**
-     * Get file import options from form
+     * Get folder import options from form
      */
-    public getFileImportOptions(): FileImportOptions | null {
-        const modal = document.getElementById(this.fileImportModalId);
+    public getFolderImportOptions(): FolderImportOptions | null {
+        const modal = document.getElementById(this.folderImportModalId);
         if (!modal) return null;
 
-        const files = (modal as any)._selectedFiles as File[];
-        if (!files || files.length === 0) {
+        const folderPathInput = modal.querySelector('#folderPath') as HTMLInputElement;
+        if (!folderPathInput?.value.trim()) {
             return null;
         }
 
         // Get form values
-        const extractContentInput = modal.querySelector('#fileExtractContent') as HTMLInputElement;
-        const intelligentAnalysisInput = modal.querySelector('#fileIntelligentAnalysis') as HTMLInputElement;
-        const actionDetectionInput = modal.querySelector('#fileActionDetection') as HTMLInputElement;
-        const extractionModeInput = modal.querySelector('#fileExtractionMode') as HTMLSelectElement;
+        const extractContentInput = modal.querySelector('#folderExtractContent') as HTMLInputElement;
+        const intelligentAnalysisInput = modal.querySelector('#folderIntelligentAnalysis') as HTMLInputElement;
+        const actionDetectionInput = modal.querySelector('#folderActionDetection') as HTMLInputElement;
+        const extractionModeInput = modal.querySelector('#folderExtractionMode') as HTMLSelectElement;
         const preserveStructureInput = modal.querySelector('#preserveStructure') as HTMLInputElement;
+        const recursiveInput = modal.querySelector('#recursive') as HTMLInputElement;
+        const limitInput = modal.querySelector('#fileLimit') as HTMLInputElement;
+        const maxFileSizeInput = modal.querySelector('#maxFileSize') as HTMLInputElement;
+        const skipHiddenInput = modal.querySelector('#skipHidden') as HTMLInputElement;
 
-        const options: FileImportOptions = {
-            files,
+        const options: FolderImportOptions = {
+            folderPath: folderPathInput.value.trim(),
             extractContent: extractContentInput?.checked ?? true,
             enableIntelligentAnalysis: intelligentAnalysisInput?.checked ?? true,
             enableActionDetection: actionDetectionInput?.checked ?? false,
             extractionMode: (extractionModeInput?.value as any) ?? 'content',
             preserveStructure: preserveStructureInput?.checked ?? true,
-            allowedTypes: SUPPORTED_FILE_TYPES.slice(),
-            maxFileSize: DEFAULT_MAX_FILE_SIZE
+            recursive: recursiveInput?.checked ?? true,
+            fileTypes: ['.html', '.htm', '.mhtml'],
+            skipHidden: skipHiddenInput?.checked ?? true
         };
+
+        // Add optional numeric parameters
+        if (limitInput?.value) {
+            options.limit = parseInt(limitInput.value);
+        }
+
+        if (maxFileSizeInput?.value) {
+            options.maxFileSize = parseInt(maxFileSizeInput.value) * 1024 * 1024; // Convert MB to bytes
+        }
 
         return options;
     }
@@ -378,258 +451,54 @@ export class WebsiteImportUI {
             return !!(selectedBrowser && selectedType);
         }
 
-        if (this.activeModal === this.fileImportModalId) {
-            const fileInput = modal.querySelector('#fileInput') as HTMLInputElement;
-            return !!(fileInput?.files && fileInput.files.length > 0);
+        if (this.activeModal === this.folderImportModalId) {
+            const folderPathInput = modal.querySelector('#folderPath') as HTMLInputElement;
+            return !!(folderPathInput?.value.trim());
         }
 
         return false;
     }
 
     /**
-     * Handle file drop for file import
+     * Validate folder path for import
      */
-    public handleFileDrop(files: FileList): void {
-        this.processSelectedFiles(Array.from(files));
-    }
-
-    /**
-     * Handle file selection
-     */
-    public handleFileSelection(files: FileList): void {
-        this.processSelectedFiles(Array.from(files));
-    }
-
-    /**
-     * Process selected files and update UI
-     */
-    private processSelectedFiles(files: File[]): void {
-        const modal = document.getElementById(this.fileImportModalId);
-        if (!modal) return;
-
-        // Validate files
-        const validFiles = files.filter(file => this.isValidFile(file));
-        
-        if (validFiles.length === 0) {
-            this.showFileError('No valid HTML files selected. Please select .html, .htm, or .mhtml files.');
-            return;
-        }
-
-        if (validFiles.length !== files.length) {
-            this.showFileWarning(`${files.length - validFiles.length} files were skipped (invalid type or too large).`);
-        }
-
-        this.updateFileList(validFiles);
-        this.updateFileImportState();
-    }
-
-    /**
-     * Validate a single file
-     */
-    private isValidFile(file: File): boolean {
-        const validExtensions = ['.html', '.htm', '.mhtml'];
-        const extension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
-        const maxSize = DEFAULT_MAX_FILE_SIZE; // 50MB
-
-        return validExtensions.includes(extension) && file.size <= maxSize;
-    }
-
-    /**
-     * Update file list display
-     */
-    private updateFileList(files: File[]): void {
-        const modal = document.getElementById(this.fileImportModalId);
-        if (!modal) return;
-
-        const fileList = modal.querySelector('#fileList');
-        const fileListContainer = modal.querySelector('#fileListContainer');
-        const fileCount = modal.querySelector('#fileCount');
-        const totalSize = modal.querySelector('#totalSize');
-        const importOptions = modal.querySelector('#fileImportOptions') as HTMLElement;
-
-        if (!fileList || !fileListContainer || !fileCount || !totalSize) return;
-
-        // Show file list
-        fileList.classList.remove('d-none');
-        importOptions.style.display = 'block';
-
-        // Clear existing list
-        fileListContainer.innerHTML = '';
-
-        // Add files to list
-        let totalSizeBytes = 0;
-        files.forEach((file, index) => {
-            totalSizeBytes += file.size;
-            
-            const fileItem = document.createElement('div');
-            fileItem.className = 'file-item d-flex align-items-center justify-content-between p-2 border-bottom';
-            fileItem.innerHTML = `
-                <div class="d-flex align-items-center">
-                    <i class="bi bi-file-earmark-code text-primary me-2"></i>
-                    <div>
-                        <div class="fw-semibold">${file.name}</div>
-                        <small class="text-muted">${this.formatFileSize(file.size)} • ${file.type || 'HTML file'}</small>
-                    </div>
-                </div>
-                <button type="button" class="btn btn-sm btn-outline-danger remove-file-btn" data-index="${index}">
-                    <i class="bi bi-x"></i>
-                </button>
-            `;
-
-            // Add remove button event listener
-            const removeBtn = fileItem.querySelector('.remove-file-btn');
-            if (removeBtn) {
-                removeBtn.addEventListener('click', () => {
-                    this.removeFileFromList(index);
-                });
-            }
-
-            fileListContainer.appendChild(fileItem);
-        });
-
-        // Update summary
-        fileCount.textContent = files.length.toString();
-        totalSize.textContent = this.formatFileSize(totalSizeBytes);
-
-        // Store files for later use
-        (modal as any)._selectedFiles = files;
-    }
-
-    /**
-     * Remove file from list
-     */
-    private removeFileFromList(index: number): void {
-        const modal = document.getElementById(this.fileImportModalId);
-        if (!modal || !(modal as any)._selectedFiles) return;
-
-        const files = (modal as any)._selectedFiles as File[];
-        const newFiles = files.filter((_, i) => i !== index);
-        
-        if (newFiles.length === 0) {
-            this.clearFileList();
-        } else {
-            this.updateFileList(newFiles);
-        }
-        
-        this.updateFileImportState();
-    }
-
-    /**
-     * Clear file list
-     */
-    private clearFileList(): void {
-        const modal = document.getElementById(this.fileImportModalId);
-        if (!modal) return;
-
-        const fileList = modal.querySelector('#fileList');
-        const importOptions = modal.querySelector('#fileImportOptions') as HTMLElement;
-        const fileInput = modal.querySelector('#fileInput') as HTMLInputElement;
-
-        if (fileList) fileList.classList.add('d-none');
-        if (importOptions) importOptions.style.display = 'none';
-        if (fileInput) fileInput.value = '';
-
-        (modal as any)._selectedFiles = [];
-        this.updateFileImportState();
-    }
-
-    /**
-     * Update file import button state
-     */
-    private updateFileImportState(): void {
-        const modal = document.getElementById(this.fileImportModalId);
-        if (!modal) return;
-
-        const startButton = modal.querySelector('#startFileImport') as HTMLButtonElement;
-        const files = (modal as any)._selectedFiles as File[] || [];
-
-        if (startButton) {
-            startButton.disabled = files.length === 0;
-        }
-    }
-
-    /**
-     * Format file size for display
-     */
-    private formatFileSize(bytes: number): string {
-        if (bytes === 0) return '0 B';
-        
-        const k = 1024;
-        const sizes = ['B', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-    }
-
-    /**
-     * Show file error message
-     */
-    private showFileError(message: string): void {
-        // Could implement toast notification or inline error display
-        console.error(message);
-        alert(message); // Simple implementation for now
-    }
-
-    /**
-     * Show file warning message  
-     */
-    private showFileWarning(message: string): void {
-        console.warn(message);
-        // Could implement less intrusive warning display
-    }
-
-    /**
-     * Validate files for import
-     */
-    public validateFiles(files: File[]): ValidationResult {
+    public async validateFolderPath(folderPath: string): Promise<ValidationResult> {
         const errors: string[] = [];
         const warnings: string[] = [];
 
-        if (files.length === 0) {
-            errors.push('No files selected for import.');
+        if (!folderPath || !folderPath.trim()) {
+            errors.push('Folder path is required.');
             return { isValid: false, errors, warnings };
         }
 
-        // Check file types
-        const validExtensions = SUPPORTED_FILE_TYPES;
-        const invalidFiles = files.filter(file => {
-            const extension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
-            return !validExtensions.includes(extension as any);
-        });
+        const trimmedPath = folderPath.trim();
 
-        if (invalidFiles.length > 0) {
-            errors.push(`${invalidFiles.length} files have unsupported formats. Supported: ${validExtensions.join(', ')}`);
+        // Basic path validation
+        if (trimmedPath.length > 260) {
+            errors.push('Folder path is too long (maximum 260 characters).');
         }
 
-        // Check file sizes
-        const maxSize = DEFAULT_MAX_FILE_SIZE;
-        const oversizedFiles = files.filter(file => file.size > maxSize);
-        
-        if (oversizedFiles.length > 0) {
-            const maxSizeMB = Math.round(maxSize / (1024 * 1024));
-            warnings.push(`${oversizedFiles.length} files exceed ${maxSizeMB}MB and may cause performance issues.`);
+        // Check for invalid characters (basic validation)
+        const invalidChars = /[<>"|?*]/;
+        if (invalidChars.test(trimmedPath)) {
+            errors.push('Folder path contains invalid characters.');
         }
 
-        // Check total size
-        const totalSize = files.reduce((sum, file) => sum + file.size, 0);
-        const maxTotalSize = 500 * 1024 * 1024; // 500MB
-        
-        if (totalSize > maxTotalSize) {
-            warnings.push('Total file size is very large and may impact browser performance.');
+        // Since we can't directly access the file system from browser extension,
+        // we'll validate the path format and provide helpful guidance
+        const windowsPathPattern = /^[A-Za-z]:\\(.+\\)*[^\\]*$/;
+        const unixPathPattern = /^\/(.+\/)*[^\/]*$/;
+        const relativePathPattern = /^[^\/\\:*?"<>|]+([\/\\][^\/\\:*?"<>|]+)*$/;
+
+        if (!windowsPathPattern.test(trimmedPath) && 
+            !unixPathPattern.test(trimmedPath) && 
+            !relativePathPattern.test(trimmedPath)) {
+            warnings.push('Please ensure the folder path is valid for your operating system.');
         }
 
-        // Check for duplicate names
-        const fileNames = files.map(f => f.name.toLowerCase());
-        const duplicateNames = fileNames.filter((name, index) => fileNames.indexOf(name) !== index);
-        
-        if (duplicateNames.length > 0) {
-            warnings.push('Some files have duplicate names. Later files may overwrite earlier ones.');
-        }
-
-        // Check for empty files
-        const emptyFiles = files.filter(file => file.size === 0);
-        if (emptyFiles.length > 0) {
-            warnings.push(`${emptyFiles.length} files appear to be empty.`);
+        // Provide helpful examples
+        if (errors.length === 0) {
+            warnings.push('The folder will be validated when import starts. Ensure you have read permissions.');
         }
 
         return {
@@ -637,6 +506,50 @@ export class WebsiteImportUI {
             errors,
             warnings
         };
+    }
+
+    /**
+     * Show folder path validation feedback
+     */
+    private showFolderValidationFeedback(validation: ValidationResult): void {
+        const modal = document.getElementById(this.folderImportModalId);
+        if (!modal) return;
+
+        const feedbackContainer = modal.querySelector('#folderValidationFeedback');
+        if (!feedbackContainer) return;
+
+        if (!validation.isValid) {
+            feedbackContainer.innerHTML = `
+                <div class="alert alert-danger alert-sm">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    ${validation.errors.join('<br>')}
+                </div>
+            `;
+        } else if (validation.warnings.length > 0) {
+            feedbackContainer.innerHTML = `
+                <div class="alert alert-warning alert-sm">
+                    <i class="bi bi-info-circle"></i>
+                    ${validation.warnings.join('<br>')}
+                </div>
+            `;
+        } else {
+            feedbackContainer.innerHTML = '';
+        }
+    }
+
+    /**
+     * Update folder import form state
+     */
+    private updateFolderImportState(): void {
+        const modal = document.getElementById(this.folderImportModalId);
+        if (!modal) return;
+
+        const folderPathInput = modal.querySelector('#folderPath') as HTMLInputElement;
+        const startButton = modal.querySelector('#startFolderImport') as HTMLButtonElement;
+
+        if (startButton) {
+            startButton.disabled = !folderPathInput?.value.trim();
+        }
     }
 
     /**
@@ -875,79 +788,99 @@ export class WebsiteImportUI {
     }
 
     /**
-     * Create file import modal
+     * Create folder import modal
      */
-    private createFileImportModal(): void {
+    private createFolderImportModal(): void {
         const modalDiv = document.createElement('div');
         modalDiv.className = 'modal fade';
-        modalDiv.id = this.fileImportModalId;
+        modalDiv.id = this.folderImportModalId;
         modalDiv.setAttribute('tabindex', '-1');
         
         modalDiv.innerHTML = `
             <div class="modal-dialog modal-lg">
                 <div class="modal-content">
-                    <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                    <div class="modal-header" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white;">
                         <h5 class="modal-title">
-                            <i class="bi bi-file-earmark-arrow-up me-2"></i>Import from Files
+                            <i class="bi bi-folder2-open me-2"></i>Import from Folder
                         </h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="filter: invert(1);"></button>
                     </div>
                     <div class="modal-body">
                         <div id="importForm">
-                            <!-- File Drop Zone -->
-                            <div id="fileDropZone" class="file-drop-zone mb-3">
-                                <div class="drop-zone-content">
-                                    <i class="bi bi-cloud-upload fs-1 text-muted mb-3"></i>
-                                    <h5>Drag & Drop HTML Files</h5>
-                                    <p class="text-muted mb-3">Or click to browse and select files</p>
-                                    <button type="button" class="btn btn-outline-primary" id="browseFilesBtn">
-                                        <i class="bi bi-folder2-open"></i> Browse Files
+                            <!-- Folder Path Input -->
+                            <div class="mb-3">
+                                <label for="folderPath" class="form-label fw-semibold">
+                                    <i class="bi bi-folder"></i> Folder Path
+                                </label>
+                                <div class="input-group">
+                                    <input type="text" id="folderPath" class="form-control" 
+                                           placeholder="Enter folder path (e.g., C:\\Documents\\HTMLFiles or /home/user/html-files)"
+                                           autocomplete="off">
+                                    <button type="button" class="btn btn-outline-secondary" id="browseFolderBtn" title="Browse for folder">
+                                        <i class="bi bi-three-dots"></i>
                                     </button>
-                                    <input type="file" id="fileInput" multiple accept=".html,.htm,.mhtml" class="d-none">
                                 </div>
-                                <div class="drop-zone-overlay d-none">
-                                    <div class="overlay-content">
-                                        <i class="bi bi-download fs-1"></i>
-                                        <h5>Drop files here</h5>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- File List -->
-                            <div id="fileList" class="file-list d-none">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <h6 class="mb-0">Selected Files</h6>
-                                    <div>
-                                        <button type="button" class="btn btn-sm btn-outline-secondary" id="clearFilesBtn">
-                                            <i class="bi bi-trash"></i> Clear All
-                                        </button>
-                                    </div>
-                                </div>
-                                <div id="fileListContainer" class="file-list-container">
-                                    <!-- Files will be populated here -->
-                                </div>
-                                <div class="file-summary mt-2">
+                                <div class="form-text">
                                     <small class="text-muted">
-                                        <span id="fileCount">0</span> files selected, 
-                                        <span id="totalSize">0 KB</span> total
+                                        <i class="bi bi-info-circle"></i>
+                                        Enter the full path to a folder containing HTML files. 
+                                        Subfolders will be included if recursive option is enabled.
                                     </small>
                                 </div>
+                                <div id="folderValidationFeedback"></div>
                             </div>
 
-                            <!-- Import Options -->
-                            <div class="mb-3" id="fileImportOptions" style="display: none;">
-                                <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#fileAdvancedOptions">
-                                    <i class="bi bi-gear"></i> Import Options
+                            <!-- Folder Options -->
+                            <div class="mb-3">
+                                <h6 class="mb-3">Folder Options</h6>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" id="recursive" checked>
+                                            <label class="form-check-label" for="recursive">
+                                                <i class="bi bi-arrow-down-up"></i> Include subfolders
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" id="skipHidden" checked>
+                                            <label class="form-check-label" for="skipHidden">
+                                                <i class="bi bi-eye-slash"></i> Skip hidden files
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <label for="fileLimit" class="form-label">File limit (optional)</label>
+                                        <input type="number" id="fileLimit" class="form-control form-control-sm" 
+                                               placeholder="e.g., 1000" min="1" max="10000" value="1000">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="maxFileSize" class="form-label">Max file size (MB)</label>
+                                        <input type="number" id="maxFileSize" class="form-control form-control-sm" 
+                                               placeholder="50" min="1" max="500" value="50">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Processing Options -->
+                            <div class="mb-3">
+                                <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#folderAdvancedOptions">
+                                    <i class="bi bi-gear"></i> Processing Options
                                 </button>
 
-                                <div class="collapse mt-3" id="fileAdvancedOptions">
+                                <div class="collapse mt-3" id="folderAdvancedOptions">
                                     <div class="card card-body bg-light">
                                         <div class="mb-3">
-                                            <h6 class="mb-3">Processing Options</h6>
+                                            <h6 class="mb-3">Content Processing</h6>
                                             
                                             <div class="form-check mb-2">
-                                                <input class="form-check-input" type="checkbox" id="fileExtractContent" checked>
-                                                <label class="form-check-label" for="fileExtractContent">
+                                                <input class="form-check-input" type="checkbox" id="folderExtractContent" checked>
+                                                <label class="form-check-label" for="folderExtractContent">
                                                     <i class="bi bi-file-text"></i> Extract content from files
                                                 </label>
                                                 <small class="text-muted d-block ms-4">
@@ -956,8 +889,8 @@ export class WebsiteImportUI {
                                             </div>
 
                                             <div class="form-check mb-2">
-                                                <input class="form-check-input" type="checkbox" id="fileIntelligentAnalysis" checked>
-                                                <label class="form-check-label" for="fileIntelligentAnalysis">
+                                                <input class="form-check-input" type="checkbox" id="folderIntelligentAnalysis" checked>
+                                                <label class="form-check-label" for="folderIntelligentAnalysis">
                                                     <i class="bi bi-robot"></i> AI knowledge extraction
                                                 </label>
                                                 <small class="text-muted d-block ms-4">
@@ -966,8 +899,8 @@ export class WebsiteImportUI {
                                             </div>
 
                                             <div class="form-check mb-3">
-                                                <input class="form-check-input" type="checkbox" id="fileActionDetection">
-                                                <label class="form-check-label" for="fileActionDetection">
+                                                <input class="form-check-input" type="checkbox" id="folderActionDetection">
+                                                <label class="form-check-label" for="folderActionDetection">
                                                     <i class="bi bi-lightning"></i> Action detection
                                                 </label>
                                                 <small class="text-muted d-block ms-4">
@@ -976,8 +909,8 @@ export class WebsiteImportUI {
                                             </div>
 
                                             <div class="mb-3">
-                                                <label for="fileExtractionMode" class="form-label">Processing Quality</label>
-                                                <select id="fileExtractionMode" class="form-select form-select-sm">
+                                                <label for="folderExtractionMode" class="form-label">Processing Quality</label>
+                                                <select id="folderExtractionMode" class="form-select form-select-sm">
                                                     <option value="basic">Basic - Fast processing</option>
                                                     <option value="content" selected>Content - Good quality</option>
                                                     <option value="actions">Actions - Include action detection</option>
@@ -988,10 +921,10 @@ export class WebsiteImportUI {
                                             <div class="form-check mb-2">
                                                 <input class="form-check-input" type="checkbox" id="preserveStructure" checked>
                                                 <label class="form-check-label" for="preserveStructure">
-                                                    <i class="bi bi-diagram-3"></i> Preserve file structure
+                                                    <i class="bi bi-diagram-3"></i> Preserve folder structure
                                                 </label>
                                                 <small class="text-muted d-block ms-4">
-                                                    Maintain original file organization and metadata
+                                                    Maintain original folder organization and metadata
                                                 </small>
                                             </div>
                                         </div>
@@ -999,12 +932,31 @@ export class WebsiteImportUI {
                                 </div>
                             </div>
 
+                            <!-- Path Examples -->
+                            <div class="mb-3">
+                                <details class="text-muted">
+                                    <summary class="btn btn-link btn-sm p-0 text-decoration-none">
+                                        <i class="bi bi-question-circle"></i> Path Examples
+                                    </summary>
+                                    <div class="mt-2 small">
+                                        <strong>Windows:</strong><br>
+                                        <code>C:\\Users\\YourName\\Documents\\HTMLFiles</code><br>
+                                        <code>D:\\Projects\\WebsiteArchive</code><br><br>
+                                        <strong>macOS/Linux:</strong><br>
+                                        <code>/Users/yourname/Documents/HTMLFiles</code><br>
+                                        <code>/home/user/website-archive</code><br><br>
+                                        <strong>Network paths:</strong><br>
+                                        <code>\\\\server\\share\\htmlfiles</code>
+                                    </div>
+                                </details>
+                            </div>
+
                             <!-- Import Controls -->
                             <div class="d-flex gap-2">
-                                <button id="startFileImport" class="btn btn-success" disabled>
-                                    <i class="bi bi-upload"></i> Start Import
+                                <button id="startFolderImport" class="btn btn-success" disabled>
+                                    <i class="bi bi-folder-plus"></i> Start Import
                                 </button>
-                                <button id="cancelFileImport" class="btn btn-outline-secondary d-none">
+                                <button id="cancelFolderImport" class="btn btn-outline-secondary d-none">
                                     <i class="bi bi-x-circle"></i> Cancel
                                 </button>
                             </div>
@@ -1015,13 +967,13 @@ export class WebsiteImportUI {
                             <div class="progress-container">
                                 <div class="text-center">
                                     <div class="spinner-border text-success mb-3" role="status">
-                                        <span class="visually-hidden">Processing files...</span>
+                                        <span class="visually-hidden">Processing folder...</span>
                                     </div>
                                     <div>
-                                        <span class="fw-semibold">Processing Files...</span>
+                                        <span class="fw-semibold">Processing Folder...</span>
                                     </div>
                                     <small id="importStatusMessage" class="text-muted d-block mt-2">
-                                        Preparing files...
+                                        Validating folder...
                                     </small>
                                     <div class="progress mt-3" style="height: 6px;">
                                         <div id="importProgressBar" class="progress-bar bg-success" role="progressbar" 
@@ -1043,7 +995,7 @@ export class WebsiteImportUI {
         `;
 
         document.body.appendChild(modalDiv);
-        this.setupFileImportEventListeners();
+        this.setupFolderImportEventListeners();
     }
 
     /**
@@ -1140,78 +1092,74 @@ export class WebsiteImportUI {
     }
 
     /**
-     * Setup event listeners for file import modal
+     * Setup event listeners for folder import modal
      */
-    private setupFileImportEventListeners(): void {
-        const modal = document.getElementById(this.fileImportModalId);
+    private setupFolderImportEventListeners(): void {
+        const modal = document.getElementById(this.folderImportModalId);
         if (!modal) return;
 
-        const fileInput = modal.querySelector('#fileInput') as HTMLInputElement;
-        const browseBtn = modal.querySelector('#browseFilesBtn');
-        const dropZone = modal.querySelector('#fileDropZone');
-        const startButton = modal.querySelector('#startFileImport') as HTMLButtonElement;
-        const clearFilesBtn = modal.querySelector('#clearFilesBtn');
+        const folderPathInput = modal.querySelector('#folderPath') as HTMLInputElement;
+        const browseFolderBtn = modal.querySelector('#browseFolderBtn');
+        const startButton = modal.querySelector('#startFolderImport') as HTMLButtonElement;
 
-        // Browse files button
-        if (browseBtn && fileInput) {
-            browseBtn.addEventListener('click', () => {
-                fileInput.click();
-            });
-        }
-
-        // File input change
-        if (fileInput) {
-            fileInput.addEventListener('change', () => {
-                if (fileInput.files) {
-                    this.handleFileSelection(fileInput.files);
-                }
-            });
-        }
-
-        // Drag and drop
-        if (dropZone) {
-            const overlay = dropZone.querySelector('.drop-zone-overlay');
-
-            dropZone.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                dropZone.classList.add('drag-over');
-                if (overlay) overlay.classList.remove('d-none');
-            });
-
-            dropZone.addEventListener('dragleave', (e) => {
-                e.preventDefault();
-                const dragEvent = e as DragEvent;
-                if (!dropZone.contains(dragEvent.relatedTarget as Node)) {
-                    dropZone.classList.remove('drag-over');
-                    if (overlay) overlay.classList.add('d-none');
-                }
-            });
-
-            dropZone.addEventListener('drop', (e) => {
-                e.preventDefault();
-                const dragEvent = e as DragEvent;
-                dropZone.classList.remove('drag-over');
-                if (overlay) overlay.classList.add('d-none');
+        // Folder path input validation
+        if (folderPathInput) {
+            folderPathInput.addEventListener('input', async () => {
+                this.updateFolderImportState();
                 
-                if (dragEvent.dataTransfer?.files) {
-                    this.handleFileDrop(dragEvent.dataTransfer.files);
+                // Debounced validation
+                clearTimeout((folderPathInput as any)._validationTimeout);
+                (folderPathInput as any)._validationTimeout = setTimeout(async () => {
+                    const validation = await this.validateFolderPath(folderPathInput.value);
+                    this.showFolderValidationFeedback(validation);
+                }, 500);
+            });
+
+            folderPathInput.addEventListener('blur', async () => {
+                if (folderPathInput.value.trim()) {
+                    const validation = await this.validateFolderPath(folderPathInput.value);
+                    this.showFolderValidationFeedback(validation);
                 }
             });
         }
 
-        // Clear files button
-        if (clearFilesBtn) {
-            clearFilesBtn.addEventListener('click', () => {
-                this.clearFileList();
+        // Browse folder button (note: actual folder browsing would require native file system access)
+        if (browseFolderBtn) {
+            browseFolderBtn.addEventListener('click', () => {
+                // Show helpful message since we can't actually browse folders in browser extension
+                const helpModal = `
+                    <div class="alert alert-info">
+                        <strong>Tip:</strong> Copy the folder path from your file manager and paste it here.<br>
+                        <strong>Windows:</strong> Right-click folder → Properties → Copy location<br>
+                        <strong>Mac:</strong> Right-click folder → Get Info → Copy path<br>
+                        <strong>Linux:</strong> Right-click folder → Properties → Copy path
+                    </div>
+                `;
+                
+                const feedbackContainer = modal.querySelector('#folderValidationFeedback');
+                if (feedbackContainer) {
+                    feedbackContainer.innerHTML = helpModal;
+                    setTimeout(() => {
+                        feedbackContainer.innerHTML = '';
+                    }, 5000);
+                }
             });
         }
+
+        // Form inputs change handlers
+        const formInputs = modal.querySelectorAll('input, select');
+        formInputs.forEach(input => {
+            input.addEventListener('change', () => {
+                this.updateFolderImportState();
+            });
+        });
 
         // Start import button
         if (startButton) {
             startButton.addEventListener('click', () => {
-                const options = this.getFileImportOptions();
+                const options = this.getFolderImportOptions();
                 if (options) {
-                    window.dispatchEvent(new CustomEvent('startFileImport', { 
+                    window.dispatchEvent(new CustomEvent('startFolderImport', { 
                         detail: options 
                     }));
                 }
@@ -1219,7 +1167,7 @@ export class WebsiteImportUI {
         }
 
         // Cancel buttons
-        const cancelButtons = modal.querySelectorAll('#cancelFileImport, #cancelImportProgress');
+        const cancelButtons = modal.querySelectorAll('#cancelFolderImport, #cancelImportProgress');
         cancelButtons.forEach(button => {
             button.addEventListener('click', () => {
                 window.dispatchEvent(new CustomEvent('cancelImport'));
@@ -1227,31 +1175,47 @@ export class WebsiteImportUI {
         });
 
         modal.addEventListener('hidden.bs.modal', () => {
-            this.removeModal(this.fileImportModalId);
+            this.removeModal(this.folderImportModalId);
         });
     }
 
     /**
-     * Show modal
+     * Show modal with enhanced animations
      */
     private showModal(modalId: string): void {
         const modalElement = document.getElementById(modalId);
         if (modalElement && (window as any).bootstrap) {
+            // Add entrance animation class
+            modalElement.classList.add('modal-entering');
+            
             const modal = new (window as any).bootstrap.Modal(modalElement);
             modal.show();
+            
+            // Remove animation class after transition
+            setTimeout(() => {
+                modalElement.classList.remove('modal-entering');
+            }, 300);
         }
     }
 
     /**
-     * Hide modal
+     * Hide modal with enhanced animations
      */
     private hideModal(modalId: string): void {
         const modalElement = document.getElementById(modalId);
         if (modalElement && (window as any).bootstrap) {
+            // Add exit animation class
+            modalElement.classList.add('modal-exiting');
+            
             const modal = (window as any).bootstrap.Modal.getInstance(modalElement);
             if (modal) {
                 modal.hide();
             }
+            
+            // Clean up animation class after hide
+            setTimeout(() => {
+                modalElement.classList.remove('modal-exiting');
+            }, 300);
         }
     }
 
@@ -1321,6 +1285,9 @@ export class WebsiteImportUI {
                     border-color: #667eea;
                     background-color: #e3f2fd;
                     border-style: solid;
+                    transform: scale(1.02);
+                    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+                    transition: all 0.2s ease;
                 }
                 
                 .drop-zone-overlay {
@@ -1382,6 +1349,126 @@ export class WebsiteImportUI {
                     color: #495057;
                     background-color: #f8f9fa;
                     border-color: #dee2e6;
+                }
+                
+                /* Enhanced Modal and Transition Animations */
+                .modal-entering .modal-dialog {
+                    animation: modalSlideIn 0.3s ease-out;
+                }
+                
+                .modal-exiting .modal-dialog {
+                    animation: modalSlideOut 0.3s ease-in;
+                }
+                
+                @keyframes modalSlideIn {
+                    from {
+                        transform: translateY(-50px);
+                        opacity: 0;
+                    }
+                    to {
+                        transform: translateY(0);
+                        opacity: 1;
+                    }
+                }
+                
+                @keyframes modalSlideOut {
+                    from {
+                        transform: translateY(0);
+                        opacity: 1;
+                    }
+                    to {
+                        transform: translateY(-30px);
+                        opacity: 0;
+                    }
+                }
+                
+                .fade-out {
+                    animation: fadeOut 0.3s ease-out forwards;
+                }
+                
+                .fade-in {
+                    animation: fadeIn 0.3s ease-out;
+                }
+                
+                @keyframes fadeOut {
+                    from { opacity: 1; transform: translateX(0); }
+                    to { opacity: 0; transform: translateX(-20px); }
+                }
+                
+                @keyframes fadeIn {
+                    from { opacity: 0; transform: translateX(20px); }
+                    to { opacity: 1; transform: translateX(0); }
+                }
+                
+                .progress-pulse {
+                    animation: progressPulse 1.5s infinite;
+                }
+                
+                @keyframes progressPulse {
+                    0%, 100% { box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.4); }
+                    50% { box-shadow: 0 0 0 10px rgba(102, 126, 234, 0); }
+                }
+                
+                .status-updating {
+                    animation: statusUpdate 0.2s ease;
+                }
+                
+                @keyframes statusUpdate {
+                    0% { transform: scale(1); }
+                    50% { transform: scale(1.05); }
+                    100% { transform: scale(1); }
+                }
+                
+                .file-item-enter {
+                    animation: fileItemEnter 0.3s ease;
+                }
+                
+                .file-item-exit {
+                    animation: fileItemExit 0.3s ease forwards;
+                }
+                
+                @keyframes fileItemEnter {
+                    from { opacity: 0; transform: translateY(-20px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                
+                @keyframes fileItemExit {
+                    from { opacity: 1; transform: translateX(0); }
+                    to { opacity: 0; transform: translateX(100%); }
+                }
+                
+                .drop-success {
+                    animation: dropSuccess 0.5s ease;
+                }
+                
+                @keyframes dropSuccess {
+                    0% { background-color: inherit; }
+                    50% { background-color: rgba(40, 167, 69, 0.1); }
+                    100% { background-color: inherit; }
+                }
+                
+                /* Respect user motion preferences */
+                @media (prefers-reduced-motion: reduce) {
+                    .modal-entering .modal-dialog,
+                    .modal-exiting .modal-dialog,
+                    .fade-out,
+                    .fade-in,
+                    .progress-pulse,
+                    .status-updating,
+                    .file-item-enter,
+                    .file-item-exit,
+                    .drop-success {
+                        animation: none !important;
+                    }
+                    
+                    .file-drop-zone.drag-over {
+                        transform: none !important;
+                    }
+                    
+                    .import-option:hover,
+                    .file-item:hover {
+                        transform: none !important;
+                    }
                 }
             `;
             document.head.appendChild(style);

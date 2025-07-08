@@ -3,7 +3,8 @@
 
 import {
     ImportOptions,
-    FileImportOptions,
+    FolderImportOptions,
+    FolderImportProgress,
     ImportResult,
     ImportProgress,
     ImportError,
@@ -12,9 +13,6 @@ import {
     BrowserBookmark,
     BrowserHistoryItem,
     ProcessedData,
-    ProcessedFileData,
-    ParsedHtmlData,
-    ExtractedContent,
     ProgressCallback,
     SUPPORTED_FILE_TYPES,
     DEFAULT_MAX_FILE_SIZE,
@@ -24,7 +22,7 @@ import {
 
 /**
  * Core import logic and data processing manager
- * Handles both web activity (browser data) and file import operations
+ * Handles both web activity (browser data) and folder import operations
  */
 export class WebsiteImportManager {
     private progressCallbacks: Map<string, ProgressCallback> = new Map();
@@ -131,17 +129,17 @@ export class WebsiteImportManager {
     }
 
     /**
-     * Start file import (HTML files)
+     * Start folder import (HTML folder)
      */
-    async startFileImport(options: FileImportOptions): Promise<ImportResult> {
+    async startFolderImport(options: FolderImportOptions): Promise<ImportResult> {
         const importId = this.generateImportId();
         const startTime = Date.now();
 
         try {
             // Validate options
-            const validation = this.validateFileImportOptions(options);
+            const validation = this.validateFolderImportOptions(options);
             if (!validation.isValid) {
-                throw new Error(`Invalid file import options: ${validation.errors.join(', ')}`);
+                throw new Error(`Invalid folder import options: ${validation.errors.join(', ')}`);
             }
 
             this.activeImports.set(importId, true);
@@ -150,19 +148,17 @@ export class WebsiteImportManager {
             this.updateProgress(importId, {
                 importId,
                 phase: 'initializing',
-                totalItems: options.files.length,
+                totalItems: 0, // Will be updated once folder is enumerated
                 processedItems: 0,
                 errors: []
             });
 
-            // Process HTML files
-            const processedFiles = await this.processHtmlFiles(options.files);
-
-            // Send to service worker for further processing
+            // Send folder import request directly to service worker
+            // The backend will handle folder enumeration and file processing
             const result = await this.sendToServiceWorker({
-                type: "importHtmlFiles",
+                type: "importHtmlFolder",
                 parameters: {
-                    files: processedFiles,
+                    folderPath: options.folderPath,
                     options,
                     importId
                 }
@@ -171,15 +167,15 @@ export class WebsiteImportManager {
             const duration = Date.now() - startTime;
 
             return {
-                success: true,
+                success: result.success || false,
                 importId,
-                itemCount: processedFiles.length,
+                itemCount: result.itemCount || 0,
                 duration,
-                errors: [],
-                summary: {
-                    totalProcessed: processedFiles.length,
-                    successfullyImported: processedFiles.length,
-                    knowledgeExtracted: 0, // Will be updated by service worker
+                errors: result.errors || [],
+                summary: result.summary || {
+                    totalProcessed: 0,
+                    successfullyImported: 0,
+                    knowledgeExtracted: 0,
                     entitiesFound: 0,
                     topicsIdentified: 0,
                     actionsDetected: 0
@@ -188,9 +184,34 @@ export class WebsiteImportManager {
 
         } catch (error) {
             const duration = Date.now() - startTime;
+            
+            // Provide more specific error messages for folder import
+            let errorType: 'validation' | 'network' | 'processing' | 'extraction' = 'processing';
+            let errorMessage = 'Unknown error occurred during folder import';
+            
+            if (error instanceof Error) {
+                const message = error.message;
+                
+                if (message.includes('folder') || message.includes('path') || message.includes('directory')) {
+                    errorType = 'validation';
+                    errorMessage = `Folder access error: ${message}`;
+                } else if (message.includes('permission') || message.includes('access')) {
+                    errorType = 'validation';
+                    errorMessage = `Permission denied: Unable to access the specified folder. Please check folder permissions.`;
+                } else if (message.includes('not found') || message.includes('does not exist')) {
+                    errorType = 'validation';
+                    errorMessage = `Folder not found: The specified folder path does not exist.`;
+                } else if (message.includes('HTML') || message.includes('file')) {
+                    errorType = 'processing';
+                    errorMessage = `File processing error: ${message}`;
+                } else {
+                    errorMessage = message;
+                }
+            }
+            
             const importError: ImportError = {
-                type: 'processing',
-                message: error instanceof Error ? error.message : 'Unknown error',
+                type: errorType,
+                message: errorMessage,
                 timestamp: Date.now()
             };
 
@@ -354,137 +375,6 @@ export class WebsiteImportManager {
     }
 
     /**
-     * Process HTML files for import
-     */
-    async processHtmlFiles(files: File[]): Promise<ProcessedFileData[]> {
-        const results: ProcessedFileData[] = [];
-        
-        for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            
-            try {
-                const parsedData = await this.parseHtmlFile(file);
-                const extractedContent = await this.extractContentFromHtml(parsedData.content);
-                
-                const processedFile: ProcessedFileData = {
-                    name: file.name,
-                    content: parsedData.content,
-                    metadata: {
-                        title: parsedData.title,
-                        lastModified: file.lastModified,
-                        size: file.size
-                    },
-                    extractedData: {
-                        text: extractedContent.text,
-                        links: parsedData.links,
-                        images: parsedData.images,
-                        metadata: parsedData.metadata
-                    }
-                };
-                
-                results.push(processedFile);
-                
-            } catch (error) {
-                console.error(`Failed to process file ${file.name}:`, error);
-                // Continue with other files
-            }
-        }
-        
-        return results;
-    }
-
-    /**
-     * Parse HTML file content
-     */
-    async parseHtmlFile(file: File): Promise<ParsedHtmlData> {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            
-            reader.onload = () => {
-                try {
-                    const content = reader.result as string;
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(content, 'text/html');
-                    
-                    // Extract title
-                    const title = doc.querySelector('title')?.textContent || file.name;
-                    
-                    // Extract links
-                    const links = Array.from(doc.querySelectorAll('a[href]'))
-                        .map(a => a.getAttribute('href'))
-                        .filter((href): href is string => href !== null);
-                    
-                    // Extract images
-                    const images = Array.from(doc.querySelectorAll('img[src]'))
-                        .map(img => img.getAttribute('src'))
-                        .filter((src): src is string => src !== null);
-                    
-                    // Extract metadata
-                    const metadata: Record<string, any> = {};
-                    const metaTags = doc.querySelectorAll('meta');
-                    metaTags.forEach(meta => {
-                        const name = meta.getAttribute('name') || meta.getAttribute('property');
-                        const content = meta.getAttribute('content');
-                        if (name && content) {
-                            metadata[name] = content;
-                        }
-                    });
-                    
-                    resolve({
-                        title,
-                        content,
-                        links,
-                        images,
-                        metadata
-                    });
-                    
-                } catch (error) {
-                    reject(new Error(`Failed to parse HTML: ${error}`));
-                }
-            };
-            
-            reader.onerror = () => {
-                reject(new Error(`Failed to read file: ${file.name}`));
-            };
-            
-            reader.readAsText(file);
-        });
-    }
-
-    /**
-     * Extract text content from HTML
-     */
-    async extractContentFromHtml(html: string): Promise<ExtractedContent> {
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-        
-        // Remove script and style elements
-        const scripts = doc.querySelectorAll('script, style');
-        scripts.forEach(el => el.remove());
-        
-        // Get text content
-        const text = doc.body?.textContent || doc.textContent || '';
-        
-        // Clean up whitespace
-        const cleanText = text.replace(/\s+/g, ' ').trim();
-        
-        // Extract basic metadata - Fixed for TypeScript strict mode
-        const title = doc.querySelector('title')?.textContent || undefined;
-        const description = doc.querySelector('meta[name="description"]')?.getAttribute('content') || undefined;
-        const keywordsContent = doc.querySelector('meta[name="keywords"]')?.getAttribute('content');
-        const keywords = keywordsContent ? keywordsContent.split(',') : undefined;
-        const language = doc.documentElement.getAttribute('lang') || undefined;
-        
-        return {
-            text: cleanText,
-            title,
-            description,
-            keywords,
-            language
-        };
-    }
-
-    /**
      * Validate import options
      */
     validateImportOptions(options: ImportOptions): ValidationResult {
@@ -529,39 +419,75 @@ export class WebsiteImportManager {
     }
 
     /**
-     * Validate file import options
+     * Validate folder import options
      */
-    validateFileImportOptions(options: FileImportOptions): ValidationResult {
+    validateFolderImportOptions(options: FolderImportOptions): ValidationResult {
         const errors: string[] = [];
         const warnings: string[] = [];
 
-        // Validate files
-        if (!options.files || options.files.length === 0) {
-            errors.push('At least one file is required');
+        // Validate folder path
+        if (!options.folderPath || !options.folderPath.trim()) {
+            errors.push('Folder path is required. Please specify a valid folder path containing HTML files.');
         } else {
-            // Check file types
-            const invalidFiles = options.files.filter(file => {
-                const extension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
-                return !SUPPORTED_FILE_TYPES.includes(extension as any);
-            });
-
-            if (invalidFiles.length > 0) {
-                errors.push(`Unsupported file types: ${invalidFiles.map(f => f.name).join(', ')}`);
-            }
-
-            // Check file sizes
-            const maxSize = options.maxFileSize || DEFAULT_MAX_FILE_SIZE;
-            const oversizedFiles = options.files.filter(file => file.size > maxSize);
+            const folderPath = options.folderPath.trim();
             
-            if (oversizedFiles.length > 0) {
-                warnings.push(`Large files may impact performance: ${oversizedFiles.map(f => f.name).join(', ')}`);
+            // Basic path validation
+            if (folderPath.length > 260) {
+                errors.push('Folder path is too long (maximum 260 characters). Please use a shorter path.');
             }
 
-            // Check total size
-            const totalSize = options.files.reduce((sum, file) => sum + file.size, 0);
-            if (totalSize > 500 * 1024 * 1024) { // 500MB
-                warnings.push('Total file size is very large and may impact performance');
+            // Check for invalid characters
+            const invalidChars = /[<>"|?*]/;
+            if (invalidChars.test(folderPath)) {
+                errors.push('Folder path contains invalid characters (<>"|?*). Please use a valid folder path.');
             }
+            
+            // Check for proper path format
+            const windowsPathPattern = /^[A-Za-z]:[\\\/]/;
+            const unixPathPattern = /^[\/~]/;
+            const relativePathPattern = /^[^\/\\:*?"<>|]/;
+            
+            if (!windowsPathPattern.test(folderPath) && 
+                !unixPathPattern.test(folderPath) && 
+                !relativePathPattern.test(folderPath)) {
+                warnings.push('Path format may not be valid for your operating system. Please verify the path.');
+            }
+        }
+
+        // Validate numeric options
+        if (options.limit !== undefined) {
+            if (options.limit < 1 || options.limit > 10000) {
+                errors.push('File limit must be between 1 and 10,000 files.');
+            } else if (options.limit > 1000) {
+                warnings.push('Large file limits may impact performance. Consider processing folders in smaller batches.');
+            }
+        }
+
+        if (options.maxFileSize !== undefined) {
+            if (options.maxFileSize < 1024 || options.maxFileSize > 500 * 1024 * 1024) {
+                errors.push('Maximum file size must be between 1KB and 500MB.');
+            } else if (options.maxFileSize > 50 * 1024 * 1024) {
+                warnings.push('Large file size limits may impact memory usage during import.');
+            }
+        }
+
+        // Validate file types
+        if (options.fileTypes && options.fileTypes.length > 0) {
+            const invalidTypes = options.fileTypes.filter(type => 
+                !SUPPORTED_FILE_TYPES.includes(type as any)
+            );
+            if (invalidTypes.length > 0) {
+                errors.push(`Unsupported file types: ${invalidTypes.join(', ')}`);
+            }
+        }
+
+        // Provide warnings for potentially slow operations
+        if (options.recursive && options.limit && options.limit > 1000) {
+            warnings.push('Large recursive imports may take a long time to complete');
+        }
+
+        if (options.enableIntelligentAnalysis) {
+            warnings.push('AI analysis will increase processing time significantly');
         }
 
         return {
@@ -619,15 +545,6 @@ export class WebsiteImportManager {
         }
 
         return results;
-    }
-
-    /**
-     * Preprocess file data before sending to service worker
-     */
-    preprocessFileData(files: File[], options: FileImportOptions): ProcessedFileData[] {
-        // This will be implemented when we have the actual file processing logic
-        // For now, return empty array as placeholder
-        return [];
     }
 
     // Private helper methods

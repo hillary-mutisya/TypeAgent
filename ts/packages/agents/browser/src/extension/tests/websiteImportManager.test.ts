@@ -515,16 +515,13 @@ describe('WebsiteImportManager Integration', () => {
         });
     });
 
-    test('should handle file import with multiple HTML files', async () => {
-        const htmlFiles = [
-            new File(['<html><head><title>Page 1</title></head><body>Content 1</body></html>'], 'page1.html'),
-            new File(['<html><head><title>Page 2</title></head><body>Content 2</body></html>'], 'page2.html')
-        ];
-
-        const options: FileImportOptions = {
-            files: htmlFiles,
+    test('should handle folder import with HTML files', async () => {
+        const options: FolderImportOptions = {
+            folderPath: '/path/to/html/folder',
             extractContent: true,
-            enableIntelligentAnalysis: true
+            enableIntelligentAnalysis: true,
+            recursive: true,
+            fileTypes: ['.html', '.htm']
         };
 
         mockChrome.runtime.sendMessage.mockResolvedValue({
@@ -532,14 +529,14 @@ describe('WebsiteImportManager Integration', () => {
             itemCount: 2
         });
 
-        const result = await importManager.startFileImport(options);
+        const result = await importManager.startFolderImport(options);
 
         expect(result.success).toBe(true);
         expect(result.itemCount).toBe(2);
         expect(mockChrome.runtime.sendMessage).toHaveBeenCalledWith({
-            type: "importHtmlFiles",
+            type: "importHtmlFolder",
             parameters: {
-                files: expect.any(Array),
+                folderPath: '/path/to/html/folder',
                 options,
                 importId: expect.any(String)
             }

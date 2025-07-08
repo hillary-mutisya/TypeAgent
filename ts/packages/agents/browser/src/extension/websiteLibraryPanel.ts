@@ -6,7 +6,7 @@
 
 import { WebsiteImportManager } from './websiteImportManager';
 import { WebsiteImportUI } from './websiteImportUI';
-import { ImportOptions, FileImportOptions, ImportProgress, ImportResult } from './interfaces/websiteImport.types';
+import { ImportOptions, FolderImportOptions, ImportProgress, ImportResult } from './interfaces/websiteImport.types';
 
 interface FullPageNavigation {
     currentPage: "search" | "discover" | "analytics";
@@ -283,7 +283,7 @@ class WebsiteLibraryPanelFullPage {
 
         if (importFromFileBtn) {
             importFromFileBtn.addEventListener('click', () => {
-                this.showFileImportModal();
+                this.showFolderImportModal();
             });
         }
 
@@ -298,9 +298,9 @@ class WebsiteLibraryPanelFullPage {
             await this.handleWebActivityImport(options);
         });
 
-        window.addEventListener('startFileImport', async (event: any) => {
-            const options = event.detail as FileImportOptions;
-            await this.handleFileImport(options);
+        window.addEventListener('startFolderImport', async (event: any) => {
+            const options = event.detail as FolderImportOptions;
+            await this.handleFolderImport(options);
         });
 
         window.addEventListener('cancelImport', () => {
@@ -1924,8 +1924,8 @@ class WebsiteLibraryPanelFullPage {
         this.importUI.showWebActivityImportModal();
     }
 
-    public showFileImportModal() {
-        this.importUI.showFileImportModal();
+    public showFolderImportModal() {
+        this.importUI.showFolderImportModal();
     }
 
     // Import handling methods
@@ -1950,17 +1950,17 @@ class WebsiteLibraryPanelFullPage {
         }
     }
 
-    private async handleFileImport(options: FileImportOptions): Promise<void> {
+    private async handleFolderImport(options: FolderImportOptions): Promise<void> {
         try {
             this.importUI.showImportProgress({
-                importId: 'file-import',
+                importId: 'folder-import',
                 phase: 'initializing',
-                totalItems: options.files.length,
+                totalItems: 0, // Will be updated when folder is enumerated
                 processedItems: 0,
                 errors: []
             });
 
-            const result = await this.importManager.startFileImport(options);
+            const result = await this.importManager.startFolderImport(options);
             this.importUI.showImportComplete(result);
         } catch (error) {
             this.importUI.showImportError({

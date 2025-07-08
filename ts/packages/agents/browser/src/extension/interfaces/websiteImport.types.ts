@@ -21,16 +21,19 @@ export interface ImportOptions {
     contentTimeout?: number;
 }
 
-// File import specific options
-export interface FileImportOptions {
-    files: File[];
+// Folder import specific options
+export interface FolderImportOptions {
+    folderPath: string;
     extractContent?: boolean;
     enableIntelligentAnalysis?: boolean;
     enableActionDetection?: boolean;
     extractionMode?: "basic" | "content" | "actions" | "full";
-    allowedTypes?: string[];
-    maxFileSize?: number;
     preserveStructure?: boolean;
+    recursive?: boolean;
+    fileTypes?: string[];
+    limit?: number;
+    maxFileSize?: number;
+    skipHidden?: boolean;
 }
 
 // Progress tracking for imports
@@ -44,12 +47,13 @@ export interface ImportProgress {
     errors: ImportError[];
 }
 
-// Extended progress for file imports
-export interface FileImportProgress extends ImportProgress {
+// Extended progress for folder imports
+export interface FolderImportProgress extends ImportProgress {
     currentFile?: string;
     filesProcessed: number;
     totalFiles: number;
     failedFiles: string[];
+    folderPath: string;
 }
 
 // Import operation results
@@ -87,6 +91,13 @@ export interface ValidationResult {
     warnings: string[];
 }
 
+// Folder validation results  
+export interface FolderValidationResult extends ValidationResult {
+    folderPath?: string;
+    fileCount?: number;
+    estimatedSize?: number;
+}
+
 // Browser data structures
 export interface BrowserBookmark {
     id: string;
@@ -117,23 +128,6 @@ export interface ProcessedData {
     lastVisited?: string;
     extractedContent?: string;
     metadata: Record<string, any>;
-}
-
-export interface ProcessedFileData {
-    name: string;
-    content: string;
-    metadata: {
-        title?: string;
-        url?: string;
-        lastModified?: number;
-        size: number;
-    };
-    extractedData: {
-        text: string;
-        links: string[];
-        images: string[];
-        metadata: Record<string, any>;
-    };
 }
 
 // HTML parsing results
@@ -168,11 +162,11 @@ export interface ImportWebsiteDataMessage {
     importId: string;
 }
 
-export interface ImportHtmlFilesMessage {
-    type: "importHtmlFiles";
+export interface ImportHtmlFolderMessage {
+    type: "importHtmlFolder";
     parameters: {
-        files: ProcessedFileData[];
-        options: FileImportOptions;
+        folderPath: string;
+        options: FolderImportOptions;
         importId: string;
     };
 }
@@ -201,3 +195,6 @@ export const DEFAULT_MAX_CONCURRENT = 5;
 export const DEFAULT_CONTENT_TIMEOUT = 30000; // 30 seconds
 
 export type SupportedFileType = typeof SUPPORTED_FILE_TYPES[number];
+
+// Re-export folder import types
+export * from './folderImport.types';

@@ -39,7 +39,13 @@ export interface FolderImportOptions {
 // Progress tracking for imports
 export interface ImportProgress {
     importId: string;
-    phase: 'initializing' | 'fetching' | 'processing' | 'extracting' | 'complete' | 'error';
+    phase:
+        | "initializing"
+        | "fetching"
+        | "processing"
+        | "extracting"
+        | "complete"
+        | "error";
     totalItems: number;
     processedItems: number;
     currentItem?: string;
@@ -68,7 +74,7 @@ export interface ImportResult {
 
 // Error information
 export interface ImportError {
-    type: 'validation' | 'network' | 'processing' | 'extraction';
+    type: "validation" | "network" | "processing" | "extraction";
     message: string;
     url?: string;
     timestamp: number;
@@ -91,7 +97,7 @@ export interface ValidationResult {
     warnings: string[];
 }
 
-// Folder validation results  
+// Folder validation results
 export interface FolderValidationResult extends ValidationResult {
     folderPath?: string;
     fileCount?: number;
@@ -189,12 +195,12 @@ export interface ProcessedHtmlFile {
 }
 
 // Constants
-export const SUPPORTED_FILE_TYPES = ['.html', '.htm', '.mhtml'] as const;
+export const SUPPORTED_FILE_TYPES = [".html", ".htm", ".mhtml"] as const;
 export const DEFAULT_MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 export const DEFAULT_MAX_CONCURRENT = 5;
 export const DEFAULT_CONTENT_TIMEOUT = 30000; // 30 seconds
 
-export type SupportedFileType = typeof SUPPORTED_FILE_TYPES[number];
+export type SupportedFileType = (typeof SUPPORTED_FILE_TYPES)[number];
 
 // Re-export folder import types
-export * from './folderImport.types';
+export * from "./folderImport.types";

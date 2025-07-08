@@ -11,18 +11,19 @@ import {
     ImportError,
     ValidationResult,
     SUPPORTED_FILE_TYPES,
-    DEFAULT_MAX_FILE_SIZE
-} from './interfaces/websiteImport.types';
+    DEFAULT_MAX_FILE_SIZE,
+} from "./interfaces/websiteImport.types";
 
 /**
  * UI components and modal management for website import functionality
  * Handles both web activity import (browser data) and file import operations
  */
 export class WebsiteImportUI {
-    private webActivityModalId = 'webActivityImportModal';
-    private folderImportModalId = 'folderImportModal';
+    private webActivityModalId = "webActivityImportModal";
+    private folderImportModalId = "folderImportModal";
     private activeModal: string | null = null;
-    private progressCallback: ((progress: ImportProgress) => void) | null = null;
+    private progressCallback: ((progress: ImportProgress) => void) | null =
+        null;
     private completionCallback: ((result: ImportResult) => void) | null = null;
     private errorCallback: ((error: ImportError) => void) | null = null;
 
@@ -65,14 +66,17 @@ export class WebsiteImportUI {
      * Show import progress in the active modal with smooth transitions
      */
     public showImportProgress(progress: ImportProgress): void {
-        const modalElement = document.getElementById(this.activeModal || '');
+        const modalElement = document.getElementById(this.activeModal || "");
         if (!modalElement) return;
 
-        const progressContainer = modalElement.querySelector('#importProgress');
-        const formContainer = modalElement.querySelector('#importForm');
-        
+        const progressContainer = modalElement.querySelector("#importProgress");
+        const formContainer = modalElement.querySelector("#importForm");
+
         if (progressContainer && formContainer) {
-            this.transitionToProgress(formContainer as HTMLElement, progressContainer as HTMLElement);
+            this.transitionToProgress(
+                formContainer as HTMLElement,
+                progressContainer as HTMLElement,
+            );
             this.updateImportProgress(progress);
         }
     }
@@ -80,19 +84,22 @@ export class WebsiteImportUI {
     /**
      * Enhanced form state transitions with animations
      */
-    private transitionToProgress(formContainer: HTMLElement, progressContainer: HTMLElement): void {
+    private transitionToProgress(
+        formContainer: HTMLElement,
+        progressContainer: HTMLElement,
+    ): void {
         // Fade out form
-        formContainer.classList.add('fade-out');
-        
+        formContainer.classList.add("fade-out");
+
         setTimeout(() => {
-            formContainer.classList.add('d-none');
-            progressContainer.classList.remove('d-none');
-            progressContainer.classList.add('fade-in');
-            
+            formContainer.classList.add("d-none");
+            progressContainer.classList.remove("d-none");
+            progressContainer.classList.add("fade-in");
+
             // Clean up animation classes
             setTimeout(() => {
-                formContainer.classList.remove('fade-out');
-                progressContainer.classList.remove('fade-in');
+                formContainer.classList.remove("fade-out");
+                progressContainer.classList.remove("fade-in");
             }, 300);
         }, 300);
     }
@@ -101,61 +108,72 @@ export class WebsiteImportUI {
      * Update import progress display with enhanced animations
      */
     public updateImportProgress(progress: ImportProgress): void {
-        const modalElement = document.getElementById(this.activeModal || '');
+        const modalElement = document.getElementById(this.activeModal || "");
         if (!modalElement) return;
 
-        const statusElement = modalElement.querySelector('#importStatusMessage');
-        const progressBar = modalElement.querySelector('#importProgressBar') as HTMLElement;
-        const progressText = modalElement.querySelector('#importProgressText');
-        
+        const statusElement = modalElement.querySelector(
+            "#importStatusMessage",
+        );
+        const progressBar = modalElement.querySelector(
+            "#importProgressBar",
+        ) as HTMLElement;
+        const progressText = modalElement.querySelector("#importProgressText");
+
         // Animate status text changes
         if (statusElement) {
             const phaseMessages: Record<string, string> = {
-                'initializing': 'Preparing import...',
-                'fetching': 'Fetching browser data...',
-                'processing': 'Processing items...',
-                'extracting': 'Extracting content...',
-                'complete': 'Import complete!',
-                'error': 'Import failed'
+                initializing: "Preparing import...",
+                fetching: "Fetching browser data...",
+                processing: "Processing items...",
+                extracting: "Extracting content...",
+                complete: "Import complete!",
+                error: "Import failed",
             };
-            
+
             let newMessage = phaseMessages[progress.phase] || progress.phase;
             if (progress.currentItem) {
                 newMessage += ` (${progress.currentItem.substring(0, 50)}...)`;
             }
-            
+
             // Animate text update
-            statusElement.classList.add('status-updating');
+            statusElement.classList.add("status-updating");
             statusElement.textContent = newMessage;
-            
+
             setTimeout(() => {
-                statusElement.classList.remove('status-updating');
+                statusElement.classList.remove("status-updating");
             }, 200);
         }
 
         // Enhanced progress bar animation
         if (progressBar && progress.totalItems > 0) {
-            const percentage = Math.round((progress.processedItems / progress.totalItems) * 100);
-            
+            const percentage = Math.round(
+                (progress.processedItems / progress.totalItems) * 100,
+            );
+
             // Smooth progress bar animation
-            progressBar.style.transition = 'width 0.3s ease-in-out';
+            progressBar.style.transition = "width 0.3s ease-in-out";
             progressBar.style.width = `${percentage}%`;
-            progressBar.setAttribute('aria-valuenow', percentage.toString());
-            
+            progressBar.setAttribute("aria-valuenow", percentage.toString());
+
             // Add pulse effect for active progress
-            if (progress.phase === 'processing' || progress.phase === 'extracting') {
-                progressBar.classList.add('progress-pulse');
+            if (
+                progress.phase === "processing" ||
+                progress.phase === "extracting"
+            ) {
+                progressBar.classList.add("progress-pulse");
             } else {
-                progressBar.classList.remove('progress-pulse');
+                progressBar.classList.remove("progress-pulse");
             }
         }
 
         // Update progress text
         if (progressText) {
             progressText.textContent = `${progress.processedItems} / ${progress.totalItems} items`;
-            
+
             if (progress.estimatedTimeRemaining) {
-                const minutes = Math.ceil(progress.estimatedTimeRemaining / 60000);
+                const minutes = Math.ceil(
+                    progress.estimatedTimeRemaining / 60000,
+                );
                 progressText.textContent += ` (${minutes}m remaining)`;
             }
         }
@@ -169,15 +187,18 @@ export class WebsiteImportUI {
      * Show import completion result
      */
     public showImportComplete(result: ImportResult): void {
-        const modalElement = document.getElementById(this.activeModal || '');
+        const modalElement = document.getElementById(this.activeModal || "");
         if (!modalElement) return;
 
-        const progressContainer = modalElement.querySelector('#importProgress');
+        const progressContainer = modalElement.querySelector("#importProgress");
         if (progressContainer) {
-            const isFolderImport = this.activeModal === this.folderImportModalId;
-            const iconClass = isFolderImport ? 'bi-check2-circle' : 'bi-check-circle';
-            const successColor = isFolderImport ? 'success' : 'primary';
-            
+            const isFolderImport =
+                this.activeModal === this.folderImportModalId;
+            const iconClass = isFolderImport
+                ? "bi-check2-circle"
+                : "bi-check-circle";
+            const successColor = isFolderImport ? "success" : "primary";
+
             const successHtml = `
                 <div class="text-center">
                     <div class="text-${successColor} mb-3">
@@ -186,7 +207,9 @@ export class WebsiteImportUI {
                     <h5 class="text-${successColor}">Import Complete!</h5>
                     <p class="mb-3">Successfully imported <strong>${result.itemCount}</strong> items.</p>
                     
-                    ${result.summary ? `
+                    ${
+                        result.summary
+                            ? `
                         <div class="import-summary bg-light rounded p-3 mb-3">
                             <div class="row text-center">
                                 <div class="col-3">
@@ -207,7 +230,9 @@ export class WebsiteImportUI {
                                 </div>
                             </div>
                         </div>
-                    ` : ''}
+                    `
+                            : ""
+                    }
                     
                     <div class="d-flex gap-2 justify-content-center">
                         <button id="viewImportedData" class="btn btn-outline-${successColor}">
@@ -219,25 +244,25 @@ export class WebsiteImportUI {
                     </div>
                 </div>
             `;
-            
+
             progressContainer.innerHTML = successHtml;
         }
 
         // Setup button event listeners
-        const closeButton = modalElement.querySelector('#closeModal');
-        const viewDataButton = modalElement.querySelector('#viewImportedData');
-        
+        const closeButton = modalElement.querySelector("#closeModal");
+        const viewDataButton = modalElement.querySelector("#viewImportedData");
+
         if (closeButton) {
-            closeButton.addEventListener('click', () => {
+            closeButton.addEventListener("click", () => {
                 this.hideActiveModal();
             });
         }
 
         if (viewDataButton) {
-            viewDataButton.addEventListener('click', () => {
+            viewDataButton.addEventListener("click", () => {
                 this.hideActiveModal();
                 // Navigate to search page to view imported data
-                window.dispatchEvent(new CustomEvent('navigateToSearch'));
+                window.dispatchEvent(new CustomEvent("navigateToSearch"));
             });
         }
 
@@ -250,46 +275,61 @@ export class WebsiteImportUI {
      * Show import error
      */
     public showImportError(error: ImportError): void {
-        const modalElement = document.getElementById(this.activeModal || '');
+        const modalElement = document.getElementById(this.activeModal || "");
         if (!modalElement) return;
 
-        const progressContainer = modalElement.querySelector('#importProgress');
+        const progressContainer = modalElement.querySelector("#importProgress");
         if (progressContainer) {
-            const isFolderImport = this.activeModal === this.folderImportModalId;
-            
+            const isFolderImport =
+                this.activeModal === this.folderImportModalId;
+
             const errorTypeMessages: Record<string, string> = {
-                'validation': isFolderImport 
-                    ? 'Please check your folder path and import settings, then try again.'
-                    : 'Please check your import settings and try again.',
-                'network': 'Please check your internet connection and try again.',
-                'processing': isFolderImport
-                    ? 'There was an issue processing files in the folder. Some files may be corrupted or in an unsupported format.'
-                    : 'There was an issue processing the data.',
-                'extraction': isFolderImport
-                    ? 'Content extraction failed for some HTML files. The files may be corrupted or have unusual formatting.'
-                    : 'Content extraction failed for some items.'
+                validation: isFolderImport
+                    ? "Please check your folder path and import settings, then try again."
+                    : "Please check your import settings and try again.",
+                network: "Please check your internet connection and try again.",
+                processing: isFolderImport
+                    ? "There was an issue processing files in the folder. Some files may be corrupted or in an unsupported format."
+                    : "There was an issue processing the data.",
+                extraction: isFolderImport
+                    ? "Content extraction failed for some HTML files. The files may be corrupted or have unusual formatting."
+                    : "Content extraction failed for some items.",
             };
 
-            const suggestion = errorTypeMessages[error.type] || 'Please try again or contact support if the issue persists.';
-            
+            const suggestion =
+                errorTypeMessages[error.type] ||
+                "Please try again or contact support if the issue persists.";
+
             // Provide specific suggestions for folder import errors
-            let additionalHelp = '';
+            let additionalHelp = "";
             if (isFolderImport) {
-                if (error.message.includes('permission') || error.message.includes('access')) {
-                    additionalHelp = '<br><small><strong>Tip:</strong> Ensure the folder is not read-only and you have permission to access it.</small>';
-                } else if (error.message.includes('not found') || error.message.includes('does not exist')) {
-                    additionalHelp = '<br><small><strong>Tip:</strong> Verify the folder path exists and is spelled correctly.</small>';
-                } else if (error.message.includes('HTML') || error.message.includes('file')) {
-                    additionalHelp = '<br><small><strong>Tip:</strong> Ensure the folder contains valid HTML files (.html, .htm, .mhtml).</small>';
+                if (
+                    error.message.includes("permission") ||
+                    error.message.includes("access")
+                ) {
+                    additionalHelp =
+                        "<br><small><strong>Tip:</strong> Ensure the folder is not read-only and you have permission to access it.</small>";
+                } else if (
+                    error.message.includes("not found") ||
+                    error.message.includes("does not exist")
+                ) {
+                    additionalHelp =
+                        "<br><small><strong>Tip:</strong> Verify the folder path exists and is spelled correctly.</small>";
+                } else if (
+                    error.message.includes("HTML") ||
+                    error.message.includes("file")
+                ) {
+                    additionalHelp =
+                        "<br><small><strong>Tip:</strong> Ensure the folder contains valid HTML files (.html, .htm, .mhtml).</small>";
                 }
             }
-            
+
             const errorHtml = `
                 <div class="text-center">
                     <div class="text-danger mb-3">
                         <i class="bi bi-x-circle fs-1"></i>
                     </div>
-                    <h5 class="text-danger">${isFolderImport ? 'Folder Import Failed' : 'Import Failed'}</h5>
+                    <h5 class="text-danger">${isFolderImport ? "Folder Import Failed" : "Import Failed"}</h5>
                     <div class="alert alert-danger text-start" role="alert">
                         <strong>Error:</strong> ${error.message}<br>
                         <small class="text-muted">${suggestion}${additionalHelp}</small>
@@ -304,29 +344,30 @@ export class WebsiteImportUI {
                     </div>
                 </div>
             `;
-            
+
             progressContainer.innerHTML = errorHtml;
         }
 
         // Setup button handlers
-        const closeButton = modalElement.querySelector('#closeModal');
-        const retryButton = modalElement.querySelector('#retryImport');
-        
+        const closeButton = modalElement.querySelector("#closeModal");
+        const retryButton = modalElement.querySelector("#retryImport");
+
         if (closeButton) {
-            closeButton.addEventListener('click', () => {
+            closeButton.addEventListener("click", () => {
                 this.hideActiveModal();
             });
         }
 
         if (retryButton) {
-            retryButton.addEventListener('click', () => {
+            retryButton.addEventListener("click", () => {
                 // Reset to form view
-                const formContainer = modalElement.querySelector('#importForm');
-                const progressContainer = modalElement.querySelector('#importProgress');
-                
+                const formContainer = modalElement.querySelector("#importForm");
+                const progressContainer =
+                    modalElement.querySelector("#importProgress");
+
                 if (formContainer && progressContainer) {
-                    progressContainer.classList.add('d-none');
-                    formContainer.classList.remove('d-none');
+                    progressContainer.classList.add("d-none");
+                    formContainer.classList.remove("d-none");
                 }
             });
         }
@@ -343,36 +384,63 @@ export class WebsiteImportUI {
         const modal = document.getElementById(this.webActivityModalId);
         if (!modal) return null;
 
-        const selectedBrowser = modal.querySelector('[data-browser].selected');
-        const selectedType = modal.querySelector('[data-type].selected');
+        const selectedBrowser = modal.querySelector("[data-browser].selected");
+        const selectedType = modal.querySelector("[data-type].selected");
 
         if (!selectedBrowser || !selectedType) {
             return null;
         }
 
-        const source = selectedBrowser.getAttribute('data-browser') as 'chrome' | 'edge';
-        const type = selectedType.getAttribute('data-type') as 'bookmarks' | 'history';
+        const source = selectedBrowser.getAttribute("data-browser") as
+            | "chrome"
+            | "edge";
+        const type = selectedType.getAttribute("data-type") as
+            | "bookmarks"
+            | "history";
 
         // Get form values
-        const limitInput = modal.querySelector('#importLimit') as HTMLInputElement;
-        const daysBackInput = modal.querySelector('#daysBack') as HTMLInputElement;
-        const folderInput = modal.querySelector('#bookmarkFolder') as HTMLInputElement;
-        const extractContentInput = modal.querySelector('#extractContent') as HTMLInputElement;
-        const intelligentAnalysisInput = modal.querySelector('#enableIntelligentAnalysis') as HTMLInputElement;
-        const actionDetectionInput = modal.querySelector('#enableActionDetection') as HTMLInputElement;
-        const extractionModeInput = modal.querySelector('#extractionMode') as HTMLSelectElement;
-        const maxConcurrentInput = modal.querySelector('#maxConcurrent') as HTMLInputElement;
-        const contentTimeoutInput = modal.querySelector('#contentTimeout') as HTMLInputElement;
+        const limitInput = modal.querySelector(
+            "#importLimit",
+        ) as HTMLInputElement;
+        const daysBackInput = modal.querySelector(
+            "#daysBack",
+        ) as HTMLInputElement;
+        const folderInput = modal.querySelector(
+            "#bookmarkFolder",
+        ) as HTMLInputElement;
+        const extractContentInput = modal.querySelector(
+            "#extractContent",
+        ) as HTMLInputElement;
+        const intelligentAnalysisInput = modal.querySelector(
+            "#enableIntelligentAnalysis",
+        ) as HTMLInputElement;
+        const actionDetectionInput = modal.querySelector(
+            "#enableActionDetection",
+        ) as HTMLInputElement;
+        const extractionModeInput = modal.querySelector(
+            "#extractionMode",
+        ) as HTMLSelectElement;
+        const maxConcurrentInput = modal.querySelector(
+            "#maxConcurrent",
+        ) as HTMLInputElement;
+        const contentTimeoutInput = modal.querySelector(
+            "#contentTimeout",
+        ) as HTMLInputElement;
 
         const options: ImportOptions = {
             source,
             type,
             extractContent: extractContentInput?.checked ?? true,
-            enableIntelligentAnalysis: intelligentAnalysisInput?.checked ?? true,
+            enableIntelligentAnalysis:
+                intelligentAnalysisInput?.checked ?? true,
             enableActionDetection: actionDetectionInput?.checked ?? false,
-            extractionMode: (extractionModeInput?.value as any) ?? 'content',
-            maxConcurrent: maxConcurrentInput?.value ? parseInt(maxConcurrentInput.value) : 5,
-            contentTimeout: contentTimeoutInput?.value ? parseInt(contentTimeoutInput.value) * 1000 : 30000
+            extractionMode: (extractionModeInput?.value as any) ?? "content",
+            maxConcurrent: maxConcurrentInput?.value
+                ? parseInt(maxConcurrentInput.value)
+                : 5,
+            contentTimeout: contentTimeoutInput?.value
+                ? parseInt(contentTimeoutInput.value) * 1000
+                : 30000,
         };
 
         // Add optional parameters
@@ -380,11 +448,11 @@ export class WebsiteImportUI {
             options.limit = parseInt(limitInput.value);
         }
 
-        if (type === 'history' && daysBackInput?.value) {
+        if (type === "history" && daysBackInput?.value) {
             options.days = parseInt(daysBackInput.value);
         }
 
-        if (type === 'bookmarks' && folderInput?.value) {
+        if (type === "bookmarks" && folderInput?.value) {
             options.folder = folderInput.value.trim();
         }
 
@@ -398,32 +466,53 @@ export class WebsiteImportUI {
         const modal = document.getElementById(this.folderImportModalId);
         if (!modal) return null;
 
-        const folderPathInput = modal.querySelector('#folderPath') as HTMLInputElement;
+        const folderPathInput = modal.querySelector(
+            "#folderPath",
+        ) as HTMLInputElement;
         if (!folderPathInput?.value.trim()) {
             return null;
         }
 
         // Get form values
-        const extractContentInput = modal.querySelector('#folderExtractContent') as HTMLInputElement;
-        const intelligentAnalysisInput = modal.querySelector('#folderIntelligentAnalysis') as HTMLInputElement;
-        const actionDetectionInput = modal.querySelector('#folderActionDetection') as HTMLInputElement;
-        const extractionModeInput = modal.querySelector('#folderExtractionMode') as HTMLSelectElement;
-        const preserveStructureInput = modal.querySelector('#preserveStructure') as HTMLInputElement;
-        const recursiveInput = modal.querySelector('#recursive') as HTMLInputElement;
-        const limitInput = modal.querySelector('#fileLimit') as HTMLInputElement;
-        const maxFileSizeInput = modal.querySelector('#maxFileSize') as HTMLInputElement;
-        const skipHiddenInput = modal.querySelector('#skipHidden') as HTMLInputElement;
+        const extractContentInput = modal.querySelector(
+            "#folderExtractContent",
+        ) as HTMLInputElement;
+        const intelligentAnalysisInput = modal.querySelector(
+            "#folderIntelligentAnalysis",
+        ) as HTMLInputElement;
+        const actionDetectionInput = modal.querySelector(
+            "#folderActionDetection",
+        ) as HTMLInputElement;
+        const extractionModeInput = modal.querySelector(
+            "#folderExtractionMode",
+        ) as HTMLSelectElement;
+        const preserveStructureInput = modal.querySelector(
+            "#preserveStructure",
+        ) as HTMLInputElement;
+        const recursiveInput = modal.querySelector(
+            "#recursive",
+        ) as HTMLInputElement;
+        const limitInput = modal.querySelector(
+            "#fileLimit",
+        ) as HTMLInputElement;
+        const maxFileSizeInput = modal.querySelector(
+            "#maxFileSize",
+        ) as HTMLInputElement;
+        const skipHiddenInput = modal.querySelector(
+            "#skipHidden",
+        ) as HTMLInputElement;
 
         const options: FolderImportOptions = {
             folderPath: folderPathInput.value.trim(),
             extractContent: extractContentInput?.checked ?? true,
-            enableIntelligentAnalysis: intelligentAnalysisInput?.checked ?? true,
+            enableIntelligentAnalysis:
+                intelligentAnalysisInput?.checked ?? true,
             enableActionDetection: actionDetectionInput?.checked ?? false,
-            extractionMode: (extractionModeInput?.value as any) ?? 'content',
+            extractionMode: (extractionModeInput?.value as any) ?? "content",
             preserveStructure: preserveStructureInput?.checked ?? true,
             recursive: recursiveInput?.checked ?? true,
-            fileTypes: ['.html', '.htm', '.mhtml'],
-            skipHidden: skipHiddenInput?.checked ?? true
+            fileTypes: [".html", ".htm", ".mhtml"],
+            skipHidden: skipHiddenInput?.checked ?? true,
         };
 
         // Add optional numeric parameters
@@ -432,7 +521,8 @@ export class WebsiteImportUI {
         }
 
         if (maxFileSizeInput?.value) {
-            options.maxFileSize = parseInt(maxFileSizeInput.value) * 1024 * 1024; // Convert MB to bytes
+            options.maxFileSize =
+                parseInt(maxFileSizeInput.value) * 1024 * 1024; // Convert MB to bytes
         }
 
         return options;
@@ -442,18 +532,22 @@ export class WebsiteImportUI {
      * Validate import form
      */
     public validateImportForm(): boolean {
-        const modal = document.getElementById(this.activeModal || '');
+        const modal = document.getElementById(this.activeModal || "");
         if (!modal) return false;
 
         if (this.activeModal === this.webActivityModalId) {
-            const selectedBrowser = modal.querySelector('[data-browser].selected');
-            const selectedType = modal.querySelector('[data-type].selected');
+            const selectedBrowser = modal.querySelector(
+                "[data-browser].selected",
+            );
+            const selectedType = modal.querySelector("[data-type].selected");
             return !!(selectedBrowser && selectedType);
         }
 
         if (this.activeModal === this.folderImportModalId) {
-            const folderPathInput = modal.querySelector('#folderPath') as HTMLInputElement;
-            return !!(folderPathInput?.value.trim());
+            const folderPathInput = modal.querySelector(
+                "#folderPath",
+            ) as HTMLInputElement;
+            return !!folderPathInput?.value.trim();
         }
 
         return false;
@@ -462,12 +556,14 @@ export class WebsiteImportUI {
     /**
      * Validate folder path for import
      */
-    public async validateFolderPath(folderPath: string): Promise<ValidationResult> {
+    public async validateFolderPath(
+        folderPath: string,
+    ): Promise<ValidationResult> {
         const errors: string[] = [];
         const warnings: string[] = [];
 
         if (!folderPath || !folderPath.trim()) {
-            errors.push('Folder path is required.');
+            errors.push("Folder path is required.");
             return { isValid: false, errors, warnings };
         }
 
@@ -475,13 +571,13 @@ export class WebsiteImportUI {
 
         // Basic path validation
         if (trimmedPath.length > 260) {
-            errors.push('Folder path is too long (maximum 260 characters).');
+            errors.push("Folder path is too long (maximum 260 characters).");
         }
 
         // Check for invalid characters (basic validation)
         const invalidChars = /[<>"|?*]/;
         if (invalidChars.test(trimmedPath)) {
-            errors.push('Folder path contains invalid characters.');
+            errors.push("Folder path contains invalid characters.");
         }
 
         // Since we can't directly access the file system from browser extension,
@@ -490,21 +586,27 @@ export class WebsiteImportUI {
         const unixPathPattern = /^\/(.+\/)*[^\/]*$/;
         const relativePathPattern = /^[^\/\\:*?"<>|]+([\/\\][^\/\\:*?"<>|]+)*$/;
 
-        if (!windowsPathPattern.test(trimmedPath) && 
-            !unixPathPattern.test(trimmedPath) && 
-            !relativePathPattern.test(trimmedPath)) {
-            warnings.push('Please ensure the folder path is valid for your operating system.');
+        if (
+            !windowsPathPattern.test(trimmedPath) &&
+            !unixPathPattern.test(trimmedPath) &&
+            !relativePathPattern.test(trimmedPath)
+        ) {
+            warnings.push(
+                "Please ensure the folder path is valid for your operating system.",
+            );
         }
 
         // Provide helpful examples
         if (errors.length === 0) {
-            warnings.push('The folder will be validated when import starts. Ensure you have read permissions.');
+            warnings.push(
+                "The folder will be validated when import starts. Ensure you have read permissions.",
+            );
         }
 
         return {
             isValid: errors.length === 0,
             errors,
-            warnings
+            warnings,
         };
     }
 
@@ -515,25 +617,27 @@ export class WebsiteImportUI {
         const modal = document.getElementById(this.folderImportModalId);
         if (!modal) return;
 
-        const feedbackContainer = modal.querySelector('#folderValidationFeedback');
+        const feedbackContainer = modal.querySelector(
+            "#folderValidationFeedback",
+        );
         if (!feedbackContainer) return;
 
         if (!validation.isValid) {
             feedbackContainer.innerHTML = `
                 <div class="alert alert-danger alert-sm">
                     <i class="bi bi-exclamation-triangle"></i>
-                    ${validation.errors.join('<br>')}
+                    ${validation.errors.join("<br>")}
                 </div>
             `;
         } else if (validation.warnings.length > 0) {
             feedbackContainer.innerHTML = `
                 <div class="alert alert-warning alert-sm">
                     <i class="bi bi-info-circle"></i>
-                    ${validation.warnings.join('<br>')}
+                    ${validation.warnings.join("<br>")}
                 </div>
             `;
         } else {
-            feedbackContainer.innerHTML = '';
+            feedbackContainer.innerHTML = "";
         }
     }
 
@@ -544,8 +648,12 @@ export class WebsiteImportUI {
         const modal = document.getElementById(this.folderImportModalId);
         if (!modal) return;
 
-        const folderPathInput = modal.querySelector('#folderPath') as HTMLInputElement;
-        const startButton = modal.querySelector('#startFolderImport') as HTMLButtonElement;
+        const folderPathInput = modal.querySelector(
+            "#folderPath",
+        ) as HTMLInputElement;
+        const startButton = modal.querySelector(
+            "#startFolderImport",
+        ) as HTMLButtonElement;
 
         if (startButton) {
             startButton.disabled = !folderPathInput?.value.trim();
@@ -555,7 +663,9 @@ export class WebsiteImportUI {
     /**
      * Set progress update callback
      */
-    public onProgressUpdate(callback: (progress: ImportProgress) => void): void {
+    public onProgressUpdate(
+        callback: (progress: ImportProgress) => void,
+    ): void {
         this.progressCallback = callback;
     }
 
@@ -574,16 +684,16 @@ export class WebsiteImportUI {
     }
 
     // Private helper methods
-    
+
     /**
      * Create web activity import modal
      */
     private createWebActivityModal(): void {
-        const modalDiv = document.createElement('div');
-        modalDiv.className = 'modal fade';
+        const modalDiv = document.createElement("div");
+        modalDiv.className = "modal fade";
         modalDiv.id = this.webActivityModalId;
-        modalDiv.setAttribute('tabindex', '-1');
-        
+        modalDiv.setAttribute("tabindex", "-1");
+
         modalDiv.innerHTML = `
             <div class="modal-dialog modal-lg">
                 <div class="modal-content">
@@ -791,11 +901,11 @@ export class WebsiteImportUI {
      * Create folder import modal
      */
     private createFolderImportModal(): void {
-        const modalDiv = document.createElement('div');
-        modalDiv.className = 'modal fade';
+        const modalDiv = document.createElement("div");
+        modalDiv.className = "modal fade";
         modalDiv.id = this.folderImportModalId;
-        modalDiv.setAttribute('tabindex', '-1');
-        
+        modalDiv.setAttribute("tabindex", "-1");
+
         modalDiv.innerHTML = `
             <div class="modal-dialog modal-lg">
                 <div class="modal-content">
@@ -1006,55 +1116,61 @@ export class WebsiteImportUI {
         if (!modal) return;
 
         // Browser selection
-        const browserOptions = modal.querySelectorAll('[data-browser]');
-        browserOptions.forEach(option => {
-            option.addEventListener('click', () => {
-                browserOptions.forEach(opt => opt.classList.remove('selected'));
-                option.classList.add('selected');
+        const browserOptions = modal.querySelectorAll("[data-browser]");
+        browserOptions.forEach((option) => {
+            option.addEventListener("click", () => {
+                browserOptions.forEach((opt) =>
+                    opt.classList.remove("selected"),
+                );
+                option.classList.add("selected");
                 this.updateWebActivityFormState();
             });
         });
 
         // Data type selection
-        const typeOptions = modal.querySelectorAll('[data-type]');
-        typeOptions.forEach(option => {
-            option.addEventListener('click', () => {
-                typeOptions.forEach(opt => opt.classList.remove('selected'));
-                option.classList.add('selected');
+        const typeOptions = modal.querySelectorAll("[data-type]");
+        typeOptions.forEach((option) => {
+            option.addEventListener("click", () => {
+                typeOptions.forEach((opt) => opt.classList.remove("selected"));
+                option.classList.add("selected");
                 this.updateWebActivityFormState();
             });
         });
 
         // Form inputs
-        const formInputs = modal.querySelectorAll('input, select');
-        formInputs.forEach(input => {
-            input.addEventListener('change', () => {
+        const formInputs = modal.querySelectorAll("input, select");
+        formInputs.forEach((input) => {
+            input.addEventListener("change", () => {
                 this.updateWebActivityFormState();
             });
         });
 
         // Start import button
-        const startButton = modal.querySelector('#startWebActivityImport');
+        const startButton = modal.querySelector("#startWebActivityImport");
         if (startButton) {
-            startButton.addEventListener('click', () => {
+            startButton.addEventListener("click", () => {
                 const options = this.getWebActivityImportOptions();
                 if (options) {
-                    window.dispatchEvent(new CustomEvent('startWebActivityImport', { 
-                        detail: options 
-                    }));
+                    window.dispatchEvent(
+                        new CustomEvent("startWebActivityImport", {
+                            detail: options,
+                        }),
+                    );
                 }
             });
         }
 
         // Cancel buttons
-        const cancelButtons = modal.querySelectorAll('#cancelWebActivityImport, #cancelImportProgress');
-        cancelButtons.forEach(button => {
-            button.addEventListener('click', () => {
-                window.dispatchEvent(new CustomEvent('cancelImport'));
+        const cancelButtons = modal.querySelectorAll(
+            "#cancelWebActivityImport, #cancelImportProgress",
+        );
+        cancelButtons.forEach((button) => {
+            button.addEventListener("click", () => {
+                window.dispatchEvent(new CustomEvent("cancelImport"));
             });
         });
 
-        modal.addEventListener('hidden.bs.modal', () => {
+        modal.addEventListener("hidden.bs.modal", () => {
             this.removeModal(this.webActivityModalId);
         });
     }
@@ -1066,22 +1182,28 @@ export class WebsiteImportUI {
         const modal = document.getElementById(this.webActivityModalId);
         if (!modal) return;
 
-        const selectedBrowser = modal.querySelector('[data-browser].selected');
-        const selectedType = modal.querySelector('[data-type].selected');
-        const startButton = modal.querySelector('#startWebActivityImport') as HTMLButtonElement;
+        const selectedBrowser = modal.querySelector("[data-browser].selected");
+        const selectedType = modal.querySelector("[data-type].selected");
+        const startButton = modal.querySelector(
+            "#startWebActivityImport",
+        ) as HTMLButtonElement;
 
         // Show/hide conditional fields
-        const daysBackContainer = modal.querySelector('#daysBackContainer') as HTMLElement;
-        const folderContainer = modal.querySelector('#folderContainer') as HTMLElement;
+        const daysBackContainer = modal.querySelector(
+            "#daysBackContainer",
+        ) as HTMLElement;
+        const folderContainer = modal.querySelector(
+            "#folderContainer",
+        ) as HTMLElement;
 
         if (selectedType) {
-            const type = selectedType.getAttribute('data-type');
-            if (type === 'history') {
-                daysBackContainer.style.display = 'block';
-                folderContainer.style.display = 'none';
-            } else if (type === 'bookmarks') {
-                daysBackContainer.style.display = 'none';
-                folderContainer.style.display = 'block';
+            const type = selectedType.getAttribute("data-type");
+            if (type === "history") {
+                daysBackContainer.style.display = "block";
+                folderContainer.style.display = "none";
+            } else if (type === "bookmarks") {
+                daysBackContainer.style.display = "none";
+                folderContainer.style.display = "block";
             }
         }
 
@@ -1098,26 +1220,37 @@ export class WebsiteImportUI {
         const modal = document.getElementById(this.folderImportModalId);
         if (!modal) return;
 
-        const folderPathInput = modal.querySelector('#folderPath') as HTMLInputElement;
-        const browseFolderBtn = modal.querySelector('#browseFolderBtn');
-        const startButton = modal.querySelector('#startFolderImport') as HTMLButtonElement;
+        const folderPathInput = modal.querySelector(
+            "#folderPath",
+        ) as HTMLInputElement;
+        const browseFolderBtn = modal.querySelector("#browseFolderBtn");
+        const startButton = modal.querySelector(
+            "#startFolderImport",
+        ) as HTMLButtonElement;
 
         // Folder path input validation
         if (folderPathInput) {
-            folderPathInput.addEventListener('input', async () => {
+            folderPathInput.addEventListener("input", async () => {
                 this.updateFolderImportState();
-                
+
                 // Debounced validation
                 clearTimeout((folderPathInput as any)._validationTimeout);
-                (folderPathInput as any)._validationTimeout = setTimeout(async () => {
-                    const validation = await this.validateFolderPath(folderPathInput.value);
-                    this.showFolderValidationFeedback(validation);
-                }, 500);
+                (folderPathInput as any)._validationTimeout = setTimeout(
+                    async () => {
+                        const validation = await this.validateFolderPath(
+                            folderPathInput.value,
+                        );
+                        this.showFolderValidationFeedback(validation);
+                    },
+                    500,
+                );
             });
 
-            folderPathInput.addEventListener('blur', async () => {
+            folderPathInput.addEventListener("blur", async () => {
                 if (folderPathInput.value.trim()) {
-                    const validation = await this.validateFolderPath(folderPathInput.value);
+                    const validation = await this.validateFolderPath(
+                        folderPathInput.value,
+                    );
                     this.showFolderValidationFeedback(validation);
                 }
             });
@@ -1125,7 +1258,7 @@ export class WebsiteImportUI {
 
         // Browse folder button (note: actual folder browsing would require native file system access)
         if (browseFolderBtn) {
-            browseFolderBtn.addEventListener('click', () => {
+            browseFolderBtn.addEventListener("click", () => {
                 // Show helpful message since we can't actually browse folders in browser extension
                 const helpModal = `
                     <div class="alert alert-info">
@@ -1135,46 +1268,52 @@ export class WebsiteImportUI {
                         <strong>Linux:</strong> Right-click folder → Properties → Copy path
                     </div>
                 `;
-                
-                const feedbackContainer = modal.querySelector('#folderValidationFeedback');
+
+                const feedbackContainer = modal.querySelector(
+                    "#folderValidationFeedback",
+                );
                 if (feedbackContainer) {
                     feedbackContainer.innerHTML = helpModal;
                     setTimeout(() => {
-                        feedbackContainer.innerHTML = '';
+                        feedbackContainer.innerHTML = "";
                     }, 5000);
                 }
             });
         }
 
         // Form inputs change handlers
-        const formInputs = modal.querySelectorAll('input, select');
-        formInputs.forEach(input => {
-            input.addEventListener('change', () => {
+        const formInputs = modal.querySelectorAll("input, select");
+        formInputs.forEach((input) => {
+            input.addEventListener("change", () => {
                 this.updateFolderImportState();
             });
         });
 
         // Start import button
         if (startButton) {
-            startButton.addEventListener('click', () => {
+            startButton.addEventListener("click", () => {
                 const options = this.getFolderImportOptions();
                 if (options) {
-                    window.dispatchEvent(new CustomEvent('startFolderImport', { 
-                        detail: options 
-                    }));
+                    window.dispatchEvent(
+                        new CustomEvent("startFolderImport", {
+                            detail: options,
+                        }),
+                    );
                 }
             });
         }
 
         // Cancel buttons
-        const cancelButtons = modal.querySelectorAll('#cancelFolderImport, #cancelImportProgress');
-        cancelButtons.forEach(button => {
-            button.addEventListener('click', () => {
-                window.dispatchEvent(new CustomEvent('cancelImport'));
+        const cancelButtons = modal.querySelectorAll(
+            "#cancelFolderImport, #cancelImportProgress",
+        );
+        cancelButtons.forEach((button) => {
+            button.addEventListener("click", () => {
+                window.dispatchEvent(new CustomEvent("cancelImport"));
             });
         });
 
-        modal.addEventListener('hidden.bs.modal', () => {
+        modal.addEventListener("hidden.bs.modal", () => {
             this.removeModal(this.folderImportModalId);
         });
     }
@@ -1186,14 +1325,14 @@ export class WebsiteImportUI {
         const modalElement = document.getElementById(modalId);
         if (modalElement && (window as any).bootstrap) {
             // Add entrance animation class
-            modalElement.classList.add('modal-entering');
-            
+            modalElement.classList.add("modal-entering");
+
             const modal = new (window as any).bootstrap.Modal(modalElement);
             modal.show();
-            
+
             // Remove animation class after transition
             setTimeout(() => {
-                modalElement.classList.remove('modal-entering');
+                modalElement.classList.remove("modal-entering");
             }, 300);
         }
     }
@@ -1205,16 +1344,18 @@ export class WebsiteImportUI {
         const modalElement = document.getElementById(modalId);
         if (modalElement && (window as any).bootstrap) {
             // Add exit animation class
-            modalElement.classList.add('modal-exiting');
-            
-            const modal = (window as any).bootstrap.Modal.getInstance(modalElement);
+            modalElement.classList.add("modal-exiting");
+
+            const modal = (window as any).bootstrap.Modal.getInstance(
+                modalElement,
+            );
             if (modal) {
                 modal.hide();
             }
-            
+
             // Clean up animation class after hide
             setTimeout(() => {
-                modalElement.classList.remove('modal-exiting');
+                modalElement.classList.remove("modal-exiting");
             }, 300);
         }
     }
@@ -1227,25 +1368,25 @@ export class WebsiteImportUI {
         if (modalElement) {
             modalElement.remove();
         }
-        
+
         // Clean up any leftover backdrop
-        const backdrop = document.querySelector('.modal-backdrop');
+        const backdrop = document.querySelector(".modal-backdrop");
         if (backdrop) {
             backdrop.remove();
         }
-        
-        document.body.classList.remove('modal-open');
-        document.body.style.removeProperty('overflow');
-        document.body.style.removeProperty('padding-right');
+
+        document.body.classList.remove("modal-open");
+        document.body.style.removeProperty("overflow");
+        document.body.style.removeProperty("padding-right");
     }
 
     /**
      * Initialize component styles
      */
     private initializeStyles(): void {
-        const styleId = 'websiteImportUIStyles';
+        const styleId = "websiteImportUIStyles";
         if (!document.getElementById(styleId)) {
-            const style = document.createElement('style');
+            const style = document.createElement("style");
             style.id = styleId;
             style.textContent = `
                 .import-option { 

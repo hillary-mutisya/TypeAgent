@@ -4,7 +4,7 @@
 /**
  * Shared HTML processing module for consolidating HTML import logic
  * between bookmark/history import and HTML file import flows.
- * 
+ *
  * This module extracts and consolidates the HTML processing logic from
  * the website-memory package's ContentExtractor to provide a unified
  * processing pipeline for both import types.
@@ -22,7 +22,7 @@ import {
     ActionInfo,
     StructuredDataCollection,
     type EnhancedContentWithKnowledge,
-    type KnowledgeExtractionMode
+    type KnowledgeExtractionMode,
 } from "website-memory";
 
 // Re-export types for consumers
@@ -36,7 +36,7 @@ export type {
     ActionInfo,
     StructuredDataCollection,
     EnhancedContentWithKnowledge,
-    KnowledgeExtractionMode
+    KnowledgeExtractionMode,
 };
 
 /**
@@ -116,27 +116,35 @@ export interface WebsiteData {
  */
 export async function processHtmlContent(
     html: string,
-    sourceIdentifier: string,  // URL or file path
+    sourceIdentifier: string, // URL or file path
     options: ProcessingOptions = {},
-    fileMetadata?: FileMetadata
+    fileMetadata?: FileMetadata,
 ): Promise<WebsiteData> {
     // Create ContentExtractor with options
     const extractorOptions: any = {};
-    if (options.contentTimeout !== undefined) extractorOptions.timeout = options.contentTimeout;
-    if (options.userAgent !== undefined) extractorOptions.userAgent = options.userAgent;
-    if (options.maxContentLength !== undefined) extractorOptions.maxContentLength = options.maxContentLength;
-    if (options.enableActionDetection !== undefined) extractorOptions.enableActionDetection = options.enableActionDetection;
-    if (options.enableIntelligentAnalysis !== undefined) extractorOptions.enableKnowledgeExtraction = options.enableIntelligentAnalysis;
-    if (options.knowledgeMode !== undefined) extractorOptions.knowledgeMode = options.knowledgeMode;
-    if (options.maxCharsPerChunk !== undefined) extractorOptions.maxCharsPerChunk = options.maxCharsPerChunk;
-    
+    if (options.contentTimeout !== undefined)
+        extractorOptions.timeout = options.contentTimeout;
+    if (options.userAgent !== undefined)
+        extractorOptions.userAgent = options.userAgent;
+    if (options.maxContentLength !== undefined)
+        extractorOptions.maxContentLength = options.maxContentLength;
+    if (options.enableActionDetection !== undefined)
+        extractorOptions.enableActionDetection = options.enableActionDetection;
+    if (options.enableIntelligentAnalysis !== undefined)
+        extractorOptions.enableKnowledgeExtraction =
+            options.enableIntelligentAnalysis;
+    if (options.knowledgeMode !== undefined)
+        extractorOptions.knowledgeMode = options.knowledgeMode;
+    if (options.maxCharsPerChunk !== undefined)
+        extractorOptions.maxCharsPerChunk = options.maxCharsPerChunk;
+
     const extractor = new ContentExtractor(extractorOptions);
 
     // Extract enhanced content from HTML
-    const enhancedContent = await extractor.extractFromHtml(
-        html, 
-        options.extractionMode || "content"
-    ) as EnhancedContent;
+    const enhancedContent = (await extractor.extractFromHtml(
+        html,
+        options.extractionMode || "content",
+    )) as EnhancedContent;
 
     // Parse basic HTML structure
     const parsedContent = await parseHtmlStructure(html);
@@ -151,25 +159,38 @@ export async function processHtmlContent(
     // Create website data structure
     const websiteData: WebsiteData = {
         url,
-        title: enhancedContent.pageContent?.title || parsedContent.title || fileMetadata?.filename || "Untitled",
-        content: enhancedContent.pageContent?.mainContent || parsedContent.content || "",
+        title:
+            enhancedContent.pageContent?.title ||
+            parsedContent.title ||
+            fileMetadata?.filename ||
+            "Untitled",
+        content:
+            enhancedContent.pageContent?.mainContent ||
+            parsedContent.content ||
+            "",
         domain,
         metadata: {
             websiteSource: fileMetadata ? "file_import" : "bookmark_import",
             url,
-            title: enhancedContent.pageContent?.title || parsedContent.title || fileMetadata?.filename || "Untitled",
+            title:
+                enhancedContent.pageContent?.title ||
+                parsedContent.title ||
+                fileMetadata?.filename ||
+                "Untitled",
             domain,
             pageType: determinePageType(enhancedContent, parsedContent),
             importDate: new Date().toISOString(),
             lastModified: fileMetadata?.lastModified || new Date(),
             originalMetadata: enhancedContent.metaTags,
-            links: enhancedContent.pageContent?.links?.map(l => l.href) || parsedContent.links,
+            links:
+                enhancedContent.pageContent?.links?.map((l) => l.href) ||
+                parsedContent.links,
             images: enhancedContent.pageContent?.images || [],
-            preserveStructure: true
+            preserveStructure: true,
         },
         visitCount: 1,
         lastVisited: publishedDate || fileMetadata?.lastModified || new Date(),
-        enhancedContent
+        enhancedContent,
     };
 
     // Add file-specific metadata if available
@@ -191,31 +212,33 @@ export async function processHtmlContent(
 /**
  * Parse HTML structure using Cheerio (basic parsing)
  */
-export async function parseHtmlStructure(html: string): Promise<ParsedHtmlContent> {
+export async function parseHtmlStructure(
+    html: string,
+): Promise<ParsedHtmlContent> {
     const $ = cheerio.load(html);
-    
+
     // Extract title
     const title = extractTitle($);
-    
+
     // Extract main content
     const content = extractTextContent($);
-    
+
     // Extract links
     const links = extractLinks($);
-    
+
     // Extract images
     const images = extractImages($);
-    
+
     // Extract metadata
     const metadata = extractBasicMetadata($);
-    
+
     // Extract published date
     const publishedDate = extractPublishedDateFromMeta($);
-    
+
     // Calculate word count and reading time
     const wordCount = calculateWordCount(content);
     const readingTime = calculateReadingTime(wordCount);
-    
+
     const result: ParsedHtmlContent = {
         title: title || "Untitled",
         content,
@@ -223,13 +246,13 @@ export async function parseHtmlStructure(html: string): Promise<ParsedHtmlConten
         images,
         metadata,
         wordCount,
-        readingTime
+        readingTime,
     };
-    
+
     if (publishedDate) {
         result.publishedDate = publishedDate;
     }
-    
+
     return result;
 }
 
@@ -238,7 +261,9 @@ export async function parseHtmlStructure(html: string): Promise<ParsedHtmlConten
  */
 export function extractTextContent($: cheerio.CheerioAPI): string {
     // Remove unwanted elements
-    $("script, style, nav, header, footer, aside, .nav, .navigation, .sidebar").remove();
+    $(
+        "script, style, nav, header, footer, aside, .nav, .navigation, .sidebar",
+    ).remove();
     $('[class*="ad"], [id*="ad"], .advertisement, .ads').remove();
     $(".social-share, .share-buttons, .comments, .cookie-banner").remove();
 
@@ -291,7 +316,9 @@ export function extractTitle($: cheerio.CheerioAPI): string {
 /**
  * Extract basic metadata from HTML meta tags
  */
-export function extractBasicMetadata($: cheerio.CheerioAPI): Record<string, any> {
+export function extractBasicMetadata(
+    $: cheerio.CheerioAPI,
+): Record<string, any> {
     const metadata: Record<string, any> = {};
 
     // Standard meta tags
@@ -302,7 +329,8 @@ export function extractBasicMetadata($: cheerio.CheerioAPI): Record<string, any>
     if (author) metadata.author = author;
 
     const keywords = $('meta[name="keywords"]').attr("content");
-    if (keywords) metadata.keywords = keywords.split(",").map((k: string) => k.trim());
+    if (keywords)
+        metadata.keywords = keywords.split(",").map((k: string) => k.trim());
 
     // Open Graph tags
     const ogTitle = $('meta[property="og:title"]').attr("content");
@@ -336,7 +364,12 @@ export function extractLinks($: cheerio.CheerioAPI): string[] {
 
     $("a[href]").each((_: number, element: any) => {
         const href = $(element).attr("href");
-        if (href && href.length > 0 && !href.startsWith("#") && !href.startsWith("javascript:")) {
+        if (
+            href &&
+            href.length > 0 &&
+            !href.startsWith("#") &&
+            !href.startsWith("javascript:")
+        ) {
             links.push(href);
         }
     });
@@ -371,33 +404,36 @@ export async function extractPublishedDate(html: string): Promise<Date | null> {
 /**
  * Extract published date from meta tags using priority order
  */
-export function extractPublishedDateFromMeta($: cheerio.CheerioAPI): Date | null {
+export function extractPublishedDateFromMeta(
+    $: cheerio.CheerioAPI,
+): Date | null {
     const publishedDateSelectors = [
         // Primary sources
-        'meta[name="published-date"]',           // Custom published date
+        'meta[name="published-date"]', // Custom published date
         'meta[property="article:published_time"]', // Open Graph Article
-        'meta[name="date"]',                     // Generic date
-        
-        // Secondary sources  
-        'meta[name="DC.Date"]',                  // Dublin Core
-        'meta[name="article:published_date"]',   // Article metadata
-        'meta[property="article:published"]',    // Article variant
-        
+        'meta[name="date"]', // Generic date
+
+        // Secondary sources
+        'meta[name="DC.Date"]', // Dublin Core
+        'meta[name="article:published_date"]', // Article metadata
+        'meta[property="article:published"]', // Article variant
+
         // Fallback sources
-        'time[pubdate]',                         // HTML5 pubdate
-        'time[datetime]',                        // HTML5 datetime
-        'meta[name="Last-Modified"]',            // HTTP header equivalent
-        'meta[name="created"]',                  // Created date
-        'meta[property="article:modified_time"]' // Article modified time
+        "time[pubdate]", // HTML5 pubdate
+        "time[datetime]", // HTML5 datetime
+        'meta[name="Last-Modified"]', // HTTP header equivalent
+        'meta[name="created"]', // Created date
+        'meta[property="article:modified_time"]', // Article modified time
     ];
 
     for (const selector of publishedDateSelectors) {
         const element = $(selector);
         if (element.length > 0) {
-            const dateValue = element.attr('content') || 
-                            element.attr('datetime') ||
-                            element.text();
-            
+            const dateValue =
+                element.attr("content") ||
+                element.attr("datetime") ||
+                element.text();
+
             if (dateValue) {
                 const date = parsePublishedDateString(dateValue);
                 if (date && !isNaN(date.getTime())) {
@@ -406,7 +442,7 @@ export function extractPublishedDateFromMeta($: cheerio.CheerioAPI): Date | null
             }
         }
     }
-    
+
     return null;
 }
 
@@ -414,13 +450,13 @@ export function extractPublishedDateFromMeta($: cheerio.CheerioAPI): Date | null
  * Parse published date string handling multiple formats
  */
 export function parsePublishedDateString(dateString: string): Date | null {
-    if (!dateString || typeof dateString !== 'string') {
+    if (!dateString || typeof dateString !== "string") {
         return null;
     }
 
     // Clean up the date string
     const cleanDateString = dateString.trim();
-    
+
     // Try standard JavaScript Date parsing first
     const date = new Date(cleanDateString);
     if (!isNaN(date.getTime())) {
@@ -428,7 +464,7 @@ export function parsePublishedDateString(dateString: string): Date | null {
         const now = new Date();
         const hundredYearsAgo = new Date(now.getFullYear() - 100, 0, 1);
         const oneYearFromNow = new Date(now.getFullYear() + 1, 11, 31);
-        
+
         if (date >= hundredYearsAgo && date <= oneYearFromNow) {
             return date;
         }
@@ -443,34 +479,38 @@ export function parsePublishedDateString(dateString: string): Date | null {
         // European formats (DD.MM.YYYY)
         /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/,
         // Simple year only
-        /^(\d{4})$/
+        /^(\d{4})$/,
     ];
 
     for (const pattern of formatPatterns) {
         const match = cleanDateString.match(pattern);
         if (match) {
             let year: number, month: number, day: number;
-            
-            if (pattern === formatPatterns[0]) { // YYYY-MM-DD
+
+            if (pattern === formatPatterns[0]) {
+                // YYYY-MM-DD
                 year = parseInt(match[1]);
                 month = parseInt(match[2]) - 1; // JavaScript months are 0-based
                 day = parseInt(match[3]);
-            } else if (pattern === formatPatterns[1]) { // MM/DD/YYYY
+            } else if (pattern === formatPatterns[1]) {
+                // MM/DD/YYYY
                 month = parseInt(match[1]) - 1;
                 day = parseInt(match[2]);
                 year = parseInt(match[3]);
-            } else if (pattern === formatPatterns[2]) { // DD.MM.YYYY
+            } else if (pattern === formatPatterns[2]) {
+                // DD.MM.YYYY
                 day = parseInt(match[1]);
                 month = parseInt(match[2]) - 1;
                 year = parseInt(match[3]);
-            } else if (pattern === formatPatterns[3]) { // YYYY only
+            } else if (pattern === formatPatterns[3]) {
+                // YYYY only
                 year = parseInt(match[1]);
                 month = 0;
                 day = 1;
             } else {
                 continue;
             }
-            
+
             const parsedDate = new Date(year, month, day);
             if (!isNaN(parsedDate.getTime())) {
                 return parsedDate;
@@ -517,62 +557,82 @@ export function calculateReadingTime(wordCount: number): number {
  * Extract domain from URL or file path
  */
 export function extractDomainFromUrl(url: string): string {
-    if (url.startsWith('file://') || !url.includes('://')) {
-        return 'local_files';
+    if (url.startsWith("file://") || !url.includes("://")) {
+        return "local_files";
     }
-    
+
     try {
         const urlObj = new URL(url);
-        return urlObj.hostname || 'unknown';
+        return urlObj.hostname || "unknown";
     } catch {
-        return 'local_files';
+        return "local_files";
     }
 }
 
 /**
  * Determine page type based on content analysis
  */
-export function determinePageType(enhancedContent: Partial<EnhancedContent>, parsedContent: ParsedHtmlContent): string {
+export function determinePageType(
+    enhancedContent: Partial<EnhancedContent>,
+    parsedContent: ParsedHtmlContent,
+): string {
     // Check for common page type indicators
-    const title = enhancedContent.pageContent?.title || parsedContent.title || "";
-    const content = enhancedContent.pageContent?.mainContent || parsedContent.content || "";
+    const title =
+        enhancedContent.pageContent?.title || parsedContent.title || "";
+    const content =
+        enhancedContent.pageContent?.mainContent || parsedContent.content || "";
     const metaTags = enhancedContent.metaTags;
-    
+
     // Check Open Graph type first
     if (metaTags?.ogType) {
         return metaTags.ogType;
     }
-    
+
     // Analyze content patterns
     const titleLower = title.toLowerCase();
     const contentLower = content.toLowerCase();
-    
+
     // News/article patterns
-    if (titleLower.includes('news') || titleLower.includes('article') || 
-        contentLower.includes('published') || contentLower.includes('author')) {
-        return 'article';
+    if (
+        titleLower.includes("news") ||
+        titleLower.includes("article") ||
+        contentLower.includes("published") ||
+        contentLower.includes("author")
+    ) {
+        return "article";
     }
-    
+
     // Blog patterns
-    if (titleLower.includes('blog') || contentLower.includes('posted by') || 
-        contentLower.includes('written by')) {
-        return 'blog';
+    if (
+        titleLower.includes("blog") ||
+        contentLower.includes("posted by") ||
+        contentLower.includes("written by")
+    ) {
+        return "blog";
     }
-    
+
     // Documentation patterns
-    if (titleLower.includes('documentation') || titleLower.includes('docs') || 
-        titleLower.includes('api') || titleLower.includes('reference')) {
-        return 'documentation';
+    if (
+        titleLower.includes("documentation") ||
+        titleLower.includes("docs") ||
+        titleLower.includes("api") ||
+        titleLower.includes("reference")
+    ) {
+        return "documentation";
     }
-    
+
     // Product/commerce patterns
-    if (titleLower.includes('product') || titleLower.includes('buy') || 
-        titleLower.includes('price') || contentLower.includes('add to cart')) {
-        return 'product';
+    if (
+        titleLower.includes("product") ||
+        titleLower.includes("buy") ||
+        titleLower.includes("price") ||
+        contentLower.includes("add to cart")
+    ) {
+        return "product";
     }
-    
+
     // Default to general document
-    return 'document';
+    return "document";
 }
 
 /**
@@ -580,22 +640,22 @@ export function determinePageType(enhancedContent: Partial<EnhancedContent>, par
  */
 export function createFileUrl(filePath: string): string {
     // Convert file path to file:// URL
-    if (filePath.startsWith('file://')) {
+    if (filePath.startsWith("file://")) {
         return filePath;
     }
-    
+
     // Handle Windows paths
-    if (filePath.includes('\\')) {
+    if (filePath.includes("\\")) {
         // Convert backslashes to forward slashes
-        const normalized = filePath.replace(/\\/g, '/');
+        const normalized = filePath.replace(/\\/g, "/");
         return `file:///${normalized}`;
     }
-    
+
     // Handle Unix paths
-    if (filePath.startsWith('/')) {
+    if (filePath.startsWith("/")) {
         return `file://${filePath}`;
     }
-    
+
     // Relative path - make it absolute
     return `file:///${filePath}`;
 }
@@ -603,9 +663,11 @@ export function createFileUrl(filePath: string): string {
 /**
  * Enhanced metadata extraction using ContentExtractor's MetaTagCollection
  */
-export async function extractMetadata(html: string): Promise<MetaTagCollection> {
+export async function extractMetadata(
+    html: string,
+): Promise<MetaTagCollection> {
     const $ = cheerio.load(html);
-    
+
     const metaTags: MetaTagCollection = { custom: {} };
 
     // Standard meta tags
@@ -664,33 +726,34 @@ export async function extractMetadata(html: string): Promise<MetaTagCollection> 
 export function createWebsiteDataFromContent(
     enhancedContent: EnhancedContent,
     url: string,
-    sourceType: "bookmark" | "history" | "file" = "bookmark"
+    sourceType: "bookmark" | "history" | "file" = "bookmark",
 ): WebsiteData {
     const domain = extractDomainFromUrl(url);
     const title = enhancedContent.pageContent?.title || "Untitled";
     const content = enhancedContent.pageContent?.mainContent || "";
-    
+
     return {
         url,
         title,
         content,
         domain,
         metadata: {
-            websiteSource: sourceType === "file" ? "file_import" : `${sourceType}_import`,
+            websiteSource:
+                sourceType === "file" ? "file_import" : `${sourceType}_import`,
             url,
             title,
             domain,
-            pageType: enhancedContent.metaTags?.ogType || 'document',
+            pageType: enhancedContent.metaTags?.ogType || "document",
             importDate: new Date().toISOString(),
             lastModified: new Date(),
             originalMetadata: enhancedContent.metaTags,
-            links: enhancedContent.pageContent?.links?.map(l => l.href) || [],
+            links: enhancedContent.pageContent?.links?.map((l) => l.href) || [],
             images: enhancedContent.pageContent?.images || [],
-            preserveStructure: true
+            preserveStructure: true,
         },
         visitCount: 1,
         lastVisited: new Date(),
-        enhancedContent
+        enhancedContent,
     };
 }
 
@@ -698,39 +761,42 @@ export function createWebsiteDataFromContent(
  * Batch process HTML files with progress tracking
  */
 export async function processHtmlBatch(
-    htmlFiles: Array<{ html: string; identifier: string; metadata?: FileMetadata }>,
+    htmlFiles: Array<{
+        html: string;
+        identifier: string;
+        metadata?: FileMetadata;
+    }>,
     options: ProcessingOptions = {},
-    progressCallback?: (current: number, total: number, item: string) => void
+    progressCallback?: (current: number, total: number, item: string) => void,
 ): Promise<WebsiteData[]> {
     const results: WebsiteData[] = [];
     const total = htmlFiles.length;
-    
+
     for (let i = 0; i < htmlFiles.length; i++) {
         const file = htmlFiles[i];
-        
+
         try {
             if (progressCallback && i % 5 === 0) {
                 progressCallback(i + 1, total, file.identifier);
             }
-            
+
             const websiteData = await processHtmlContent(
                 file.html,
                 file.identifier,
                 options,
-                file.metadata
+                file.metadata,
             );
-            
+
             results.push(websiteData);
-            
         } catch (error) {
             console.error(`Failed to process ${file.identifier}:`, error);
             // Continue with other files
         }
     }
-    
+
     if (progressCallback) {
         progressCallback(total, total, "Completed");
     }
-    
+
     return results;
 }

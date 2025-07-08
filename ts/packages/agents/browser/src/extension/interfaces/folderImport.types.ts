@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 // Import base types
-import { ImportProgress, ImportError } from './websiteImport.types';
+import { ImportProgress, ImportError } from "./websiteImport.types";
 
 /**
  * Folder import options for HTML folder import

@@ -31,55 +31,57 @@ export async function handleMessage(
                 try {
                     const websocket = getWebSocket();
                     return {
-                        connected: websocket && websocket.readyState === WebSocket.OPEN,
+                        connected:
+                            websocket &&
+                            websocket.readyState === WebSocket.OPEN,
                     };
                 } catch (error) {
                     return { connected: false };
                 }
             }
-            
+
             case "getLibraryStats": {
                 return await handleGetWebsiteLibraryStats();
             }
-            
+
             case "searchWebsites": {
                 return await handleSearchWebsitesEnhanced(message);
             }
-            
+
             case "extractKnowledge": {
                 // TODO: Implement knowledge extraction
                 return {
                     hasKnowledge: false,
                     status: "none",
-                    error: "Knowledge extraction not implemented"
+                    error: "Knowledge extraction not implemented",
                 };
             }
-            
+
             case "checkKnowledgeStatus": {
                 // TODO: Implement knowledge status check
                 return {
                     hasKnowledge: false,
-                    status: "none"
+                    status: "none",
                 };
             }
-            
+
             case "getSearchSuggestions": {
                 return await handleGetSearchSuggestions(message);
             }
-            
+
             case "getRecentSearches": {
                 return await handleGetSearchHistory();
             }
-            
+
             case "saveSearch": {
                 return await handleSaveSearchHistory({
                     query: message.query,
-                    results: message.results
+                    results: message.results,
                 });
             }
         }
     }
-    
+
     // Handle type-based messages (existing code)
     switch (message.type) {
         case "initialize": {
@@ -762,7 +764,7 @@ async function handleImportHtmlFolder(message: any) {
     try {
         const { parameters } = message;
         const { folderPath, options, importId } = parameters;
-        
+
         // Send action to backend agent using the new ImportHtmlFolder action
         const result = await sendActionToAgent({
             actionName: "importHtmlFolder",
@@ -770,20 +772,26 @@ async function handleImportHtmlFolder(message: any) {
                 folderPath,
                 options: {
                     extractContent: options?.extractContent ?? true,
-                    enableIntelligentAnalysis: options?.enableIntelligentAnalysis ?? true,
-                    enableActionDetection: options?.enableActionDetection ?? false,
+                    enableIntelligentAnalysis:
+                        options?.enableIntelligentAnalysis ?? true,
+                    enableActionDetection:
+                        options?.enableActionDetection ?? false,
                     extractionMode: options?.extractionMode ?? "content",
                     preserveStructure: options?.preserveStructure ?? true,
                     recursive: options?.recursive ?? true,
-                    fileTypes: options?.fileTypes ?? ['.html', '.htm', '.mhtml'],
+                    fileTypes: options?.fileTypes ?? [
+                        ".html",
+                        ".htm",
+                        ".mhtml",
+                    ],
                     limit: options?.limit,
                     maxFileSize: options?.maxFileSize,
-                    skipHidden: options?.skipHidden ?? true
+                    skipHidden: options?.skipHidden ?? true,
                 },
-                importId
-            }
+                importId,
+            },
         });
-        
+
         return {
             success: !result.error,
             itemCount: result.websiteCount || 0,
@@ -796,12 +804,11 @@ async function handleImportHtmlFolder(message: any) {
                 knowledgeExtracted: result.knowledgeCount || 0,
                 entitiesFound: result.entityCount || 0,
                 topicsIdentified: result.topicCount || 0,
-                actionsDetected: result.actionCount || 0
-            }
+                actionsDetected: result.actionCount || 0,
+            },
         };
-        
     } catch (error) {
-        console.error('Folder import error:', error);
+        console.error("Folder import error:", error);
         return {
             success: false,
             error: error instanceof Error ? error.message : "Unknown error",
@@ -814,8 +821,8 @@ async function handleImportHtmlFolder(message: any) {
                 knowledgeExtracted: 0,
                 entitiesFound: 0,
                 topicsIdentified: 0,
-                actionsDetected: 0
-            }
+                actionsDetected: 0,
+            },
         };
     }
 }
@@ -828,11 +835,11 @@ async function handleGetFileImportProgress(importId: string) {
             success: true,
             progress: {
                 importId: importId,
-                phase: 'complete',
+                phase: "complete",
                 totalItems: 0,
                 processedItems: 0,
-                errors: []
-            }
+                errors: [],
+            },
         };
     } catch (error) {
         console.error("Error getting file import progress:", error);

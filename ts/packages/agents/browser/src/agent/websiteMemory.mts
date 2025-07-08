@@ -30,7 +30,7 @@ import {
     getFileMetadata,
     createFileBatches,
     FolderOptions,
-    DEFAULT_FOLDER_OPTIONS
+    DEFAULT_FOLDER_OPTIONS,
 } from "./folderUtils.mjs";
 
 export interface BrowserActionContext {
@@ -675,7 +675,7 @@ export async function importHtmlFolderFromSession(
     displayProgress?: (message: string) => void,
 ): Promise<any> {
     const startTime = Date.now();
-    
+
     try {
         if (displayProgress) {
             displayProgress("Validating folder and enumerating HTML files...");
@@ -698,22 +698,25 @@ export async function importHtmlFolderFromSession(
         // Enumerate HTML files in the folder
         const folderOptions: FolderOptions = {
             ...DEFAULT_FOLDER_OPTIONS,
-            ...options
+            ...options,
         };
 
         const htmlFiles = await enumerateHtmlFiles(folderPath, folderOptions);
-        
+
         if (htmlFiles.length === 0) {
             throw new Error(`No HTML files found in folder: ${folderPath}`);
         }
 
         if (displayProgress) {
-            displayProgress(`Found ${htmlFiles.length} HTML files. Processing...`);
+            displayProgress(
+                `Found ${htmlFiles.length} HTML files. Processing...`,
+            );
         }
 
         // Ensure we have a website collection
         if (!context.agentContext.websiteCollection) {
-            context.agentContext.websiteCollection = new website.WebsiteCollection();
+            context.agentContext.websiteCollection =
+                new website.WebsiteCollection();
         }
 
         // Process files in batches for better performance and progress reporting
@@ -722,10 +725,14 @@ export async function importHtmlFolderFromSession(
 
         for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
             const batch = batches[batchIndex];
-            
+
             if (displayProgress) {
-                const progressPercent = Math.round((batchIndex / batches.length) * 100);
-                displayProgress(`Processing batch ${batchIndex + 1}/${batches.length} (${progressPercent}%)`);
+                const progressPercent = Math.round(
+                    (batchIndex / batches.length) * 100,
+                );
+                displayProgress(
+                    `Processing batch ${batchIndex + 1}/${batches.length} (${progressPercent}%)`,
+                );
             }
 
             // Read and prepare batch data
@@ -734,17 +741,17 @@ export async function importHtmlFolderFromSession(
                 try {
                     const htmlContent = await readHtmlFile(filePath);
                     const fileMetadata = await getFileMetadata(filePath);
-                    
+
                     batchData.push({
                         html: htmlContent,
                         identifier: filePath,
-                        metadata: fileMetadata
+                        metadata: fileMetadata,
                     });
                 } catch (error: any) {
                     errors.push({
-                        type: 'file_read',
+                        type: "file_read",
                         message: `Failed to read ${filePath}: ${error.message}`,
-                        timestamp: Date.now()
+                        timestamp: Date.now(),
                     });
                     debug(`Error reading file ${filePath}:`, error);
                 }
@@ -755,9 +762,11 @@ export async function importHtmlFolderFromSession(
                 const processingOptions: ProcessingOptions = {
                     extractContent: options.extractContent !== false,
                     extractionMode: options.extractionMode || "content",
-                    enableIntelligentAnalysis: options.enableIntelligentAnalysis || false,
-                    enableActionDetection: options.enableActionDetection || false,
-                    maxConcurrent: 5
+                    enableIntelligentAnalysis:
+                        options.enableIntelligentAnalysis || false,
+                    enableActionDetection:
+                        options.enableActionDetection || false,
+                    maxConcurrent: 5,
                 };
 
                 const batchResults = await processHtmlBatch(
@@ -765,19 +774,20 @@ export async function importHtmlFolderFromSession(
                     processingOptions,
                     (current, total, item) => {
                         if (displayProgress && current % 2 === 0) {
-                            displayProgress(`Processing: ${path.basename(item)}`);
+                            displayProgress(
+                                `Processing: ${path.basename(item)}`,
+                            );
                         }
-                    }
+                    },
                 );
 
                 websiteDataResults.push(...batchResults);
                 successCount += batchResults.length;
-
             } catch (error: any) {
                 errors.push({
-                    type: 'batch_processing',
+                    type: "batch_processing",
                     message: `Failed to process batch ${batchIndex + 1}: ${error.message}`,
-                    timestamp: Date.now()
+                    timestamp: Date.now(),
                 });
                 debug(`Error processing batch ${batchIndex + 1}:`, error);
             }
@@ -785,9 +795,11 @@ export async function importHtmlFolderFromSession(
 
         // Add all processed websites to the collection
         if (websiteDataResults.length > 0) {
-            const websites = websiteDataResults.map(data => convertWebsiteDataToWebsite(data));
+            const websites = websiteDataResults.map((data) =>
+                convertWebsiteDataToWebsite(data),
+            );
             context.agentContext.websiteCollection.addWebsites(websites);
-            
+
             await context.agentContext.websiteCollection.buildIndex();
 
             try {
@@ -796,16 +808,20 @@ export async function importHtmlFolderFromSession(
                         context.agentContext.index.path,
                         "index",
                     );
-                    debug(`Saved website collection with ${successCount} new files to ${context.agentContext.index.path}`);
+                    debug(
+                        `Saved website collection with ${successCount} new files to ${context.agentContext.index.path}`,
+                    );
                 } else {
-                    debug("No index path available, HTML folder data not persisted");
+                    debug(
+                        "No index path available, HTML folder data not persisted",
+                    );
                 }
             } catch (error) {
                 debug(`Failed to save website collection: ${error}`);
                 errors.push({
-                    type: 'persistence',
+                    type: "persistence",
                     message: `Failed to save data: ${(error as Error).message}`,
-                    timestamp: Date.now()
+                    timestamp: Date.now(),
                 });
             }
         }
@@ -813,7 +829,9 @@ export async function importHtmlFolderFromSession(
         const duration = Date.now() - startTime;
 
         if (displayProgress) {
-            displayProgress(`Folder import complete: ${successCount}/${htmlFiles.length} files processed successfully`);
+            displayProgress(
+                `Folder import complete: ${successCount}/${htmlFiles.length} files processed successfully`,
+            );
         }
 
         return {
@@ -826,12 +844,17 @@ export async function importHtmlFolderFromSession(
                 totalFiles: htmlFiles.length,
                 totalProcessed: htmlFiles.length,
                 successfullyImported: successCount,
-                knowledgeExtracted: options?.enableIntelligentAnalysis ? successCount : 0,
+                knowledgeExtracted: options?.enableIntelligentAnalysis
+                    ? successCount
+                    : 0,
                 entitiesFound: 0, // Entities extraction would need different logic
                 topicsIdentified: 0, // Topics extraction would need different logic
-                actionsDetected: websiteDataResults.reduce((sum, data) => 
-                    sum + (data.enhancedContent?.actions?.length || 0), 0)
-            }
+                actionsDetected: websiteDataResults.reduce(
+                    (sum, data) =>
+                        sum + (data.enhancedContent?.actions?.length || 0),
+                    0,
+                ),
+            },
         };
     } catch (error: any) {
         return {
@@ -839,11 +862,13 @@ export async function importHtmlFolderFromSession(
             importId: parameters.importId,
             itemCount: 0,
             duration: Date.now() - startTime,
-            errors: [{
-                type: 'processing',
-                message: error.message,
-                timestamp: Date.now()
-            }],
+            errors: [
+                {
+                    type: "processing",
+                    message: error.message,
+                    timestamp: Date.now(),
+                },
+            ],
             summary: {
                 totalFiles: 0,
                 totalProcessed: 0,
@@ -851,8 +876,8 @@ export async function importHtmlFolderFromSession(
                 knowledgeExtracted: 0,
                 entitiesFound: 0,
                 topicsIdentified: 0,
-                actionsDetected: 0
-            }
+                actionsDetected: 0,
+            },
         };
     }
 }
@@ -875,7 +900,9 @@ export async function importHtmlFolder(
         );
 
         if (result.success) {
-            return createActionResult(`Successfully imported ${result.itemCount} HTML files from folder.`);
+            return createActionResult(
+                `Successfully imported ${result.itemCount} HTML files from folder.`,
+            );
         } else {
             const errorCount = result.errors.length;
             const message = `Folder import completed: ${result.itemCount} successful, ${errorCount} failed.`;
@@ -912,7 +939,7 @@ function convertWebsiteDataToWebsite(data: WebsiteData): any {
         },
         visitCount: data.visitCount,
         lastVisited: data.lastVisited,
-        enhancedContent: data.enhancedContent
+        enhancedContent: data.enhancedContent,
     };
 }
 

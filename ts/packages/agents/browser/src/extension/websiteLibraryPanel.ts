@@ -4,9 +4,14 @@
 // Full-page Website Library implementation
 // Extends the existing interfaces and functionality for full-page layout
 
-import { WebsiteImportManager } from './websiteImportManager';
-import { WebsiteImportUI } from './websiteImportUI';
-import { ImportOptions, FolderImportOptions, ImportProgress, ImportResult } from './interfaces/websiteImport.types';
+import { WebsiteImportManager } from "./websiteImportManager";
+import { WebsiteImportUI } from "./websiteImportUI";
+import {
+    ImportOptions,
+    FolderImportOptions,
+    ImportProgress,
+    ImportResult,
+} from "./interfaces/websiteImport.types";
 
 interface FullPageNavigation {
     currentPage: "search" | "discover" | "analytics";
@@ -134,9 +139,9 @@ class WebsiteLibraryPanelFullPage {
     private isConnected: boolean = false;
     private navigation: FullPageNavigation = {
         currentPage: "search",
-        previousPage: null
+        previousPage: null,
     };
-    
+
     // Search functionality
     private currentResults: Website[] = [];
     private currentViewMode: "list" | "grid" | "timeline" | "domain" = "list";
@@ -144,13 +149,13 @@ class WebsiteLibraryPanelFullPage {
     private recentSearches: string[] = [];
     private currentQuery: string = "";
     private currentSearchMode: string = "auto";
-    
+
     // Data storage
     private libraryStats: LibraryStats = {
         totalWebsites: 0,
         totalBookmarks: 0,
         totalHistory: 0,
-        topDomains: 0
+        topDomains: 0,
     };
     private discoverData: DiscoverInsights | null = null;
     private analyticsData: AnalyticsData | null = null;
@@ -163,7 +168,7 @@ class WebsiteLibraryPanelFullPage {
     private suggestionDropdown: HTMLElement | null = null;
     private knowledgeCache: Map<string, KnowledgeStatus> = new Map();
     private searchCache: Map<string, SearchResult> = new Map();
-    
+
     // Import components
     private importManager: WebsiteImportManager;
     private importUI: WebsiteImportUI;
@@ -172,7 +177,7 @@ class WebsiteLibraryPanelFullPage {
         this.notificationManager = new NotificationManagerImpl();
         this.chromeExtensionService = new ChromeExtensionServiceImpl();
         this.userPreferences = this.loadUserPreferences();
-        
+
         // Initialize import components
         this.importManager = new WebsiteImportManager();
         this.importUI = new WebsiteImportUI();
@@ -180,7 +185,7 @@ class WebsiteLibraryPanelFullPage {
 
     async initialize() {
         console.log("Initializing Enhanced Full-Page Website Library Panel");
-        
+
         try {
             this.setupNavigation();
             this.setupSearchInterface();
@@ -188,27 +193,33 @@ class WebsiteLibraryPanelFullPage {
             this.setupKnowledgeInteractions();
             this.setupNotificationSystem();
             this.setupImportFunctionality();
-            
+
             await this.checkConnectionStatus();
             await this.loadLibraryStats();
             await this.loadRecentSearches();
             this.showPage("search");
-            
-            this.notificationManager.showSuccess("Website Library loaded successfully with enhanced features!");
-            
+
+            this.notificationManager.showSuccess(
+                "Website Library loaded successfully with enhanced features!",
+            );
         } catch (error) {
             console.error("Failed to initialize Website Library:", error);
-            this.notificationManager.showError("Failed to load Website Library. Please refresh the page.", 
-                () => window.location.reload());
+            this.notificationManager.showError(
+                "Failed to load Website Library. Please refresh the page.",
+                () => window.location.reload(),
+            );
         }
     }
 
     private setupNavigation() {
-        const navItems = document.querySelectorAll('.nav-item');
-        navItems.forEach(item => {
-            item.addEventListener('click', (e) => {
+        const navItems = document.querySelectorAll(".nav-item");
+        navItems.forEach((item) => {
+            item.addEventListener("click", (e) => {
                 const target = e.currentTarget as HTMLElement;
-                const page = target.getAttribute('data-page') as "search" | "discover" | "analytics";
+                const page = target.getAttribute("data-page") as
+                    | "search"
+                    | "discover"
+                    | "analytics";
                 if (page) {
                     this.navigateToPage(page);
                 }
@@ -218,50 +229,56 @@ class WebsiteLibraryPanelFullPage {
 
     private setupSearchInterface() {
         // Search input
-        const searchInput = document.getElementById('searchInput') as HTMLInputElement;
-        const searchButton = document.getElementById('searchButton');
-        
+        const searchInput = document.getElementById(
+            "searchInput",
+        ) as HTMLInputElement;
+        const searchButton = document.getElementById("searchButton");
+
         if (searchInput) {
-            searchInput.addEventListener('input', (e) => {
+            searchInput.addEventListener("input", (e) => {
                 const target = e.target as HTMLInputElement;
                 this.handleSearchInput(target.value);
             });
-            
-            searchInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
+
+            searchInput.addEventListener("keypress", (e) => {
+                if (e.key === "Enter") {
                     this.performSearch();
                 }
             });
         }
-        
+
         if (searchButton) {
-            searchButton.addEventListener('click', () => {
+            searchButton.addEventListener("click", () => {
                 this.performSearch();
             });
         }
-        
+
         // Search mode buttons
-        document.querySelectorAll('.mode-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
+        document.querySelectorAll(".mode-btn").forEach((btn) => {
+            btn.addEventListener("click", (e) => {
                 const target = e.currentTarget as HTMLElement;
-                const mode = target.getAttribute('data-mode');
+                const mode = target.getAttribute("data-mode");
                 if (mode) {
                     this.setSearchMode(mode);
                 }
             });
         });
-        
+
         // View mode buttons
-        document.querySelectorAll('.view-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
+        document.querySelectorAll(".view-btn").forEach((btn) => {
+            btn.addEventListener("click", (e) => {
                 const target = e.currentTarget as HTMLElement;
-                const view = target.getAttribute('data-view') as "list" | "grid" | "timeline" | "domain";
+                const view = target.getAttribute("data-view") as
+                    | "list"
+                    | "grid"
+                    | "timeline"
+                    | "domain";
                 if (view) {
                     this.setViewMode(view);
                 }
             });
         });
-        
+
         this.setupFilterControls();
     }
 
@@ -272,17 +289,19 @@ class WebsiteLibraryPanelFullPage {
 
     private setupImportFunctionality() {
         // Setup import navigation buttons
-        const importWebActivityBtn = document.getElementById('importWebActivityBtn');
-        const importFromFileBtn = document.getElementById('importFromFileBtn');
+        const importWebActivityBtn = document.getElementById(
+            "importWebActivityBtn",
+        );
+        const importFromFileBtn = document.getElementById("importFromFileBtn");
 
         if (importWebActivityBtn) {
-            importWebActivityBtn.addEventListener('click', () => {
+            importWebActivityBtn.addEventListener("click", () => {
                 this.showWebActivityImportModal();
             });
         }
 
         if (importFromFileBtn) {
-            importFromFileBtn.addEventListener('click', () => {
+            importFromFileBtn.addEventListener("click", () => {
                 this.showFolderImportModal();
             });
         }
@@ -293,17 +312,20 @@ class WebsiteLibraryPanelFullPage {
 
     private setupImportEventListeners() {
         // Listen for import events from the UI
-        window.addEventListener('startWebActivityImport', async (event: any) => {
-            const options = event.detail as ImportOptions;
-            await this.handleWebActivityImport(options);
-        });
+        window.addEventListener(
+            "startWebActivityImport",
+            async (event: any) => {
+                const options = event.detail as ImportOptions;
+                await this.handleWebActivityImport(options);
+            },
+        );
 
-        window.addEventListener('startFolderImport', async (event: any) => {
+        window.addEventListener("startFolderImport", async (event: any) => {
             const options = event.detail as FolderImportOptions;
             await this.handleFolderImport(options);
         });
 
-        window.addEventListener('cancelImport', () => {
+        window.addEventListener("cancelImport", () => {
             this.handleCancelImport();
         });
 
@@ -328,15 +350,15 @@ class WebsiteLibraryPanelFullPage {
 
     private async checkConnectionStatus(): Promise<boolean> {
         try {
-            if (typeof chrome === 'undefined' || !chrome.runtime) {
+            if (typeof chrome === "undefined" || !chrome.runtime) {
                 this.isConnected = false;
                 return false;
             }
-            
+
             const response = await chrome.runtime.sendMessage({
-                action: 'checkWebSocketConnection'
+                action: "checkWebSocketConnection",
             });
-            
+
             this.isConnected = response?.connected === true;
             return this.isConnected;
         } catch (error) {
@@ -349,25 +371,26 @@ class WebsiteLibraryPanelFullPage {
     }
 
     private updateConnectionStatus() {
-        const statusElement = document.getElementById('connectionStatus');
+        const statusElement = document.getElementById("connectionStatus");
         if (statusElement) {
-            const indicator = statusElement.querySelector('.status-indicator');
-            const text = statusElement.querySelector('span:last-child');
-            
+            const indicator = statusElement.querySelector(".status-indicator");
+            const text = statusElement.querySelector("span:last-child");
+
             if (indicator && text) {
                 if (this.isConnected) {
-                    indicator.className = 'status-indicator status-connected';
-                    text.textContent = 'Connected';
+                    indicator.className = "status-indicator status-connected";
+                    text.textContent = "Connected";
                 } else {
-                    indicator.className = 'status-indicator status-disconnected';
-                    text.textContent = 'Disconnected';
+                    indicator.className =
+                        "status-indicator status-disconnected";
+                    text.textContent = "Disconnected";
                 }
             }
         }
     }
 
     private showConnectionRequired() {
-        const container = document.getElementById('searchResults');
+        const container = document.getElementById("searchResults");
         if (container) {
             container.innerHTML = `
                 <div class="connection-required">
@@ -385,14 +408,16 @@ class WebsiteLibraryPanelFullPage {
     private async reconnect() {
         this.notificationManager.showInfo("Attempting to reconnect...");
         const connected = await this.checkConnectionStatus();
-        
+
         if (connected) {
             this.notificationManager.showSuccess("Reconnected successfully!");
             await this.loadLibraryStats();
             await this.performSearch();
         } else {
-            this.notificationManager.showError("Failed to reconnect. Please check your connection.", 
-                () => this.reconnect());
+            this.notificationManager.showError(
+                "Failed to reconnect. Please check your connection.",
+                () => this.reconnect(),
+            );
         }
     }
 
@@ -401,25 +426,26 @@ class WebsiteLibraryPanelFullPage {
             this.showConnectionRequired();
             return;
         }
-        
+
         try {
-            this.libraryStats = await this.chromeExtensionService.getLibraryStats();
+            this.libraryStats =
+                await this.chromeExtensionService.getLibraryStats();
             this.updateStatsDisplay();
         } catch (error) {
             console.error("Failed to load library stats:", error);
             this.notificationManager.showError(
-                "Failed to load library statistics", 
-                () => this.loadLibraryStats()
+                "Failed to load library statistics",
+                () => this.loadLibraryStats(),
             );
         }
     }
 
     private updateStatsDisplay() {
         const updates: Array<[string, number]> = [
-            ['totalWebsites', this.libraryStats.totalWebsites],
-            ['totalBookmarks', this.libraryStats.totalBookmarks], 
-            ['totalHistory', this.libraryStats.totalHistory],
-            ['topDomains', this.libraryStats.topDomains]
+            ["totalWebsites", this.libraryStats.totalWebsites],
+            ["totalBookmarks", this.libraryStats.totalBookmarks],
+            ["totalHistory", this.libraryStats.totalHistory],
+            ["topDomains", this.libraryStats.topDomains],
         ];
 
         updates.forEach(([id, value]) => {
@@ -434,11 +460,11 @@ class WebsiteLibraryPanelFullPage {
         // Update navigation state
         this.navigation.previousPage = this.navigation.currentPage;
         this.navigation.currentPage = page;
-        
+
         // Update UI
         this.updateNavigation();
         this.showPage(page);
-        
+
         // Load page-specific data
         switch (page) {
             case "search":
@@ -455,35 +481,39 @@ class WebsiteLibraryPanelFullPage {
 
     private updateNavigation() {
         // Update active navigation item
-        document.querySelectorAll('.nav-item').forEach(item => {
-            item.classList.remove('active');
+        document.querySelectorAll(".nav-item").forEach((item) => {
+            item.classList.remove("active");
         });
-        
-        const activeItem = document.querySelector(`[data-page="${this.navigation.currentPage}"]`);
+
+        const activeItem = document.querySelector(
+            `[data-page="${this.navigation.currentPage}"]`,
+        );
         if (activeItem) {
-            activeItem.classList.add('active');
+            activeItem.classList.add("active");
         }
     }
 
     private showPage(page: string) {
         // Hide all pages
-        document.querySelectorAll('.page-content').forEach(pageEl => {
-            pageEl.classList.remove('active');
+        document.querySelectorAll(".page-content").forEach((pageEl) => {
+            pageEl.classList.remove("active");
         });
-        
+
         // Show current page
         const currentPageEl = document.getElementById(`${page}-page`);
         if (currentPageEl) {
-            currentPageEl.classList.add('active');
+            currentPageEl.classList.add("active");
         }
     }
 
     private setupFilterControls() {
-        const relevanceFilter = document.getElementById('relevanceFilter') as HTMLInputElement;
+        const relevanceFilter = document.getElementById(
+            "relevanceFilter",
+        ) as HTMLInputElement;
         if (relevanceFilter) {
-            relevanceFilter.addEventListener('input', (e) => {
+            relevanceFilter.addEventListener("input", (e) => {
                 const value = (e.target as HTMLInputElement).value;
-                const valueDisplay = document.getElementById('relevanceValue');
+                const valueDisplay = document.getElementById("relevanceValue");
                 if (valueDisplay) {
                     valueDisplay.textContent = `${value}%`;
                 }
@@ -491,60 +521,76 @@ class WebsiteLibraryPanelFullPage {
         }
 
         // Setup date filters
-        const dateFrom = document.getElementById('dateFrom') as HTMLInputElement;
-        const dateTo = document.getElementById('dateTo') as HTMLInputElement;
-        
+        const dateFrom = document.getElementById(
+            "dateFrom",
+        ) as HTMLInputElement;
+        const dateTo = document.getElementById("dateTo") as HTMLInputElement;
+
         if (dateFrom) {
-            dateFrom.addEventListener('change', () => this.updateSearchFilters());
+            dateFrom.addEventListener("change", () =>
+                this.updateSearchFilters(),
+            );
         }
         if (dateTo) {
-            dateTo.addEventListener('change', () => this.updateSearchFilters());
+            dateTo.addEventListener("change", () => this.updateSearchFilters());
         }
 
         // Setup other filters
-        const sourceFilter = document.getElementById('sourceFilter') as HTMLSelectElement;
-        const domainFilter = document.getElementById('domainFilter') as HTMLInputElement;
-        
+        const sourceFilter = document.getElementById(
+            "sourceFilter",
+        ) as HTMLSelectElement;
+        const domainFilter = document.getElementById(
+            "domainFilter",
+        ) as HTMLInputElement;
+
         if (sourceFilter) {
-            sourceFilter.addEventListener('change', () => this.updateSearchFilters());
+            sourceFilter.addEventListener("change", () =>
+                this.updateSearchFilters(),
+            );
         }
         if (domainFilter) {
-            domainFilter.addEventListener('input', () => this.updateSearchFilters());
+            domainFilter.addEventListener("input", () =>
+                this.updateSearchFilters(),
+            );
         }
 
         // Setup knowledge filters
         const knowledgeFilters = [
-            'hasEntitiesFilter',
-            'hasTopicsFilter', 
-            'hasActionsFilter',
-            'knowledgeExtractedFilter'
+            "hasEntitiesFilter",
+            "hasTopicsFilter",
+            "hasActionsFilter",
+            "knowledgeExtractedFilter",
         ];
-        
-        knowledgeFilters.forEach(filterId => {
-            const filter = document.getElementById(filterId) as HTMLInputElement;
+
+        knowledgeFilters.forEach((filterId) => {
+            const filter = document.getElementById(
+                filterId,
+            ) as HTMLInputElement;
             if (filter) {
-                filter.addEventListener('change', () => this.updateSearchFilters());
+                filter.addEventListener("change", () =>
+                    this.updateSearchFilters(),
+                );
             }
         });
     }
 
     private setupEventListeners() {
         // Settings button
-        const settingsButton = document.getElementById('settingsButton');
+        const settingsButton = document.getElementById("settingsButton");
         if (settingsButton) {
-            settingsButton.addEventListener('click', () => {
+            settingsButton.addEventListener("click", () => {
                 this.showSettings();
             });
         }
 
         // Event delegation for data-action buttons
-        document.addEventListener('click', (e) => {
+        document.addEventListener("click", (e) => {
             const target = e.target as HTMLElement;
-            const actionButton = target.closest('[data-action]') as HTMLElement;
-            
+            const actionButton = target.closest("[data-action]") as HTMLElement;
+
             if (actionButton) {
                 e.preventDefault();
-                const action = actionButton.getAttribute('data-action');
+                const action = actionButton.getAttribute("data-action");
                 this.handleAction(action, actionButton);
             }
         });
@@ -552,38 +598,38 @@ class WebsiteLibraryPanelFullPage {
 
     private handleAction(action: string | null, button: HTMLElement) {
         if (!action) return;
-        
+
         switch (action) {
-            case 'showImportModal':
+            case "showImportModal":
                 this.showImportModal();
                 break;
-            case 'exploreRecentBookmarks':
+            case "exploreRecentBookmarks":
                 this.exploreRecentBookmarks();
                 break;
-            case 'exploreMostVisited':
+            case "exploreMostVisited":
                 this.exploreMostVisited();
                 break;
-            case 'exploreByDomain':
+            case "exploreByDomain":
                 this.exploreByDomain();
                 break;
-            case 'reconnect':
+            case "reconnect":
                 this.reconnect();
                 break;
             default:
-                console.warn('Unknown action:', action);
+                console.warn("Unknown action:", action);
         }
     }
 
     private handleQuickAction(button: Element) {
-        const onclick = button.getAttribute('onclick');
+        const onclick = button.getAttribute("onclick");
         if (onclick) {
-            if (onclick.includes('showImportModal')) {
+            if (onclick.includes("showImportModal")) {
                 this.showImportModal();
-            } else if (onclick.includes('exploreRecentBookmarks')) {
+            } else if (onclick.includes("exploreRecentBookmarks")) {
                 this.exploreRecentBookmarks();
-            } else if (onclick.includes('exploreMostVisited')) {
+            } else if (onclick.includes("exploreMostVisited")) {
                 this.exploreMostVisited();
-            } else if (onclick.includes('exploreByDomain')) {
+            } else if (onclick.includes("exploreByDomain")) {
                 this.exploreByDomain();
             }
         }
@@ -591,26 +637,26 @@ class WebsiteLibraryPanelFullPage {
 
     private setSearchMode(mode: string) {
         this.currentSearchMode = mode;
-        
+
         // Update UI
-        document.querySelectorAll('.mode-btn').forEach(btn => {
-            btn.classList.remove('active');
+        document.querySelectorAll(".mode-btn").forEach((btn) => {
+            btn.classList.remove("active");
         });
-        
+
         const activeBtn = document.querySelector(`[data-mode="${mode}"]`);
         if (activeBtn) {
-            activeBtn.classList.add('active');
+            activeBtn.classList.add("active");
         }
     }
 
     private setViewMode(view: "list" | "grid" | "timeline" | "domain") {
         if (this.currentViewMode === view) return;
-        
+
         this.currentViewMode = view;
-        
+
         // Update UI with smooth transition
         this.updateViewModeButtons();
-        
+
         // Animate the transition if results are visible
         if (this.currentResults.length > 0) {
             this.animateViewModeTransition(view);
@@ -618,71 +664,75 @@ class WebsiteLibraryPanelFullPage {
     }
 
     private updateViewModeButtons() {
-        document.querySelectorAll('.view-btn').forEach(btn => {
-            btn.classList.remove('active');
+        document.querySelectorAll(".view-btn").forEach((btn) => {
+            btn.classList.remove("active");
         });
-        
-        const activeBtn = document.querySelector(`[data-view="${this.currentViewMode}"]`);
+
+        const activeBtn = document.querySelector(
+            `[data-view="${this.currentViewMode}"]`,
+        );
         if (activeBtn) {
-            activeBtn.classList.add('active');
+            activeBtn.classList.add("active");
         }
     }
 
-    private async animateViewModeTransition(newView: "list" | "grid" | "timeline" | "domain") {
-        const container = document.getElementById('resultsContainer');
+    private async animateViewModeTransition(
+        newView: "list" | "grid" | "timeline" | "domain",
+    ) {
+        const container = document.getElementById("resultsContainer");
         if (!container) return;
-        
+
         // Add transitioning class to prevent interactions
-        container.classList.add('transitioning');
-        
+        container.classList.add("transitioning");
+
         // Get current content
-        const currentContent = container.querySelector('.results-content');
+        const currentContent = container.querySelector(".results-content");
         if (currentContent) {
             // Fade out current content
-            currentContent.classList.add('fade-out');
-            
+            currentContent.classList.add("fade-out");
+
             // Wait for fade out animation
-            await new Promise(resolve => setTimeout(resolve, 200));
+            await new Promise((resolve) => setTimeout(resolve, 200));
         }
-        
+
         // Update view class on container
-        container.className = 'results-container';
-        container.classList.add(`${newView}-view`, 'transitioning');
-        
+        container.className = "results-container";
+        container.classList.add(`${newView}-view`, "transitioning");
+
         // Render new content
         this.renderSearchResults(this.currentResults);
-        
+
         // Get new content and animate in
-        const newContent = container.querySelector('.results-content');
+        const newContent = container.querySelector(".results-content");
         if (newContent) {
-            newContent.classList.add('fade-out'); // Start hidden
-            
+            newContent.classList.add("fade-out"); // Start hidden
+
             // Force layout
             (newContent as HTMLElement).offsetHeight;
-            
+
             // Fade in new content
-            newContent.classList.remove('fade-out');
-            newContent.classList.add('fade-in');
-            
+            newContent.classList.remove("fade-out");
+            newContent.classList.add("fade-in");
+
             // Wait for fade in animation
-            await new Promise(resolve => setTimeout(resolve, 200));
-            
+            await new Promise((resolve) => setTimeout(resolve, 200));
+
             // Clean up classes
-            newContent.classList.remove('fade-in');
+            newContent.classList.remove("fade-in");
         }
-        
+
         // Remove transitioning class
-        container.classList.remove('transitioning');
+        container.classList.remove("transitioning");
     }
 
     private handleSearchInput(query: string) {
         this.currentQuery = query;
-        
+
         // Clear previous debounce timer
         if (this.searchDebounceTimer) {
             clearTimeout(this.searchDebounceTimer);
         }
-        
+
         // Set new debounce timer with enhanced features
         this.searchDebounceTimer = window.setTimeout(async () => {
             if (query.length >= 2) {
@@ -697,45 +747,53 @@ class WebsiteLibraryPanelFullPage {
     private async performSearch() {
         const query = this.currentQuery.trim();
         if (!query) return;
-        
+
         this.hideSearchSuggestions();
         this.addToRecentSearches(query);
         this.showSearchLoading();
-        
+
         try {
             // Check cache first for improved performance
             const filters = this.getSearchFilters();
             const cacheKey = `${query}-${JSON.stringify(filters)}-${this.currentSearchMode}`;
-            
+
             if (this.searchCache.has(cacheKey)) {
-                const cachedResults = this.searchCache.get(cacheKey)!;;
+                const cachedResults = this.searchCache.get(cacheKey)!;
                 this.showSearchResults(cachedResults);
-                this.notificationManager.showSuccess("Results loaded from cache");
+                this.notificationManager.showSuccess(
+                    "Results loaded from cache",
+                );
                 return;
             }
-            
+
             // Perform search with enhanced error handling
             let results: SearchResult;
-            
+
             if (this.isConnected) {
-                results = await this.chromeExtensionService.searchWebsites(query, filters);
+                results = await this.chromeExtensionService.searchWebsites(
+                    query,
+                    filters,
+                );
                 await this.chromeExtensionService.saveSearch(query, results);
             } else {
                 results = await this.searchWebsites(query, filters);
             }
-            
+
             // Cache results for future use
             this.searchCache.set(cacheKey, results);
-            
+
             // Enhance results with real-time knowledge status
             await this.enhanceResultsWithKnowledge(results.websites);
-            
+
             this.showSearchResults(results);
-            
         } catch (error) {
-            console.error('Search failed:', error);
-            this.showSearchError('Search failed. Please check your connection and try again.');
-            this.notificationManager.showError('Search failed', () => this.performSearch());
+            console.error("Search failed:", error);
+            this.showSearchError(
+                "Search failed. Please check your connection and try again.",
+            );
+            this.notificationManager.showError("Search failed", () =>
+                this.performSearch(),
+            );
         }
     }
 
@@ -748,10 +806,13 @@ class WebsiteLibraryPanelFullPage {
                     website.knowledge = this.knowledgeCache.get(website.url);
                     return;
                 }
-                
+
                 // Get fresh knowledge status
                 if (this.isConnected) {
-                    const knowledge = await this.chromeExtensionService.checkKnowledgeStatus(website.url);
+                    const knowledge =
+                        await this.chromeExtensionService.checkKnowledgeStatus(
+                            website.url,
+                        );
                     website.knowledge = knowledge;
                     this.knowledgeCache.set(website.url, knowledge);
                 } else {
@@ -759,32 +820,46 @@ class WebsiteLibraryPanelFullPage {
                     website.knowledge = {
                         hasKnowledge: false,
                         status: "none",
-                        confidence: 0
+                        confidence: 0,
                     };
                 }
             } catch (error) {
-                console.error(`Failed to check knowledge for ${website.url}:`, error);
+                console.error(
+                    `Failed to check knowledge for ${website.url}:`,
+                    error,
+                );
             }
         });
-        
+
         await Promise.allSettled(knowledgePromises);
     }
 
     private getSearchFilters(): SearchFilters {
         const filters: SearchFilters = {};
-        
-        const dateFrom = (document.getElementById('dateFrom') as HTMLInputElement)?.value;
-        const dateTo = (document.getElementById('dateTo') as HTMLInputElement)?.value;
-        const sourceType = (document.getElementById('sourceFilter') as HTMLSelectElement)?.value;
-        const domain = (document.getElementById('domainFilter') as HTMLInputElement)?.value;
-        const minRelevance = parseInt((document.getElementById('relevanceFilter') as HTMLInputElement)?.value || '0');
-        
+
+        const dateFrom = (
+            document.getElementById("dateFrom") as HTMLInputElement
+        )?.value;
+        const dateTo = (document.getElementById("dateTo") as HTMLInputElement)
+            ?.value;
+        const sourceType = (
+            document.getElementById("sourceFilter") as HTMLSelectElement
+        )?.value;
+        const domain = (
+            document.getElementById("domainFilter") as HTMLInputElement
+        )?.value;
+        const minRelevance = parseInt(
+            (document.getElementById("relevanceFilter") as HTMLInputElement)
+                ?.value || "0",
+        );
+
         if (dateFrom) filters.dateFrom = dateFrom;
         if (dateTo) filters.dateTo = dateTo;
-        if (sourceType) filters.sourceType = sourceType as "bookmarks" | "history";
+        if (sourceType)
+            filters.sourceType = sourceType as "bookmarks" | "history";
         if (domain) filters.domain = domain;
         if (minRelevance > 0) filters.minRelevance = minRelevance;
-        
+
         return filters;
     }
 
@@ -795,14 +870,20 @@ class WebsiteLibraryPanelFullPage {
         }
     }
 
-    private async searchWebsites(query: string, filters: SearchFilters): Promise<SearchResult> {
+    private async searchWebsites(
+        query: string,
+        filters: SearchFilters,
+    ): Promise<SearchResult> {
         if (!this.isConnected) {
             this.showConnectionRequired();
             throw new Error("Connection required");
         }
-        
+
         try {
-            return await this.chromeExtensionService.searchWebsites(query, filters);
+            return await this.chromeExtensionService.searchWebsites(
+                query,
+                filters,
+            );
         } catch (error) {
             console.error("Search failed:", error);
             throw error;
@@ -810,11 +891,11 @@ class WebsiteLibraryPanelFullPage {
     }
 
     private showSearchLoading() {
-        const resultsContainer = document.getElementById('searchResults');
-        const emptyState = document.getElementById('searchEmptyState');
-        
+        const resultsContainer = document.getElementById("searchResults");
+        const emptyState = document.getElementById("searchEmptyState");
+
         if (resultsContainer) {
-            resultsContainer.style.display = 'block';
+            resultsContainer.style.display = "block";
             resultsContainer.innerHTML = `
                 <div class="results-header">
                     <h2 class="results-title">Searching...</h2>
@@ -829,26 +910,26 @@ class WebsiteLibraryPanelFullPage {
                 </div>
             `;
         }
-        
+
         if (emptyState) {
-            emptyState.style.display = 'none';
+            emptyState.style.display = "none";
         }
     }
 
     private showSearchResults(results: SearchResult) {
         this.currentResults = results.websites;
-        
-        const resultsContainer = document.getElementById('searchResults');
-        const emptyState = document.getElementById('searchEmptyState');
-        
+
+        const resultsContainer = document.getElementById("searchResults");
+        const emptyState = document.getElementById("searchEmptyState");
+
         if (emptyState) {
-            emptyState.style.display = 'none';
+            emptyState.style.display = "none";
         }
-        
+
         if (resultsContainer) {
-            resultsContainer.style.display = 'block';
+            resultsContainer.style.display = "block";
             this.renderSearchResults(results.websites);
-            
+
             // Show AI summary if available
             if (results.summary.text) {
                 this.showAISummary(results.summary.text);
@@ -857,35 +938,37 @@ class WebsiteLibraryPanelFullPage {
     }
 
     private renderSearchResults(websites: Website[]) {
-        const container = document.getElementById('resultsContainer');
+        const container = document.getElementById("resultsContainer");
         if (!container) return;
-        
+
         // Add view-specific class to container
-        container.className = 'results-container';
+        container.className = "results-container";
         container.classList.add(`${this.currentViewMode}-view`);
-        
-        let html = '';
-        
+
+        let html = "";
+
         switch (this.currentViewMode) {
-            case 'list':
+            case "list":
                 html = this.renderListView(websites);
                 break;
-            case 'grid':
+            case "grid":
                 html = this.renderGridView(websites);
                 break;
-            case 'timeline':
+            case "timeline":
                 html = this.renderTimelineView(websites);
                 break;
-            case 'domain':
+            case "domain":
                 html = this.renderDomainView(websites);
                 break;
         }
-        
+
         container.innerHTML = `<div class="results-content">${html}</div>`;
     }
 
     private renderListView(websites: Website[]): string {
-        return websites.map(website => `
+        return websites
+            .map(
+                (website) => `
             <div class="search-result-item">
                 <div class="d-flex align-items-start">
                     <img src="https://www.google.com/s2/favicons?domain=${website.domain}" 
@@ -897,42 +980,50 @@ class WebsiteLibraryPanelFullPage {
                             </a>
                         </h6>
                         <div class="result-domain text-muted mb-1">${website.domain}</div>
-                        ${website.snippet ? `<p class="mb-2 text-muted small">${website.snippet}</p>` : ''}
+                        ${website.snippet ? `<p class="mb-2 text-muted small">${website.snippet}</p>` : ""}
                         
                         <div class="d-flex align-items-center justify-content-between">
                             <div class="knowledge-badges">
                                 ${this.renderKnowledgeBadges(website.knowledge)}
                             </div>
                             <div class="d-flex align-items-center gap-2">
-                                ${website.knowledge?.confidence ? this.renderConfidenceIndicator(website.knowledge.confidence) : ''}
-                                ${website.score ? `<span class="result-score">${Math.round(website.score * 100)}%</span>` : ''}
+                                ${website.knowledge?.confidence ? this.renderConfidenceIndicator(website.knowledge.confidence) : ""}
+                                ${website.score ? `<span class="result-score">${Math.round(website.score * 100)}%</span>` : ""}
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-        `).join('');
+        `,
+            )
+            .join("");
     }
 
     private renderGridView(websites: Website[]): string {
-        const gridHtml = websites.map(website => `
+        const gridHtml = websites
+            .map(
+                (website) => `
             <div class="card result-card">
                 <div class="card-body">
                     <div class="d-flex align-items-center mb-2">
                         <img src="https://www.google.com/s2/favicons?domain=${website.domain}" 
                              class="result-favicon me-2" alt="Favicon">
                         <h6 class="card-title mb-0 flex-grow-1">${website.title}</h6>
-                        ${website.score ? `<span class="result-score">${Math.round(website.score * 100)}%</span>` : ''}
+                        ${website.score ? `<span class="result-score">${Math.round(website.score * 100)}%</span>` : ""}
                     </div>
                     
                     <div class="result-domain text-muted mb-2">${website.domain}</div>
-                    ${website.snippet ? `<p class="card-text small mb-3">${website.snippet}</p>` : ''}
+                    ${website.snippet ? `<p class="card-text small mb-3">${website.snippet}</p>` : ""}
                     
-                    ${website.knowledge?.confidence ? `
+                    ${
+                        website.knowledge?.confidence
+                            ? `
                         <div class="mb-2">
                             ${this.renderConfidenceIndicator(website.knowledge.confidence)}
                         </div>
-                    ` : ''}
+                    `
+                            : ""
+                    }
                     
                     <div class="knowledge-badges">
                         ${this.renderKnowledgeBadges(website.knowledge)}
@@ -941,25 +1032,36 @@ class WebsiteLibraryPanelFullPage {
                     <a href="${website.url}" target="_blank" class="stretched-link"></a>
                 </div>
             </div>
-        `).join('');
-        
+        `,
+            )
+            .join("");
+
         return gridHtml;
     }
 
     private renderTimelineView(websites: Website[]): string {
         // Group by date for timeline view
-        const grouped = websites.reduce((acc, website) => {
-            const date = website.lastVisited ? new Date(website.lastVisited).toDateString() : 'Unknown Date';
-            if (!acc[date]) acc[date] = [];
-            acc[date].push(website);
-            return acc;
-        }, {} as Record<string, Website[]>);
+        const grouped = websites.reduce(
+            (acc, website) => {
+                const date = website.lastVisited
+                    ? new Date(website.lastVisited).toDateString()
+                    : "Unknown Date";
+                if (!acc[date]) acc[date] = [];
+                acc[date].push(website);
+                return acc;
+            },
+            {} as Record<string, Website[]>,
+        );
 
-        return Object.entries(grouped).map(([date, sites]) => `
+        return Object.entries(grouped)
+            .map(
+                ([date, sites]) => `
             <div class="timeline-item">
-                <div class="timeline-date">${date === 'Unknown Date' ? 'Recently Added' : date}</div>
+                <div class="timeline-date">${date === "Unknown Date" ? "Recently Added" : date}</div>
                 
-                ${sites.map(website => `
+                ${sites
+                    .map(
+                        (website) => `
                     <div class="search-result-item mb-3 border-0 p-0">
                         <div class="d-flex align-items-start">
                             <img src="https://www.google.com/s2/favicons?domain=${website.domain}" 
@@ -971,65 +1073,90 @@ class WebsiteLibraryPanelFullPage {
                                     </a>
                                 </h6>
                                 <div class="result-domain text-muted mb-1">${website.domain}</div>
-                                ${website.snippet ? `<p class="mb-2 text-muted small">${website.snippet}</p>` : ''}
+                                ${website.snippet ? `<p class="mb-2 text-muted small">${website.snippet}</p>` : ""}
                                 
                                 <div class="d-flex align-items-center justify-content-between">
                                     <div class="knowledge-badges">
                                         ${this.renderKnowledgeBadges(website.knowledge)}
                                     </div>
                                     <div class="d-flex align-items-center gap-2">
-                                        ${website.knowledge?.confidence ? this.renderConfidenceIndicator(website.knowledge.confidence) : ''}
-                                        ${website.score ? `<span class="result-score">${Math.round(website.score * 100)}%</span>` : ''}
+                                        ${website.knowledge?.confidence ? this.renderConfidenceIndicator(website.knowledge.confidence) : ""}
+                                        ${website.score ? `<span class="result-score">${Math.round(website.score * 100)}%</span>` : ""}
                                     </div>
                                 </div>
                                 
-                                ${website.lastVisited ? `
+                                ${
+                                    website.lastVisited
+                                        ? `
                                     <div class="mt-1">
                                         <small class="text-muted">
                                             <i class="bi bi-clock me-1"></i>
                                             ${new Date(website.lastVisited).toLocaleTimeString()}
                                         </small>
                                     </div>
-                                ` : ''}
+                                `
+                                        : ""
+                                }
                             </div>
                         </div>
                     </div>
-                `).join('')}
+                `,
+                    )
+                    .join("")}
             </div>
-        `).join('');
+        `,
+            )
+            .join("");
     }
 
     private renderDomainView(websites: Website[]): string {
         // Group by domain and calculate knowledge stats
-        const grouped = websites.reduce((acc, website) => {
-            if (!acc[website.domain]) {
-                acc[website.domain] = {
-                    sites: [],
-                    totalEntities: 0,
-                    totalTopics: 0,
-                    totalActions: 0,
-                    extractedCount: 0
-                };
-            }
-            acc[website.domain].sites.push(website);
-            
-            if (website.knowledge?.entityCount) {
-                acc[website.domain].totalEntities += website.knowledge.entityCount;
-            }
-            if (website.knowledge?.topicCount) {
-                acc[website.domain].totalTopics += website.knowledge.topicCount;
-            }
-            if (website.knowledge?.suggestionCount) {
-                acc[website.domain].totalActions += website.knowledge.suggestionCount;
-            }
-            if (website.knowledge?.status === 'extracted') {
-                acc[website.domain].extractedCount++;
-            }
-            
-            return acc;
-        }, {} as Record<string, {sites: Website[], totalEntities: number, totalTopics: number, totalActions: number, extractedCount: number}>);
+        const grouped = websites.reduce(
+            (acc, website) => {
+                if (!acc[website.domain]) {
+                    acc[website.domain] = {
+                        sites: [],
+                        totalEntities: 0,
+                        totalTopics: 0,
+                        totalActions: 0,
+                        extractedCount: 0,
+                    };
+                }
+                acc[website.domain].sites.push(website);
 
-        return Object.entries(grouped).map(([domain, data]) => `
+                if (website.knowledge?.entityCount) {
+                    acc[website.domain].totalEntities +=
+                        website.knowledge.entityCount;
+                }
+                if (website.knowledge?.topicCount) {
+                    acc[website.domain].totalTopics +=
+                        website.knowledge.topicCount;
+                }
+                if (website.knowledge?.suggestionCount) {
+                    acc[website.domain].totalActions +=
+                        website.knowledge.suggestionCount;
+                }
+                if (website.knowledge?.status === "extracted") {
+                    acc[website.domain].extractedCount++;
+                }
+
+                return acc;
+            },
+            {} as Record<
+                string,
+                {
+                    sites: Website[];
+                    totalEntities: number;
+                    totalTopics: number;
+                    totalActions: number;
+                    extractedCount: number;
+                }
+            >,
+        );
+
+        return Object.entries(grouped)
+            .map(
+                ([domain, data]) => `
             <div class="domain-group">
                 <div class="domain-header">
                     <div class="d-flex align-items-center justify-content-between">
@@ -1043,59 +1170,71 @@ class WebsiteLibraryPanelFullPage {
                         </div>
                         <div class="d-flex gap-2">
                             <span class="badge">${data.sites.length}</span>
-                            ${data.extractedCount > 0 ? `<span class="knowledge-badge extracted small">${data.extractedCount} extracted</span>` : ''}
+                            ${data.extractedCount > 0 ? `<span class="knowledge-badge extracted small">${data.extractedCount} extracted</span>` : ""}
                         </div>
                     </div>
                     
-                    ${(data.totalEntities > 0 || data.totalTopics > 0 || data.totalActions > 0) ? `
+                    ${
+                        data.totalEntities > 0 ||
+                        data.totalTopics > 0 ||
+                        data.totalActions > 0
+                            ? `
                         <div class="domain-knowledge-summary mt-2">
                             <div class="knowledge-badges">
-                                ${data.totalEntities > 0 ? `<span class="knowledge-badge entity small">${data.totalEntities} Entities</span>` : ''}
-                                ${data.totalTopics > 0 ? `<span class="knowledge-badge topic small">${data.totalTopics} Topics</span>` : ''}
-                                ${data.totalActions > 0 ? `<span class="knowledge-badge action small">${data.totalActions} Actions</span>` : ''}
+                                ${data.totalEntities > 0 ? `<span class="knowledge-badge entity small">${data.totalEntities} Entities</span>` : ""}
+                                ${data.totalTopics > 0 ? `<span class="knowledge-badge topic small">${data.totalTopics} Topics</span>` : ""}
+                                ${data.totalActions > 0 ? `<span class="knowledge-badge action small">${data.totalActions} Actions</span>` : ""}
                             </div>
                         </div>
-                    ` : ''}
+                    `
+                            : ""
+                    }
                 </div>
                 
                 <div class="domain-content">
-                    ${data.sites.map(website => `
+                    ${data.sites
+                        .map(
+                            (website) => `
                         <div class="search-result-item">
                             <h6 class="mb-1">
                                 <a href="${website.url}" target="_blank" class="text-decoration-none">
                                     ${website.title}
                                 </a>
                             </h6>
-                            ${website.snippet ? `<p class="mb-2 text-muted small">${website.snippet}</p>` : ''}
+                            ${website.snippet ? `<p class="mb-2 text-muted small">${website.snippet}</p>` : ""}
                             
                             <div class="d-flex align-items-center justify-content-between">
                                 <div class="knowledge-badges">
                                     ${this.renderKnowledgeBadges(website.knowledge)}
                                 </div>
                                 <div class="d-flex align-items-center gap-2">
-                                    ${website.knowledge?.confidence ? this.renderConfidenceIndicator(website.knowledge.confidence) : ''}
-                                    ${website.score ? `<span class="result-score">${Math.round(website.score * 100)}%</span>` : ''}
+                                    ${website.knowledge?.confidence ? this.renderConfidenceIndicator(website.knowledge.confidence) : ""}
+                                    ${website.score ? `<span class="result-score">${Math.round(website.score * 100)}%</span>` : ""}
                                 </div>
                             </div>
                         </div>
-                    `).join('')}
+                    `,
+                        )
+                        .join("")}
                 </div>
             </div>
-        `).join('');
+        `,
+            )
+            .join("");
     }
 
     private showAISummary(summary: string) {
-        const summarySection = document.getElementById('aiSummary');
-        const summaryContent = document.getElementById('summaryContent');
-        
+        const summarySection = document.getElementById("aiSummary");
+        const summaryContent = document.getElementById("summaryContent");
+
         if (summarySection && summaryContent) {
             summaryContent.textContent = summary;
-            summarySection.style.display = 'block';
+            summarySection.style.display = "block";
         }
     }
 
     private showSearchError(message: string) {
-        const resultsContainer = document.getElementById('searchResults');
+        const resultsContainer = document.getElementById("searchResults");
         if (resultsContainer) {
             resultsContainer.innerHTML = `
                 <div class="alert alert-danger" role="alert">
@@ -1112,39 +1251,44 @@ class WebsiteLibraryPanelFullPage {
         if (index > -1) {
             this.recentSearches.splice(index, 1);
         }
-        
+
         // Add to beginning
         this.recentSearches.unshift(query);
-        
+
         // Keep only last 10
         this.recentSearches = this.recentSearches.slice(0, 10);
-        
+
         // Update UI
         this.updateRecentSearchesUI();
-        
+
         // Save to storage
         this.saveRecentSearches();
     }
 
     private updateRecentSearchesUI() {
-        const container = document.getElementById('recentSearchesList');
+        const container = document.getElementById("recentSearchesList");
         if (!container) return;
-        
+
         if (this.recentSearches.length === 0) {
-            container.innerHTML = '<span class="empty-message">No recent searches</span>';
+            container.innerHTML =
+                '<span class="empty-message">No recent searches</span>';
             return;
         }
-        
-        container.innerHTML = this.recentSearches.map(query => `
+
+        container.innerHTML = this.recentSearches
+            .map(
+                (query) => `
             <span class="recent-search-tag" data-query="${query}">
                 ${query}
             </span>
-        `).join('');
-        
+        `,
+            )
+            .join("");
+
         // Add event listeners to recent search tags
-        container.querySelectorAll('.recent-search-tag').forEach(tag => {
-            tag.addEventListener('click', () => {
-                const query = tag.getAttribute('data-query');
+        container.querySelectorAll(".recent-search-tag").forEach((tag) => {
+            tag.addEventListener("click", () => {
+                const query = tag.getAttribute("data-query");
                 if (query) {
                     this.performSearchWithQuery(query);
                 }
@@ -1153,7 +1297,9 @@ class WebsiteLibraryPanelFullPage {
     }
 
     public performSearchWithQuery(query: string) {
-        const searchInput = document.getElementById('searchInput') as HTMLInputElement;
+        const searchInput = document.getElementById(
+            "searchInput",
+        ) as HTMLInputElement;
         if (searchInput) {
             searchInput.value = query;
             this.currentQuery = query;
@@ -1182,7 +1328,7 @@ class WebsiteLibraryPanelFullPage {
 
     private async loadDiscoverData() {
         if (!this.isConnected) {
-            const container = document.getElementById('discoverContent');
+            const container = document.getElementById("discoverContent");
             if (container) {
                 container.innerHTML = `
                     <div class="connection-required">
@@ -1197,62 +1343,74 @@ class WebsiteLibraryPanelFullPage {
             }
             return;
         }
-        
+
         // TODO: Implement actual API call to get discover data
         // For now, return empty data
         this.discoverData = {
             trendingTopics: [],
             readingPatterns: [],
             popularPages: [],
-            topDomains: []
+            topDomains: [],
         };
     }
 
     private renderDiscoverContent() {
         if (!this.discoverData) return;
-        
+
         this.renderTrendingContent();
         this.renderReadingPatterns();
         this.renderPopularPages();
     }
 
     private renderTrendingContent() {
-        const container = document.getElementById('trendingContent');
+        const container = document.getElementById("trendingContent");
         if (!container || !this.discoverData) return;
-        
-        container.innerHTML = this.discoverData.trendingTopics.map(topic => `
+
+        container.innerHTML = this.discoverData.trendingTopics
+            .map(
+                (topic) => `
             <div class="card">
                 <div class="card-body">
                     <h6 class="card-title">${topic.topic}</h6>
                     <div class="d-flex align-items-center justify-content-between">
                         <span class="text-muted">${topic.count} pages</span>
                         <div class="d-flex align-items-center">
-                            <i class="bi bi-arrow-${topic.trend === 'up' ? 'up' : topic.trend === 'down' ? 'down' : 'right'} 
-                               text-${topic.trend === 'up' ? 'success' : topic.trend === 'down' ? 'danger' : 'secondary'}"></i>
-                            ${topic.percentage > 0 ? `<span class="text-${topic.trend === 'up' ? 'success' : 'danger'} small ms-1">
-                                ${topic.percentage}%</span>` : ''}
+                            <i class="bi bi-arrow-${topic.trend === "up" ? "up" : topic.trend === "down" ? "down" : "right"} 
+                               text-${topic.trend === "up" ? "success" : topic.trend === "down" ? "danger" : "secondary"}"></i>
+                            ${
+                                topic.percentage > 0
+                                    ? `<span class="text-${topic.trend === "up" ? "success" : "danger"} small ms-1">
+                                ${topic.percentage}%</span>`
+                                    : ""
+                            }
                         </div>
                     </div>
                 </div>
             </div>
-        `).join('');
+        `,
+            )
+            .join("");
     }
 
     private renderReadingPatterns() {
-        const container = document.getElementById('readingPatterns');
+        const container = document.getElementById("readingPatterns");
         if (!container || !this.discoverData) return;
-        
+
         container.innerHTML = `
             <div class="card">
                 <div class="card-body">
                     <h6 class="card-title">Daily Activity Pattern</h6>
                     <div class="reading-pattern-chart">
-                        ${this.discoverData.readingPatterns.map(pattern => `
-                            <div class="pattern-item ${pattern.peak ? 'peak' : ''}">
+                        ${this.discoverData.readingPatterns
+                            .map(
+                                (pattern) => `
+                            <div class="pattern-item ${pattern.peak ? "peak" : ""}">
                                 <div class="pattern-bar" style="height: ${pattern.activity}%"></div>
                                 <div class="pattern-time">${pattern.timeframe}</div>
                             </div>
-                        `).join('')}
+                        `,
+                            )
+                            .join("")}
                     </div>
                 </div>
             </div>
@@ -1260,10 +1418,13 @@ class WebsiteLibraryPanelFullPage {
     }
 
     private renderPopularPages() {
-        const container = document.getElementById('popularPages');
+        const container = document.getElementById("popularPages");
         if (!container) return;
-        
-        if (!this.discoverData?.popularPages || this.discoverData.popularPages.length === 0) {
+
+        if (
+            !this.discoverData?.popularPages ||
+            this.discoverData.popularPages.length === 0
+        ) {
             container.innerHTML = `
                 <div class="empty-state">
                     <i class="bi bi-fire"></i>
@@ -1273,14 +1434,16 @@ class WebsiteLibraryPanelFullPage {
             `;
             return;
         }
-        
+
         // Render popular pages similar to search results
-        container.innerHTML = this.renderListView(this.discoverData.popularPages);
+        container.innerHTML = this.renderListView(
+            this.discoverData.popularPages,
+        );
     }
 
     private async loadAnalyticsData() {
         if (!this.isConnected) {
-            const container = document.getElementById('analyticsContent');
+            const container = document.getElementById("analyticsContent");
             if (container) {
                 container.innerHTML = `
                     <div class="connection-required">
@@ -1295,7 +1458,7 @@ class WebsiteLibraryPanelFullPage {
             }
             return;
         }
-        
+
         // TODO: Implement actual API call to get analytics data
         // For now, return basic data based on library stats
         this.analyticsData = {
@@ -1303,28 +1466,28 @@ class WebsiteLibraryPanelFullPage {
                 totalSites: this.libraryStats.totalWebsites,
                 totalBookmarks: this.libraryStats.totalBookmarks,
                 totalHistory: this.libraryStats.totalHistory,
-                knowledgeExtracted: 0
+                knowledgeExtracted: 0,
             },
             trends: [],
-            insights: []
+            insights: [],
         };
     }
 
     private renderAnalyticsContent() {
         if (!this.analyticsData) return;
-        
+
         this.renderAnalyticsOverview();
         this.renderActivityCharts();
         this.renderKnowledgeInsights();
     }
 
     private renderKnowledgeInsights() {
-        const container = document.getElementById('knowledgeInsights');
+        const container = document.getElementById("knowledgeInsights");
         if (!container || !this.analyticsData) return;
-        
+
         // Enhanced knowledge insights with visualizations
         const knowledgeStats = this.calculateKnowledgeStats();
-        
+
         container.innerHTML = `
             <div class="card">
                 <div class="card-body">
@@ -1414,10 +1577,10 @@ class WebsiteLibraryPanelFullPage {
                 actionProgress: 0,
                 highQuality: 0,
                 mediumQuality: 0,
-                lowQuality: 0
+                lowQuality: 0,
             };
         }
-        
+
         // TODO: Implement actual calculation based on real data
         return {
             entityProgress: 0,
@@ -1425,22 +1588,22 @@ class WebsiteLibraryPanelFullPage {
             actionProgress: 0,
             highQuality: 0,
             mediumQuality: 0,
-            lowQuality: 0
+            lowQuality: 0,
         };
     }
 
     private handleKnowledgeBadgeClick(badge: HTMLElement) {
         // Add visual feedback
-        badge.style.transform = 'scale(0.95)';
+        badge.style.transform = "scale(0.95)";
         setTimeout(() => {
-            badge.style.transform = '';
+            badge.style.transform = "";
         }, 150);
-        
+
         // Get badge type and show details
-        const badgeType = Array.from(badge.classList).find(cls => 
-            ['entity', 'topic', 'action', 'extracted'].includes(cls)
+        const badgeType = Array.from(badge.classList).find((cls) =>
+            ["entity", "topic", "action", "extracted"].includes(cls),
         );
-        
+
         if (badgeType) {
             this.showKnowledgeDetails(badgeType, badge);
         }
@@ -1450,46 +1613,48 @@ class WebsiteLibraryPanelFullPage {
         const topic = tag.textContent?.trim();
         if (topic) {
             // Simulate search for this topic
-            const searchInput = document.getElementById('searchInput') as HTMLInputElement;
+            const searchInput = document.getElementById(
+                "searchInput",
+            ) as HTMLInputElement;
             if (searchInput) {
                 searchInput.value = topic;
                 this.currentQuery = topic;
                 this.performSearch();
-                this.navigateToPage('search');
+                this.navigateToPage("search");
             }
         }
     }
 
     private showKnowledgeDetails(type: string, element: HTMLElement) {
         // Create a temporary tooltip showing knowledge details
-        const tooltip = document.createElement('div');
-        tooltip.className = 'knowledge-tooltip';
+        const tooltip = document.createElement("div");
+        tooltip.className = "knowledge-tooltip";
         tooltip.innerHTML = this.getKnowledgeTooltipContent(type);
-        
+
         document.body.appendChild(tooltip);
-        
+
         // Position tooltip
         const rect = element.getBoundingClientRect();
-        tooltip.style.position = 'fixed';
+        tooltip.style.position = "fixed";
         tooltip.style.top = `${rect.bottom + 8}px`;
         tooltip.style.left = `${rect.left}px`;
-        tooltip.style.zIndex = '9999';
-        
+        tooltip.style.zIndex = "9999";
+
         // Remove tooltip after delay
         setTimeout(() => {
             tooltip.remove();
         }, 3000);
-        
+
         // Remove on click outside
         const removeTooltip = (e: Event) => {
             if (!tooltip.contains(e.target as Node)) {
                 tooltip.remove();
-                document.removeEventListener('click', removeTooltip);
+                document.removeEventListener("click", removeTooltip);
             }
         };
-        
+
         setTimeout(() => {
-            document.addEventListener('click', removeTooltip);
+            document.addEventListener("click", removeTooltip);
         }, 100);
     }
 
@@ -1549,16 +1714,16 @@ class WebsiteLibraryPanelFullPage {
                         Processing Complete
                     </div>
                 </div>
-            `
+            `,
         };
-        
-        return tooltips[type as keyof typeof tooltips] || '';
+
+        return tooltips[type as keyof typeof tooltips] || "";
     }
 
     private renderAnalyticsOverview() {
-        const container = document.getElementById('analyticsOverview');
+        const container = document.getElementById("analyticsOverview");
         if (!container || !this.analyticsData) return;
-        
+
         const { overview } = this.analyticsData;
         container.innerHTML = `
             <div class="stat-item">
@@ -1581,9 +1746,9 @@ class WebsiteLibraryPanelFullPage {
     }
 
     private renderActivityCharts() {
-        const container = document.getElementById('activityCharts');
+        const container = document.getElementById("activityCharts");
         if (!container || !this.analyticsData) return;
-        
+
         container.innerHTML = `
             <div class="card">
                 <div class="card-body">
@@ -1600,10 +1765,10 @@ class WebsiteLibraryPanelFullPage {
     }
 
     private renderKnowledgeBadges(knowledge?: KnowledgeStatus): string {
-        if (!knowledge?.hasKnowledge) return '';
-        
+        if (!knowledge?.hasKnowledge) return "";
+
         const badges = [];
-        
+
         if (knowledge.entityCount && knowledge.entityCount > 0) {
             badges.push(`
                 <span class="knowledge-badge entity" title="${knowledge.entityCount} entities extracted">
@@ -1612,7 +1777,7 @@ class WebsiteLibraryPanelFullPage {
                 </span>
             `);
         }
-        
+
         if (knowledge.topicCount && knowledge.topicCount > 0) {
             badges.push(`
                 <span class="knowledge-badge topic" title="${knowledge.topicCount} topics identified">
@@ -1621,7 +1786,7 @@ class WebsiteLibraryPanelFullPage {
                 </span>
             `);
         }
-        
+
         if (knowledge.suggestionCount && knowledge.suggestionCount > 0) {
             badges.push(`
                 <span class="knowledge-badge action" title="${knowledge.suggestionCount} actions detected">
@@ -1630,8 +1795,8 @@ class WebsiteLibraryPanelFullPage {
                 </span>
             `);
         }
-        
-        if (knowledge.status === 'extracted') {
+
+        if (knowledge.status === "extracted") {
             badges.push(`
                 <span class="knowledge-badge extracted" title="Knowledge successfully extracted">
                     <i class="bi bi-check-circle"></i>
@@ -1639,20 +1804,20 @@ class WebsiteLibraryPanelFullPage {
                 </span>
             `);
         }
-        
-        return badges.join('');
+
+        return badges.join("");
     }
 
     private renderConfidenceIndicator(confidence: number): string {
         const percentage = Math.round(confidence * 100);
-        let color = '#dc3545'; // Red for low confidence
-        
+        let color = "#dc3545"; // Red for low confidence
+
         if (confidence >= 0.7) {
-            color = '#28a745'; // Green for high confidence
+            color = "#28a745"; // Green for high confidence
         } else if (confidence >= 0.4) {
-            color = '#ffc107'; // Yellow for medium confidence
+            color = "#ffc107"; // Yellow for medium confidence
         }
-        
+
         return `
             <div class="confidence-indicator" title="Confidence: ${percentage}%">
                 <span class="text-muted small">Confidence:</span>
@@ -1667,21 +1832,26 @@ class WebsiteLibraryPanelFullPage {
     // Storage methods
     private async loadRecentSearches() {
         try {
-            const stored = localStorage.getItem('websiteLibrary_recentSearches');
+            const stored = localStorage.getItem(
+                "websiteLibrary_recentSearches",
+            );
             if (stored) {
                 this.recentSearches = JSON.parse(stored);
                 this.updateRecentSearchesUI();
             }
         } catch (error) {
-            console.error('Failed to load recent searches:', error);
+            console.error("Failed to load recent searches:", error);
         }
     }
 
     private saveRecentSearches() {
         try {
-            localStorage.setItem('websiteLibrary_recentSearches', JSON.stringify(this.recentSearches));
+            localStorage.setItem(
+                "websiteLibrary_recentSearches",
+                JSON.stringify(this.recentSearches),
+            );
         } catch (error) {
-            console.error('Failed to save recent searches:', error);
+            console.error("Failed to save recent searches:", error);
         }
     }
 
@@ -1689,35 +1859,41 @@ class WebsiteLibraryPanelFullPage {
     private async loadSearchSuggestions(query: string) {
         try {
             let suggestions: SearchSuggestion[] = [];
-            
+
             if (this.isConnected) {
-                const suggestionTexts = await this.chromeExtensionService.getSearchSuggestions(query);
-                suggestions = suggestionTexts.map(text => ({
+                const suggestionTexts =
+                    await this.chromeExtensionService.getSearchSuggestions(
+                        query,
+                    );
+                suggestions = suggestionTexts.map((text) => ({
                     text,
-                    type: 'auto' as const,
-                    metadata: {}
+                    type: "auto" as const,
+                    metadata: {},
                 }));
             } else {
                 // No connection - return empty suggestions array
                 suggestions = [];
             }
-            
+
             // Add recent searches if they match
             const recentMatches = this.recentSearches
-                .filter(search => search.toLowerCase().includes(query.toLowerCase()))
+                .filter((search) =>
+                    search.toLowerCase().includes(query.toLowerCase()),
+                )
                 .slice(0, 3)
-                .map(text => ({
+                .map((text) => ({
                     text,
-                    type: 'recent' as const,
-                    metadata: { lastUsed: 'Recently' }
+                    type: "recent" as const,
+                    metadata: { lastUsed: "Recently" },
                 }));
-            
+
             // Combine and deduplicate
             this.searchSuggestions = [
                 ...recentMatches,
-                ...suggestions.filter(s => !recentMatches.some(r => r.text === s.text))
+                ...suggestions.filter(
+                    (s) => !recentMatches.some((r) => r.text === s.text),
+                ),
             ].slice(0, 8);
-            
         } catch (error) {
             console.error("Failed to load search suggestions:", error);
             this.searchSuggestions = [];
@@ -1725,9 +1901,12 @@ class WebsiteLibraryPanelFullPage {
     }
 
     private showSearchSuggestions(query: string) {
-        if (!this.suggestionDropdown || this.searchSuggestions.length === 0) return;
-        
-        const suggestionsHtml = this.searchSuggestions.map(suggestion => `
+        if (!this.suggestionDropdown || this.searchSuggestions.length === 0)
+            return;
+
+        const suggestionsHtml = this.searchSuggestions
+            .map(
+                (suggestion) => `
             <div class="suggestion-item dropdown-item d-flex align-items-center justify-content-between" 
                  data-suggestion="${suggestion.text}">
                 <div class="d-flex align-items-center">
@@ -1738,39 +1917,50 @@ class WebsiteLibraryPanelFullPage {
                     ${this.renderSuggestionMetadata(suggestion)}
                 </div>
             </div>
-        `).join('');
-        
+        `,
+            )
+            .join("");
+
         this.suggestionDropdown.innerHTML = suggestionsHtml;
-        this.suggestionDropdown.style.display = 'block';
-        
+        this.suggestionDropdown.style.display = "block";
+
         // Add click handlers to suggestions
-        this.suggestionDropdown.querySelectorAll('.suggestion-item').forEach(item => {
-            item.addEventListener('click', () => this.selectSuggestion(item as HTMLElement));
-        });
+        this.suggestionDropdown
+            .querySelectorAll(".suggestion-item")
+            .forEach((item) => {
+                item.addEventListener("click", () =>
+                    this.selectSuggestion(item as HTMLElement),
+                );
+            });
     }
 
     private getSuggestionIcon(type: string): string {
         switch (type) {
-            case 'recent': return 'bi-clock-history';
-            case 'entity': return 'bi-diagram-2';
-            case 'topic': return 'bi-tags';
-            case 'domain': return 'bi-globe';
-            default: return 'bi-search';
+            case "recent":
+                return "bi-clock-history";
+            case "entity":
+                return "bi-diagram-2";
+            case "topic":
+                return "bi-tags";
+            case "domain":
+                return "bi-globe";
+            default:
+                return "bi-search";
         }
     }
 
     private highlightMatch(text: string, query: string): string {
         if (!query) return text;
-        
-        const regex = new RegExp(`(${query})`, 'gi');
-        return text.replace(regex, '<strong>$1</strong>');
+
+        const regex = new RegExp(`(${query})`, "gi");
+        return text.replace(regex, "<strong>$1</strong>");
     }
 
     private renderSuggestionMetadata(suggestion: SearchSuggestion): string {
-        if (!suggestion.metadata) return '';
-        
+        if (!suggestion.metadata) return "";
+
         const { count, lastUsed, source } = suggestion.metadata;
-        
+
         if (count) {
             return `<small class="text-muted">${count} results</small>`;
         }
@@ -1780,13 +1970,15 @@ class WebsiteLibraryPanelFullPage {
         if (source) {
             return `<small class="text-muted">from ${source}</small>`;
         }
-        return '';
+        return "";
     }
 
     private selectSuggestion(suggestionElement: HTMLElement) {
         const text = suggestionElement.textContent?.trim();
         if (text) {
-            const searchInput = document.getElementById('searchInput') as HTMLInputElement;
+            const searchInput = document.getElementById(
+                "searchInput",
+            ) as HTMLInputElement;
             if (searchInput) {
                 searchInput.value = text;
                 this.currentQuery = text;
@@ -1798,64 +1990,77 @@ class WebsiteLibraryPanelFullPage {
 
     private hideSearchSuggestions() {
         if (this.suggestionDropdown) {
-            this.suggestionDropdown.style.display = 'none';
-            this.suggestionDropdown.innerHTML = '';
+            this.suggestionDropdown.style.display = "none";
+            this.suggestionDropdown.innerHTML = "";
         }
     }
 
     // Enhanced knowledge extraction
     private async extractKnowledgeForAllResults() {
         if (this.currentResults.length === 0) {
-            this.notificationManager.showWarning("No search results to extract knowledge from");
+            this.notificationManager.showWarning(
+                "No search results to extract knowledge from",
+            );
             return;
         }
 
-        const unextractedSites = this.currentResults.filter(site => 
-            !site.knowledge?.hasKnowledge || site.knowledge.status !== 'extracted'
+        const unextractedSites = this.currentResults.filter(
+            (site) =>
+                !site.knowledge?.hasKnowledge ||
+                site.knowledge.status !== "extracted",
         );
 
         if (unextractedSites.length === 0) {
-            this.notificationManager.showSuccess("Knowledge already extracted for all results");
+            this.notificationManager.showSuccess(
+                "Knowledge already extracted for all results",
+            );
             return;
         }
 
         this.notificationManager.showProgress(
-            `Extracting knowledge from ${unextractedSites.length} websites...`, 0
+            `Extracting knowledge from ${unextractedSites.length} websites...`,
+            0,
         );
 
         try {
             for (let i = 0; i < unextractedSites.length; i++) {
                 const site = unextractedSites[i];
-                const progress = Math.round(((i + 1) / unextractedSites.length) * 100);
-                
+                const progress = Math.round(
+                    ((i + 1) / unextractedSites.length) * 100,
+                );
+
                 this.notificationManager.showProgress(
-                    `Processing ${site.domain}... (${i + 1}/${unextractedSites.length})`, 
-                    progress
+                    `Processing ${site.domain}... (${i + 1}/${unextractedSites.length})`,
+                    progress,
                 );
 
                 await this.extractKnowledgeForSite(site);
-                
+
                 // Small delay to prevent overwhelming the system
-                await new Promise(resolve => setTimeout(resolve, 100));
+                await new Promise((resolve) => setTimeout(resolve, 100));
             }
 
             this.notificationManager.showSuccess(
-                `Knowledge extracted from ${unextractedSites.length} websites`
+                `Knowledge extracted from ${unextractedSites.length} websites`,
             );
-            
+
             // Refresh the results display
             this.renderSearchResults(this.currentResults);
-            
         } catch (error) {
             console.error("Bulk knowledge extraction failed:", error);
-            this.notificationManager.showError("Failed to extract knowledge from some websites");
+            this.notificationManager.showError(
+                "Failed to extract knowledge from some websites",
+            );
         }
     }
 
     private async extractKnowledgeForSite(website: Website) {
         try {
             if (this.isConnected) {
-                const knowledge = await this.chromeExtensionService.extractKnowledge(website.url);
+                const knowledge =
+                    await this.chromeExtensionService.extractKnowledge(
+                        website.url,
+                    );
                 website.knowledge = knowledge;
                 this.knowledgeCache.set(website.url, knowledge);
             } else {
@@ -1863,45 +2068,50 @@ class WebsiteLibraryPanelFullPage {
                 website.knowledge = {
                     hasKnowledge: false,
                     status: "error",
-                    confidence: 0
+                    confidence: 0,
                 };
-                this.notificationManager.showError("Connection required to extract knowledge");
+                this.notificationManager.showError(
+                    "Connection required to extract knowledge",
+                );
             }
         } catch (error) {
-            console.error(`Failed to extract knowledge for ${website.url}:`, error);
+            console.error(
+                `Failed to extract knowledge for ${website.url}:`,
+                error,
+            );
             if (website.knowledge) {
                 website.knowledge.status = "error";
             } else {
                 website.knowledge = {
                     hasKnowledge: false,
                     status: "error",
-                    confidence: 0
+                    confidence: 0,
                 };
             }
         }
     }
 
-
-
     // User preferences management
     private loadUserPreferences(): UserPreferences {
         try {
-            const stored = localStorage.getItem('websiteLibrary_userPreferences');
+            const stored = localStorage.getItem(
+                "websiteLibrary_userPreferences",
+            );
             if (stored) {
                 return JSON.parse(stored);
             }
         } catch (error) {
             console.error("Failed to load user preferences:", error);
         }
-        
+
         // Default preferences
         return {
-            searchMode: 'auto',
-            viewMode: 'list',
+            searchMode: "auto",
+            viewMode: "list",
             autoExtractKnowledge: false,
             showConfidenceScores: true,
             enableNotifications: true,
-            theme: 'light'
+            theme: "light",
         };
     }
 
@@ -1916,7 +2126,7 @@ class WebsiteLibraryPanelFullPage {
 
     // Quick action methods
     public showImportModal() {
-        console.log('Show import modal - using web activity modal as default');
+        console.log("Show import modal - using web activity modal as default");
         this.showWebActivityImportModal();
     }
 
@@ -1929,44 +2139,55 @@ class WebsiteLibraryPanelFullPage {
     }
 
     // Import handling methods
-    private async handleWebActivityImport(options: ImportOptions): Promise<void> {
+    private async handleWebActivityImport(
+        options: ImportOptions,
+    ): Promise<void> {
         try {
             this.importUI.showImportProgress({
-                importId: 'web-activity-import',
-                phase: 'initializing',
+                importId: "web-activity-import",
+                phase: "initializing",
                 totalItems: 0,
                 processedItems: 0,
-                errors: []
+                errors: [],
             });
 
-            const result = await this.importManager.startWebActivityImport(options);
+            const result =
+                await this.importManager.startWebActivityImport(options);
             this.importUI.showImportComplete(result);
         } catch (error) {
             this.importUI.showImportError({
-                type: 'processing',
-                message: error instanceof Error ? error.message : 'Unknown error occurred',
-                timestamp: Date.now()
+                type: "processing",
+                message:
+                    error instanceof Error
+                        ? error.message
+                        : "Unknown error occurred",
+                timestamp: Date.now(),
             });
         }
     }
 
-    private async handleFolderImport(options: FolderImportOptions): Promise<void> {
+    private async handleFolderImport(
+        options: FolderImportOptions,
+    ): Promise<void> {
         try {
             this.importUI.showImportProgress({
-                importId: 'folder-import',
-                phase: 'initializing',
+                importId: "folder-import",
+                phase: "initializing",
                 totalItems: 0, // Will be updated when folder is enumerated
                 processedItems: 0,
-                errors: []
+                errors: [],
             });
 
             const result = await this.importManager.startFolderImport(options);
             this.importUI.showImportComplete(result);
         } catch (error) {
             this.importUI.showImportError({
-                type: 'processing',
-                message: error instanceof Error ? error.message : 'Unknown error occurred',
-                timestamp: Date.now()
+                type: "processing",
+                message:
+                    error instanceof Error
+                        ? error.message
+                        : "Unknown error occurred",
+                timestamp: Date.now(),
             });
         }
     }
@@ -1974,50 +2195,50 @@ class WebsiteLibraryPanelFullPage {
     private async handleCancelImport(): Promise<void> {
         try {
             // Cancel any active import operations
-            await this.importManager.cancelImport('web-activity-import');
-            await this.importManager.cancelImport('file-import');
+            await this.importManager.cancelImport("web-activity-import");
+            await this.importManager.cancelImport("file-import");
         } catch (error) {
-            console.error('Failed to cancel import:', error);
+            console.error("Failed to cancel import:", error);
         }
     }
 
     private async handleImportComplete(result: ImportResult): Promise<void> {
         // Refresh library stats after successful import
         await this.loadLibraryStats();
-        
+
         // Update discover data if we're on the discover page
-        if (this.navigation.currentPage === 'discover') {
+        if (this.navigation.currentPage === "discover") {
             await this.initializeDiscoverPage();
         }
-        
+
         // Show success notification
         this.notificationManager.showSuccess(
-            `Successfully imported ${result.itemCount} items!`
+            `Successfully imported ${result.itemCount} items!`,
         );
     }
 
     public exploreRecentBookmarks() {
-        console.log('Explore recent bookmarks');
-        this.navigateToPage('search');
+        console.log("Explore recent bookmarks");
+        this.navigateToPage("search");
         // Set search to show recent bookmarks
     }
 
     public exploreMostVisited() {
-        console.log('Explore most visited');
-        this.navigateToPage('search');
+        console.log("Explore most visited");
+        this.navigateToPage("search");
         // Set search to show most visited sites
     }
 
     public exploreByDomain() {
-        console.log('Explore by domain');
-        this.navigateToPage('search');
+        console.log("Explore by domain");
+        this.navigateToPage("search");
         // Set view mode to domain view
-        this.setViewMode('domain');
+        this.setViewMode("domain");
     }
 
     public showSettings() {
-        console.log('Show enhanced settings modal');
-        
+        console.log("Show enhanced settings modal");
+
         // Create and show enhanced settings modal
         this.createEnhancedSettingsModal();
     }
@@ -2025,7 +2246,7 @@ class WebsiteLibraryPanelFullPage {
     // Enhanced settings modal
     private createEnhancedSettingsModal() {
         // Remove existing modal if present
-        const existingModal = document.getElementById('settingsModal');
+        const existingModal = document.getElementById("settingsModal");
         if (existingModal) {
             existingModal.remove();
         }
@@ -2093,20 +2314,20 @@ class WebsiteLibraryPanelFullPage {
                 </div>
             </div>
         `;
-        
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-        
+
+        document.body.insertAdjacentHTML("beforeend", modalHtml);
+
         // Populate current settings
         this.populateSettingsModal();
-        
+
         // Add save handler
-        const saveBtn = document.getElementById('saveSettingsBtn');
+        const saveBtn = document.getElementById("saveSettingsBtn");
         if (saveBtn) {
-            saveBtn.addEventListener('click', () => this.saveUserPreferences());
+            saveBtn.addEventListener("click", () => this.saveUserPreferences());
         }
-        
+
         // Show modal using Bootstrap
-        const modal = document.getElementById('settingsModal');
+        const modal = document.getElementById("settingsModal");
         if (modal && (window as any).bootstrap) {
             const bsModal = new (window as any).bootstrap.Modal(modal);
             bsModal.show();
@@ -2115,52 +2336,79 @@ class WebsiteLibraryPanelFullPage {
 
     private populateSettingsModal() {
         const prefs = this.userPreferences;
-        
-        const defaultSearchMode = document.getElementById('defaultSearchMode') as HTMLSelectElement;
-        const defaultViewMode = document.getElementById('defaultViewMode') as HTMLSelectElement;
-        const autoExtractKnowledge = document.getElementById('autoExtractKnowledge') as HTMLInputElement;
-        const showConfidenceScores = document.getElementById('showConfidenceScores') as HTMLInputElement;
-        const enableNotifications = document.getElementById('enableNotifications') as HTMLInputElement;
-        
+
+        const defaultSearchMode = document.getElementById(
+            "defaultSearchMode",
+        ) as HTMLSelectElement;
+        const defaultViewMode = document.getElementById(
+            "defaultViewMode",
+        ) as HTMLSelectElement;
+        const autoExtractKnowledge = document.getElementById(
+            "autoExtractKnowledge",
+        ) as HTMLInputElement;
+        const showConfidenceScores = document.getElementById(
+            "showConfidenceScores",
+        ) as HTMLInputElement;
+        const enableNotifications = document.getElementById(
+            "enableNotifications",
+        ) as HTMLInputElement;
+
         if (defaultSearchMode) defaultSearchMode.value = prefs.searchMode;
         if (defaultViewMode) defaultViewMode.value = prefs.viewMode;
-        if (autoExtractKnowledge) autoExtractKnowledge.checked = prefs.autoExtractKnowledge;
-        if (showConfidenceScores) showConfidenceScores.checked = prefs.showConfidenceScores;
-        if (enableNotifications) enableNotifications.checked = prefs.enableNotifications;
+        if (autoExtractKnowledge)
+            autoExtractKnowledge.checked = prefs.autoExtractKnowledge;
+        if (showConfidenceScores)
+            showConfidenceScores.checked = prefs.showConfidenceScores;
+        if (enableNotifications)
+            enableNotifications.checked = prefs.enableNotifications;
     }
 
     private saveUserPreferences() {
-        const defaultSearchMode = document.getElementById('defaultSearchMode') as HTMLSelectElement;
-        const defaultViewMode = document.getElementById('defaultViewMode') as HTMLSelectElement;
-        const autoExtractKnowledge = document.getElementById('autoExtractKnowledge') as HTMLInputElement;
-        const showConfidenceScores = document.getElementById('showConfidenceScores') as HTMLInputElement;
-        const enableNotifications = document.getElementById('enableNotifications') as HTMLInputElement;
-        
+        const defaultSearchMode = document.getElementById(
+            "defaultSearchMode",
+        ) as HTMLSelectElement;
+        const defaultViewMode = document.getElementById(
+            "defaultViewMode",
+        ) as HTMLSelectElement;
+        const autoExtractKnowledge = document.getElementById(
+            "autoExtractKnowledge",
+        ) as HTMLInputElement;
+        const showConfidenceScores = document.getElementById(
+            "showConfidenceScores",
+        ) as HTMLInputElement;
+        const enableNotifications = document.getElementById(
+            "enableNotifications",
+        ) as HTMLInputElement;
+
         this.userPreferences = {
-            searchMode: defaultSearchMode?.value || 'auto',
-            viewMode: defaultViewMode?.value || 'list',
+            searchMode: defaultSearchMode?.value || "auto",
+            viewMode: defaultViewMode?.value || "list",
             autoExtractKnowledge: autoExtractKnowledge?.checked || false,
             showConfidenceScores: showConfidenceScores?.checked || true,
             enableNotifications: enableNotifications?.checked || true,
-            theme: this.userPreferences.theme
+            theme: this.userPreferences.theme,
         };
-        
+
         // Save to localStorage
         try {
-            localStorage.setItem('websiteLibrary_userPreferences', JSON.stringify(this.userPreferences));
+            localStorage.setItem(
+                "websiteLibrary_userPreferences",
+                JSON.stringify(this.userPreferences),
+            );
             this.notificationManager.showSuccess("Settings saved successfully");
-            
+
             // Apply preferences immediately
             this.setSearchMode(this.userPreferences.searchMode);
             this.setViewMode(this.userPreferences.viewMode as any);
-            
+
             // Hide modal
-            const modal = document.getElementById('settingsModal');
+            const modal = document.getElementById("settingsModal");
             if (modal && (window as any).bootstrap) {
-                const bsModal = (window as any).bootstrap.Modal.getInstance(modal);
+                const bsModal = (window as any).bootstrap.Modal.getInstance(
+                    modal,
+                );
                 if (bsModal) bsModal.hide();
             }
-            
         } catch (error) {
             console.error("Failed to save user preferences:", error);
             this.notificationManager.showError("Failed to save settings");
@@ -2171,10 +2419,10 @@ class WebsiteLibraryPanelFullPage {
 // Initialize the panel when DOM is loaded
 let libraryPanelFullPage: WebsiteLibraryPanelFullPage;
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener("DOMContentLoaded", () => {
     libraryPanelFullPage = new WebsiteLibraryPanelFullPage();
     libraryPanelFullPage.initialize();
-    
+
     // Make it globally available for onclick handlers
     (window as any).libraryPanel = libraryPanelFullPage;
 });
@@ -2199,12 +2447,12 @@ interface NotificationManager {
 interface NotificationAction {
     label: string;
     action: () => void;
-    style?: 'primary' | 'secondary' | 'success' | 'danger';
+    style?: "primary" | "secondary" | "success" | "danger";
 }
 
 interface SearchSuggestion {
     text: string;
-    type: 'recent' | 'entity' | 'topic' | 'domain' | 'auto';
+    type: "recent" | "entity" | "topic" | "domain" | "auto";
     metadata?: {
         count?: number;
         lastUsed?: string;
@@ -2218,13 +2466,16 @@ interface UserPreferences {
     autoExtractKnowledge: boolean;
     showConfidenceScores: boolean;
     enableNotifications: boolean;
-    theme: 'light' | 'dark' | 'auto';
+    theme: "light" | "dark" | "auto";
 }
 
 // Enhanced Chrome Extension Service for real-time data
 interface ChromeExtensionService {
     getLibraryStats(): Promise<LibraryStats>;
-    searchWebsites(query: string, filters: SearchFilters): Promise<SearchResult>;
+    searchWebsites(
+        query: string,
+        filters: SearchFilters,
+    ): Promise<SearchResult>;
     extractKnowledge(url: string): Promise<KnowledgeStatus>;
     checkKnowledgeStatus(url: string): Promise<KnowledgeStatus>;
     getSearchSuggestions(query: string): Promise<string[]>;
@@ -2238,30 +2489,34 @@ class NotificationManagerImpl implements NotificationManager {
     private notificationCounter = 0;
 
     showSuccess(message: string, actions?: NotificationAction[]): void {
-        this.showNotification('success', message, actions);
+        this.showNotification("success", message, actions);
     }
 
     showError(message: string, retry?: () => void): void {
-        const actions = retry ? [{ label: 'Retry', action: retry, style: 'primary' as const }] : undefined;
-        this.showNotification('danger', message, actions);
+        const actions = retry
+            ? [{ label: "Retry", action: retry, style: "primary" as const }]
+            : undefined;
+        this.showNotification("danger", message, actions);
     }
 
     showWarning(message: string): void {
-        this.showNotification('warning', message);
+        this.showNotification("warning", message);
     }
 
     showInfo(message: string): void {
-        this.showNotification('info', message);
+        this.showNotification("info", message);
     }
 
     showProgress(message: string, progress?: number): void {
-        const id = this.showNotification('info', message, undefined, progress);
-        
+        const id = this.showNotification("info", message, undefined, progress);
+
         // Auto-update progress if provided
         if (progress !== undefined) {
             const notification = this.notifications.get(id);
             if (notification) {
-                const progressBar = notification.querySelector('.progress-bar') as HTMLElement;
+                const progressBar = notification.querySelector(
+                    ".progress-bar",
+                ) as HTMLElement;
                 if (progressBar) {
                     progressBar.style.width = `${progress}%`;
                     progressBar.textContent = `${progress}%`;
@@ -2273,7 +2528,7 @@ class NotificationManagerImpl implements NotificationManager {
     hide(id: string): void {
         const notification = this.notifications.get(id);
         if (notification) {
-            notification.classList.add('fade-out');
+            notification.classList.add("fade-out");
             setTimeout(() => {
                 notification.remove();
                 this.notifications.delete(id);
@@ -2288,15 +2543,20 @@ class NotificationManagerImpl implements NotificationManager {
         this.notifications.clear();
     }
 
-    private showNotification(type: string, message: string, actions?: NotificationAction[], progress?: number): string {
+    private showNotification(
+        type: string,
+        message: string,
+        actions?: NotificationAction[],
+        progress?: number,
+    ): string {
         const id = `notification-${++this.notificationCounter}`;
-        
+
         // Create notification container if it doesn't exist
-        let container = document.getElementById('notificationContainer');
+        let container = document.getElementById("notificationContainer");
         if (!container) {
-            container = document.createElement('div');
-            container.id = 'notificationContainer';
-            container.className = 'notification-container';
+            container = document.createElement("div");
+            container.id = "notificationContainer";
+            container.className = "notification-container";
             container.style.cssText = `
                 position: fixed;
                 top: 20px;
@@ -2307,16 +2567,24 @@ class NotificationManagerImpl implements NotificationManager {
             document.body.appendChild(container);
         }
 
-        const actionsHtml = actions ? actions.map(action => 
-            `<button class="btn btn-sm btn-${action.style || 'secondary'} me-2" 
-                     data-notification-id="${id}" data-action="${action.label}">${action.label}</button>`
-        ).join('') : '';
+        const actionsHtml = actions
+            ? actions
+                  .map(
+                      (action) =>
+                          `<button class="btn btn-sm btn-${action.style || "secondary"} me-2" 
+                     data-notification-id="${id}" data-action="${action.label}">${action.label}</button>`,
+                  )
+                  .join("")
+            : "";
 
-        const progressHtml = progress !== undefined ? `
+        const progressHtml =
+            progress !== undefined
+                ? `
             <div class="progress mt-2" style="height: 4px;">
                 <div class="progress-bar" style="width: ${progress}%"></div>
             </div>
-        ` : '';
+        `
+                : "";
 
         const notificationHtml = `
             <div class="alert alert-${type} alert-dismissible fade show notification-item" 
@@ -2325,47 +2593,56 @@ class NotificationManagerImpl implements NotificationManager {
                     <div class="flex-grow-1">
                         <div class="notification-message">${message}</div>
                         ${progressHtml}
-                        ${actionsHtml ? `<div class="mt-2">${actionsHtml}</div>` : ''}
+                        ${actionsHtml ? `<div class="mt-2">${actionsHtml}</div>` : ""}
                     </div>
                     <button type="button" class="btn-close" data-notification-id="${id}" data-action="close"></button>
                 </div>
             </div>
         `;
 
-        container.insertAdjacentHTML('afterbegin', notificationHtml);
-        
-        const notification = container.querySelector(`[data-id="${id}"]`) as HTMLElement;
+        container.insertAdjacentHTML("afterbegin", notificationHtml);
+
+        const notification = container.querySelector(
+            `[data-id="${id}"]`,
+        ) as HTMLElement;
         if (notification) {
             this.notifications.set(id, notification);
-            
+
             // Add event listeners for notification actions
-            notification.querySelectorAll('[data-action]').forEach(button => {
-                button.addEventListener('click', (e) => {
+            notification.querySelectorAll("[data-action]").forEach((button) => {
+                button.addEventListener("click", (e) => {
                     const target = e.target as HTMLElement;
-                    const action = target.getAttribute('data-action');
-                    const notificationId = target.getAttribute('data-notification-id');
-                    
-                    if (action === 'close' && notificationId) {
+                    const action = target.getAttribute("data-action");
+                    const notificationId = target.getAttribute(
+                        "data-notification-id",
+                    );
+
+                    if (action === "close" && notificationId) {
                         this.hide(notificationId);
                     } else if (action && notificationId && actions) {
-                        const actionHandler = actions.find(a => a.label === action);
+                        const actionHandler = actions.find(
+                            (a) => a.label === action,
+                        );
                         if (actionHandler) {
                             actionHandler.action();
                         }
                     }
                 });
             });
-            
+
             // Store action handlers for later use
             if (actions) {
-                (notification as any)._actionHandlers = actions.reduce((acc, action) => {
-                    acc[action.label] = action.action;
-                    return acc;
-                }, {} as Record<string, () => void>);
+                (notification as any)._actionHandlers = actions.reduce(
+                    (acc, action) => {
+                        acc[action.label] = action.action;
+                        return acc;
+                    },
+                    {} as Record<string, () => void>,
+                );
             }
-            
+
             // Auto-hide success/warning notifications after 5 seconds
-            if (type === 'success' || type === 'warning') {
+            if (type === "success" || type === "warning") {
                 setTimeout(() => this.hide(id), 5000);
             }
         }
@@ -2393,17 +2670,19 @@ class NotificationManagerImpl implements NotificationManager {
 // Chrome Extension Service Implementation
 class ChromeExtensionServiceImpl implements ChromeExtensionService {
     async getLibraryStats(): Promise<LibraryStats> {
-        if (typeof chrome !== 'undefined' && chrome.runtime) {
+        if (typeof chrome !== "undefined" && chrome.runtime) {
             try {
                 const response = await chrome.runtime.sendMessage({
-                    action: 'getLibraryStats',
-                    includeKnowledge: true
+                    action: "getLibraryStats",
+                    includeKnowledge: true,
                 });
-                
+
                 if (response.success) {
                     return response.stats;
                 } else {
-                    throw new Error(response.error || "Failed to get library stats");
+                    throw new Error(
+                        response.error || "Failed to get library stats",
+                    );
                 }
             } catch (error) {
                 console.error("Chrome extension not available:", error);
@@ -2413,19 +2692,22 @@ class ChromeExtensionServiceImpl implements ChromeExtensionService {
         throw new Error("Chrome extension not available");
     }
 
-    async searchWebsites(query: string, filters: SearchFilters): Promise<SearchResult> {
-        if (typeof chrome !== 'undefined' && chrome.runtime) {
+    async searchWebsites(
+        query: string,
+        filters: SearchFilters,
+    ): Promise<SearchResult> {
+        if (typeof chrome !== "undefined" && chrome.runtime) {
             try {
                 const response = await chrome.runtime.sendMessage({
-                    action: 'searchWebsites',
+                    action: "searchWebsites",
                     parameters: {
                         query,
                         filters,
                         includeSummary: true,
-                        limit: 50
-                    }
+                        limit: 50,
+                    },
                 });
-                
+
                 if (response.success) {
                     return response.results;
                 } else {
@@ -2440,11 +2722,11 @@ class ChromeExtensionServiceImpl implements ChromeExtensionService {
     }
 
     async extractKnowledge(url: string): Promise<KnowledgeStatus> {
-        if (typeof chrome !== 'undefined' && chrome.runtime) {
+        if (typeof chrome !== "undefined" && chrome.runtime) {
             try {
                 const response = await chrome.runtime.sendMessage({
-                    action: 'extractKnowledge',
-                    url
+                    action: "extractKnowledge",
+                    url,
                 });
                 return response;
             } catch (error) {
@@ -2456,11 +2738,11 @@ class ChromeExtensionServiceImpl implements ChromeExtensionService {
     }
 
     async checkKnowledgeStatus(url: string): Promise<KnowledgeStatus> {
-        if (typeof chrome !== 'undefined' && chrome.runtime) {
+        if (typeof chrome !== "undefined" && chrome.runtime) {
             try {
                 const response = await chrome.runtime.sendMessage({
-                    action: 'checkKnowledgeStatus',
-                    url
+                    action: "checkKnowledgeStatus",
+                    url,
                 });
                 return response;
             } catch (error) {
@@ -2472,11 +2754,11 @@ class ChromeExtensionServiceImpl implements ChromeExtensionService {
     }
 
     async getSearchSuggestions(query: string): Promise<string[]> {
-        if (typeof chrome !== 'undefined' && chrome.runtime) {
+        if (typeof chrome !== "undefined" && chrome.runtime) {
             try {
                 const response = await chrome.runtime.sendMessage({
-                    action: 'getSearchSuggestions',
-                    query
+                    action: "getSearchSuggestions",
+                    query,
                 });
                 return response || [];
             } catch (error) {
@@ -2488,10 +2770,10 @@ class ChromeExtensionServiceImpl implements ChromeExtensionService {
     }
 
     async getRecentSearches(): Promise<string[]> {
-        if (typeof chrome !== 'undefined' && chrome.runtime) {
+        if (typeof chrome !== "undefined" && chrome.runtime) {
             try {
                 const response = await chrome.runtime.sendMessage({
-                    action: 'getRecentSearches'
+                    action: "getRecentSearches",
                 });
                 return response || [];
             } catch (error) {
@@ -2503,12 +2785,12 @@ class ChromeExtensionServiceImpl implements ChromeExtensionService {
     }
 
     async saveSearch(query: string, results: SearchResult): Promise<void> {
-        if (typeof chrome !== 'undefined' && chrome.runtime) {
+        if (typeof chrome !== "undefined" && chrome.runtime) {
             try {
                 await chrome.runtime.sendMessage({
-                    action: 'saveSearch',
+                    action: "saveSearch",
                     query,
-                    results
+                    results,
                 });
             } catch (error) {
                 console.error("Failed to save search:", error);
@@ -2521,18 +2803,18 @@ class ChromeExtensionServiceImpl implements ChromeExtensionService {
 let libraryPanel: WebsiteLibraryPanelFullPage;
 
 // Initialize when DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => {
         libraryPanel = new WebsiteLibraryPanelFullPage();
         libraryPanel.initialize();
-        
+
         // Make available globally for any remaining references
         (window as any).libraryPanel = libraryPanel;
     });
 } else {
     libraryPanel = new WebsiteLibraryPanelFullPage();
     libraryPanel.initialize();
-    
+
     // Make available globally for any remaining references
     (window as any).libraryPanel = libraryPanel;
 }

@@ -57,7 +57,10 @@
         <div class="quick-actions">
           <h3 class="section-title">Import Data</h3>
           <div class="action-buttons">
-            <button id="importWebActivityBtn" class="action-btn import-web-activity-btn">
+            <button
+              id="importWebActivityBtn"
+              class="action-btn import-web-activity-btn"
+            >
               <i class="bi bi-download"></i>
               <span>Import Web Activity</span>
             </button>
@@ -66,7 +69,7 @@
               <span>Import from Files</span>
             </button>
           </div>
-          
+
           <h3 class="section-title">Quick Actions</h3>
           <div class="action-buttons">
             <button class="action-btn" data-action="exploreRecentBookmarks">
@@ -93,7 +96,9 @@
             <h1 class="page-title">
               <i class="bi bi-search text-primary"></i>Search Your Library
             </h1>
-            <p class="page-subtitle">Find websites, bookmarks, and pages using AI-powered search</p>
+            <p class="page-subtitle">
+              Find websites, bookmarks, and pages using AI-powered search
+            </p>
           </div>
 
           <!-- Search Interface -->
@@ -156,11 +161,23 @@
                   </div>
                   <div class="filter-group">
                     <label>Domain</label>
-                    <input type="text" id="domainFilter" placeholder="e.g., github.com" />
+                    <input
+                      type="text"
+                      id="domainFilter"
+                      placeholder="e.g., github.com"
+                    />
                   </div>
                   <div class="filter-group">
-                    <label>Min Relevance: <span id="relevanceValue">0%</span></label>
-                    <input type="range" id="relevanceFilter" min="0" max="100" value="0" />
+                    <label
+                      >Min Relevance: <span id="relevanceValue">0%</span></label
+                    >
+                    <input
+                      type="range"
+                      id="relevanceFilter"
+                      min="0"
+                      max="100"
+                      value="0"
+                    />
                   </div>
                 </div>
                 <div class="filter-row">
@@ -199,12 +216,16 @@
           </div>
 
           <!-- Search Results -->
-          <div id="searchResults" class="search-results" style="display: none;">
+          <div id="searchResults" class="search-results" style="display: none">
             <div class="results-header">
               <h2 class="results-title">Search Results</h2>
               <div class="view-controls">
                 <div class="view-modes">
-                  <button class="view-btn active" data-view="list" title="List View">
+                  <button
+                    class="view-btn active"
+                    data-view="list"
+                    title="List View"
+                  >
                     <i class="bi bi-list"></i>
                     <span>List</span>
                   </button>
@@ -212,11 +233,19 @@
                     <i class="bi bi-grid"></i>
                     <span>Grid</span>
                   </button>
-                  <button class="view-btn" data-view="timeline" title="Timeline View">
+                  <button
+                    class="view-btn"
+                    data-view="timeline"
+                    title="Timeline View"
+                  >
                     <i class="bi bi-clock"></i>
                     <span>Timeline</span>
                   </button>
-                  <button class="view-btn" data-view="domain" title="Domain View">
+                  <button
+                    class="view-btn"
+                    data-view="domain"
+                    title="Domain View"
+                  >
                     <i class="bi bi-globe"></i>
                     <span>Domain</span>
                   </button>
@@ -225,7 +254,7 @@
             </div>
 
             <!-- AI Summary -->
-            <div id="aiSummary" class="ai-summary" style="display: none;">
+            <div id="aiSummary" class="ai-summary" style="display: none">
               <div class="summary-header">
                 <i class="bi bi-robot"></i>
                 <span>AI Summary</span>
@@ -237,7 +266,7 @@
             <div id="resultsContainer" class="results-container"></div>
 
             <!-- Pagination -->
-            <div id="pagination" class="pagination" style="display: none;">
+            <div id="pagination" class="pagination" style="display: none">
               <div class="pagination-info" id="paginationInfo"></div>
               <div class="pagination-controls" id="paginationControls"></div>
             </div>
@@ -248,7 +277,8 @@
             <i class="bi bi-search"></i>
             <h6>Search Your Library</h6>
             <p class="mb-3">
-              Enter a search term above to find websites, bookmarks, and pages using AI-powered search.
+              Enter a search term above to find websites, bookmarks, and pages
+              using AI-powered search.
             </p>
           </div>
         </div>
@@ -257,9 +287,13 @@
         <div id="discover-page" class="page-content">
           <div class="page-header">
             <h1 class="page-title">
-              <i class="bi bi-lightbulb text-primary"></i>Discover Content Trends
+              <i class="bi bi-lightbulb text-primary"></i>Discover Content
+              Trends
             </h1>
-            <p class="page-subtitle">Explore your reading patterns, popular topics, and content insights</p>
+            <p class="page-subtitle">
+              Explore your reading patterns, popular topics, and content
+              insights
+            </p>
           </div>
 
           <!-- Trending Topics -->
@@ -269,7 +303,7 @@
                 <i class="bi bi-trending-up"></i>Trending in Your Library
               </h2>
             </div>
-            
+
             <div class="discovery-grid" id="trendingContent">
               <!-- Trending content will be populated here -->
             </div>
@@ -282,7 +316,7 @@
                 <i class="bi bi-clock-history"></i>Your Reading Patterns
               </h2>
             </div>
-            
+
             <div class="discovery-grid" id="readingPatterns">
               <!-- Reading patterns will be populated here -->
             </div>
@@ -295,7 +329,7 @@
                 <i class="bi bi-fire"></i>Recently Popular Pages
               </h2>
             </div>
-            
+
             <div class="results-grid" id="popularPages">
               <!-- Popular pages will be populated here -->
             </div>
@@ -306,7 +340,8 @@
             <i class="bi bi-lightbulb"></i>
             <h6>No Data to Discover</h6>
             <p class="mb-3">
-              Import your bookmarks or browsing history to see content trends and reading patterns.
+              Import your bookmarks or browsing history to see content trends
+              and reading patterns.
             </p>
             <button class="action-btn primary" data-action="showImportModal">
               <i class="bi bi-plus-circle"></i>Import Data
@@ -320,7 +355,10 @@
             <h1 class="page-title">
               <i class="bi bi-graph-up text-primary"></i>Library Analytics
             </h1>
-            <p class="page-subtitle">Detailed insights into your browsing patterns and content consumption</p>
+            <p class="page-subtitle">
+              Detailed insights into your browsing patterns and content
+              consumption
+            </p>
           </div>
 
           <!-- Quick Stats Overview -->
@@ -330,8 +368,11 @@
                 <i class="bi bi-speedometer2"></i>Quick Stats
               </h2>
             </div>
-            
-            <div class="quick-stats" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 2rem;">
+
+            <div
+              class="quick-stats"
+              style="grid-template-columns: repeat(4, 1fr); margin-bottom: 2rem"
+            >
               <div class="stat-item">
                 <div class="stat-number" id="totalWebsites">0</div>
                 <div class="stat-label">Total Sites</div>
@@ -358,8 +399,12 @@
                 <i class="bi bi-graph-up"></i>Overview Dashboard
               </h2>
             </div>
-            
-            <div class="quick-stats" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 2rem;" id="analyticsOverview">
+
+            <div
+              class="quick-stats"
+              style="grid-template-columns: repeat(4, 1fr); margin-bottom: 2rem"
+              id="analyticsOverview"
+            >
               <!-- Analytics overview will be populated here -->
             </div>
           </div>
@@ -371,7 +416,7 @@
                 <i class="bi bi-bar-chart"></i>Activity Trends
               </h2>
             </div>
-            
+
             <div class="analytics-grid" id="activityCharts">
               <!-- Activity charts will be populated here -->
             </div>
@@ -384,7 +429,7 @@
                 <i class="bi bi-globe"></i>Top Domains
               </h2>
             </div>
-            
+
             <div class="top-domains">
               <div id="topDomainsList" class="domain-list">
                 <div class="empty-message">No data available</div>
@@ -399,7 +444,7 @@
                 <i class="bi bi-brain"></i>AI Insights
               </h2>
             </div>
-            
+
             <div class="ai-insights">
               <div class="insights-grid">
                 <div class="insight-item">
@@ -429,7 +474,7 @@
                 <i class="bi bi-lightbulb"></i>Advanced Knowledge Insights
               </h2>
             </div>
-            
+
             <div class="discovery-grid" id="knowledgeInsights">
               <!-- Knowledge insights will be populated here -->
             </div>
@@ -442,7 +487,7 @@
                 <i class="bi bi-diagram-3"></i>Knowledge Visualization
               </h2>
             </div>
-            
+
             <div class="knowledge-dashboard">
               <div class="knowledge-overview-cards">
                 <div class="knowledge-card entities">
@@ -451,7 +496,9 @@
                     <h3>Entities</h3>
                   </div>
                   <div class="knowledge-card-body">
-                    <div class="knowledge-metric" id="totalEntitiesMetric">245</div>
+                    <div class="knowledge-metric" id="totalEntitiesMetric">
+                      245
+                    </div>
                     <div class="knowledge-label">Total Entities Extracted</div>
                     <div class="knowledge-breakdown">
                       <div class="breakdown-item">
@@ -480,7 +527,9 @@
                     <h3>Topics</h3>
                   </div>
                   <div class="knowledge-card-body">
-                    <div class="knowledge-metric" id="totalTopicsMetric">128</div>
+                    <div class="knowledge-metric" id="totalTopicsMetric">
+                      128
+                    </div>
                     <div class="knowledge-label">Topics Identified</div>
                     <div class="topic-cloud">
                       <span class="topic-tag size-large">JavaScript</span>
@@ -501,7 +550,9 @@
                     <h3>Actions</h3>
                   </div>
                   <div class="knowledge-card-body">
-                    <div class="knowledge-metric" id="totalActionsMetric">156</div>
+                    <div class="knowledge-metric" id="totalActionsMetric">
+                      156
+                    </div>
                     <div class="knowledge-label">Actionable Items Found</div>
                     <div class="action-breakdown">
                       <div class="action-type">
@@ -536,7 +587,8 @@
             <i class="bi bi-graph-up"></i>
             <h6>No Analytics Data</h6>
             <p class="mb-3">
-              Import and analyze your web data to see detailed usage analytics and insights.
+              Import and analyze your web data to see detailed usage analytics
+              and insights.
             </p>
             <button class="action-btn primary" data-action="showImportModal">
               <i class="bi bi-plus-circle"></i>Import Data
@@ -547,23 +599,50 @@
     </div>
 
     <!-- Settings Modal (keeping existing functionality) -->
-    <div class="modal fade" id="settingsModal" tabindex="-1" aria-labelledby="settingsModalLabel" aria-hidden="true">
+    <div
+      class="modal fade"
+      id="settingsModal"
+      tabindex="-1"
+      aria-labelledby="settingsModalLabel"
+      aria-hidden="true"
+    >
       <div class="modal-dialog modal-lg">
         <div class="modal-content">
-          <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+          <div
+            class="modal-header"
+            style="
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              color: white;
+            "
+          >
             <h5 class="modal-title" id="settingsModalLabel">
               <i class="bi bi-gear me-2"></i>Settings & Import
             </h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="filter: invert(1);"></button>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+              style="filter: invert(1)"
+            ></button>
           </div>
           <div class="modal-body">
             <!-- Import interface will be populated here -->
             <div id="importInterface">
-              <p class="text-muted">Import settings and data management options will be available here.</p>
+              <p class="text-muted">
+                Import settings and data management options will be available
+                here.
+              </p>
             </div>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            <button
+              type="button"
+              class="btn btn-secondary"
+              data-bs-dismiss="modal"
+            >
+              Close
+            </button>
           </div>
         </div>
       </div>

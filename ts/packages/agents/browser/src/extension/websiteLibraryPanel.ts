@@ -4,6 +4,10 @@
 // Full-page Website Library implementation
 // Extends the existing interfaces and functionality for full-page layout
 
+import { WebsiteImportManager } from './websiteImportManager';
+import { WebsiteImportUI } from './websiteImportUI';
+import { ImportOptions, FileImportOptions, ImportProgress, ImportResult } from './interfaces/websiteImport.types';
+
 interface FullPageNavigation {
     currentPage: "search" | "discover" | "analytics";
     previousPage: string | null;
@@ -49,7 +53,7 @@ interface AnalyticsData {
 }
 
 // Import existing interfaces
-interface ImportOptions {
+interface LocalImportOptions {
     source: "chrome" | "edge";
     type: "bookmarks" | "history";
     limit?: number;
@@ -159,11 +163,19 @@ class WebsiteLibraryPanelFullPage {
     private suggestionDropdown: HTMLElement | null = null;
     private knowledgeCache: Map<string, KnowledgeStatus> = new Map();
     private searchCache: Map<string, SearchResult> = new Map();
+    
+    // Import components
+    private importManager: WebsiteImportManager;
+    private importUI: WebsiteImportUI;
 
     constructor() {
         this.notificationManager = new NotificationManagerImpl();
         this.chromeExtensionService = new ChromeExtensionServiceImpl();
         this.userPreferences = this.loadUserPreferences();
+        
+        // Initialize import components
+        this.importManager = new WebsiteImportManager();
+        this.importUI = new WebsiteImportUI();
     }
 
     async initialize() {
@@ -175,6 +187,7 @@ class WebsiteLibraryPanelFullPage {
             this.setupEventListeners();
             this.setupKnowledgeInteractions();
             this.setupNotificationSystem();
+            this.setupImportFunctionality();
             
             await this.checkConnectionStatus();
             await this.loadLibraryStats();
@@ -255,6 +268,57 @@ class WebsiteLibraryPanelFullPage {
     private setupNotificationSystem() {
         // Notification system is already set up in the NotificationManagerImpl
         console.log("Notification system initialized");
+    }
+
+    private setupImportFunctionality() {
+        // Setup import navigation buttons
+        const importWebActivityBtn = document.getElementById('importWebActivityBtn');
+        const importFromFileBtn = document.getElementById('importFromFileBtn');
+
+        if (importWebActivityBtn) {
+            importWebActivityBtn.addEventListener('click', () => {
+                this.showWebActivityImportModal();
+            });
+        }
+
+        if (importFromFileBtn) {
+            importFromFileBtn.addEventListener('click', () => {
+                this.showFileImportModal();
+            });
+        }
+
+        // Setup import event listeners
+        this.setupImportEventListeners();
+    }
+
+    private setupImportEventListeners() {
+        // Listen for import events from the UI
+        window.addEventListener('startWebActivityImport', async (event: any) => {
+            const options = event.detail as ImportOptions;
+            await this.handleWebActivityImport(options);
+        });
+
+        window.addEventListener('startFileImport', async (event: any) => {
+            const options = event.detail as FileImportOptions;
+            await this.handleFileImport(options);
+        });
+
+        window.addEventListener('cancelImport', () => {
+            this.handleCancelImport();
+        });
+
+        // Setup import UI callbacks
+        this.importUI.onProgressUpdate((progress: ImportProgress) => {
+            this.importUI.updateImportProgress(progress);
+        });
+
+        this.importUI.onImportComplete((result: ImportResult) => {
+            this.handleImportComplete(result);
+        });
+
+        this.importUI.onImportError((error: any) => {
+            this.importUI.showImportError(error);
+        });
     }
 
     private setupKnowledgeInteractions() {
@@ -1852,8 +1916,84 @@ class WebsiteLibraryPanelFullPage {
 
     // Quick action methods
     public showImportModal() {
-        console.log('Show import modal');
-        // Implementation would show the existing import modal
+        console.log('Show import modal - using web activity modal as default');
+        this.showWebActivityImportModal();
+    }
+
+    public showWebActivityImportModal() {
+        this.importUI.showWebActivityImportModal();
+    }
+
+    public showFileImportModal() {
+        this.importUI.showFileImportModal();
+    }
+
+    // Import handling methods
+    private async handleWebActivityImport(options: ImportOptions): Promise<void> {
+        try {
+            this.importUI.showImportProgress({
+                importId: 'web-activity-import',
+                phase: 'initializing',
+                totalItems: 0,
+                processedItems: 0,
+                errors: []
+            });
+
+            const result = await this.importManager.startWebActivityImport(options);
+            this.importUI.showImportComplete(result);
+        } catch (error) {
+            this.importUI.showImportError({
+                type: 'processing',
+                message: error instanceof Error ? error.message : 'Unknown error occurred',
+                timestamp: Date.now()
+            });
+        }
+    }
+
+    private async handleFileImport(options: FileImportOptions): Promise<void> {
+        try {
+            this.importUI.showImportProgress({
+                importId: 'file-import',
+                phase: 'initializing',
+                totalItems: options.files.length,
+                processedItems: 0,
+                errors: []
+            });
+
+            const result = await this.importManager.startFileImport(options);
+            this.importUI.showImportComplete(result);
+        } catch (error) {
+            this.importUI.showImportError({
+                type: 'processing',
+                message: error instanceof Error ? error.message : 'Unknown error occurred',
+                timestamp: Date.now()
+            });
+        }
+    }
+
+    private async handleCancelImport(): Promise<void> {
+        try {
+            // Cancel any active import operations
+            await this.importManager.cancelImport('web-activity-import');
+            await this.importManager.cancelImport('file-import');
+        } catch (error) {
+            console.error('Failed to cancel import:', error);
+        }
+    }
+
+    private async handleImportComplete(result: ImportResult): Promise<void> {
+        // Refresh library stats after successful import
+        await this.loadLibraryStats();
+        
+        // Update discover data if we're on the discover page
+        if (this.navigation.currentPage === 'discover') {
+            await this.initializeDiscoverPage();
+        }
+        
+        // Show success notification
+        this.notificationManager.showSuccess(
+            `Successfully imported ${result.itemCount} items!`
+        );
     }
 
     public exploreRecentBookmarks() {

@@ -6,5 +6,6 @@
     "lib": ["DOM", "DOM.Iterable"],
     "types": ["chrome"]
   },
-  "include": ["./**/*.ts"]
+  "include": ["./**/*.ts"],
+  "exclude": ["./tests/**/*"]
 }

@@ -13,7 +13,6 @@ interface KnowledgeData {
     contentMetrics?: {
         readingTime: number;
         wordCount: number;
-        hasCode: boolean;
         interactivity: string;
         pageType: string;
     };
@@ -68,7 +67,7 @@ interface CategorizedQuestion {
     text: string;
     category: string;
     priority: "high" | "medium" | "low";
-    source: "content" | "temporal" | "technical" | "discovery" | "learning";
+    source: "content" | "temporal" | "discovery" | "learning";
     confidence: number;
     recommended: boolean;
 }
@@ -85,7 +84,7 @@ interface RelatedContentItem {
     url: string;
     title: string;
     similarity: number;
-    relationshipType: "same-domain" | "topic-match" | "code-related";
+    relationshipType: "same-domain" | "topic-match";
     excerpt: string;
 }
 
@@ -612,21 +611,6 @@ class KnowledgePanel {
             });
         }
 
-        if (categoryMap.has("technical")) {
-            categories.push({
-                name: "Technical Deep Dive",
-                icon: "bi-code-slash",
-                color: "primary",
-                questions: categoryMap
-                    .get("technical")!
-                    .sort(
-                        (a, b) =>
-                            this.getQuestionScore(b) - this.getQuestionScore(a),
-                    ),
-                priority: 2,
-                count: categoryMap.get("technical")!.length,
-            });
-        }
 
         if (categoryMap.has("discovery")) {
             categories.push({
@@ -682,7 +666,6 @@ class KnowledgePanel {
                 ![
                     "relationship",
                     "learning",
-                    "technical",
                     "discovery",
                     "content",
                     "temporal",
@@ -747,36 +730,6 @@ class KnowledgePanel {
 
             // Boost confidence if we have rich knowledge context
             if (hasEntities && hasRelationships) confidence = 0.95;
-        }
-        // Technical questions (enhanced with action detection)
-        else if (
-            lowerQ.includes("code") ||
-            lowerQ.includes("api") ||
-            lowerQ.includes("tutorial") ||
-            lowerQ.includes("example") ||
-            lowerQ.includes("documentation") ||
-            lowerQ.includes("implementation") ||
-            lowerQ.includes("library") ||
-            lowerQ.includes("framework") ||
-            lowerQ.includes("how to use") ||
-            (hasActions &&
-                (lowerQ.includes("interact") ||
-                    lowerQ.includes("click") ||
-                    lowerQ.includes("action")))
-        ) {
-            category = "technical";
-            priority = "high";
-            confidence = 0.85;
-            recommended =
-                lowerQ.includes("example") ||
-                lowerQ.includes("tutorial") ||
-                (hasActions ?? false);
-
-            // Boost for pages with detected actions
-            if (hasActions) {
-                confidence += 0.1;
-                recommended = true;
-            }
         }
         // Discovery questions (enhanced with entity/topic context)
         else if (
@@ -1664,10 +1617,6 @@ class KnowledgePanel {
         );
         const wordCountCategory = this.getWordCountCategory(metrics.wordCount);
         const pageTypeInfo = this.getPageTypeInfo(metrics.pageType);
-        const codeIntensity = this.getCodeIntensity(
-            metrics.hasCode,
-            metrics.wordCount,
-        );
 
         container.innerHTML = `
             <!-- Reading Time Section -->
@@ -1745,35 +1694,6 @@ class KnowledgePanel {
                 </div>
             </div>
 
-            <!-- Technical Content Section -->
-            <div class="metric-section">
-                <div class="d-flex align-items-center justify-content-between mb-2">
-                    <h6 class="mb-0 text-warning">
-                        <i class="bi bi-code-slash me-2"></i>Technical Content
-                    </h6>
-                    <span class="badge bg-${codeIntensity.color}">${codeIntensity.label}</span>
-                </div>
-                <div class="metric-visual-container">
-                    <div class="row text-center">
-                        <div class="col-6">
-                            <div class="metric-card p-2 bg-light rounded">
-                                <div class="h5 mb-0 text-${metrics.hasCode ? "success" : "muted"}">
-                                    <i class="bi bi-${metrics.hasCode ? "check-circle-fill" : "x-circle"}"></i>
-                                </div>
-                                <small class="text-muted">Code Present</small>
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="metric-card p-2 bg-light rounded">
-                                <div class="h5 mb-0 text-secondary">
-                                    ${metrics.interactivity !== "static" ? '<i class="bi bi-lightning-fill"></i>' : '<i class="bi bi-file-text"></i>'}
-                                </div>
-                                <small class="text-muted">${this.getInteractivityLevel(metrics.interactivity)}</small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
         `;
     }
 
@@ -1946,46 +1866,6 @@ class KnowledgePanel {
         return typeMap[pageType] || typeMap["other"];
     }
 
-    private getCodeIntensity(hasCode: boolean, wordCount: number) {
-        if (!hasCode) {
-            return {
-                color: "light",
-                label: "Non-Technical",
-                percentage: 0,
-                description: "No code content detected",
-            };
-        }
-
-        // Estimate technical intensity based on word count and code presence
-        const intensity = Math.min(
-            Math.round((1000 / Math.max(wordCount, 100)) * 100),
-            100,
-        );
-
-        if (intensity >= 50) {
-            return {
-                color: "danger",
-                label: "Code-Heavy",
-                percentage: intensity,
-                description: "Significant programming content",
-            };
-        } else if (intensity >= 25) {
-            return {
-                color: "warning",
-                label: "Technical",
-                percentage: intensity,
-                description: "Mixed technical content",
-            };
-        } else {
-            return {
-                color: "info",
-                label: "Light Code",
-                percentage: intensity,
-                description: "Some code examples",
-            };
-        }
-    }
-
     private getInteractivityLevel(interactivity: string): string {
         if (interactivity === "static" || !interactivity) return "Static";
         if (interactivity.includes("form")) return "Interactive";
@@ -2137,16 +2017,6 @@ class KnowledgePanel {
             });
         }
 
-        // Generate code-related suggestions if code is detected
-        if (knowledge.contentMetrics?.hasCode) {
-            relatedContent.push({
-                url: "#",
-                title: "Similar programming content",
-                similarity: 0.6,
-                relationshipType: "code-related",
-                excerpt: "Other pages with code examples and technical content",
-            });
-        }
 
         // Generate entity-based suggestions
         if (knowledge.entities && knowledge.entities.length > 0) {
@@ -2245,11 +2115,6 @@ class KnowledgePanel {
                 icon: "bi-tags",
                 color: "success",
                 label: "Related Topics",
-            },
-            "code-related": {
-                icon: "bi-code-slash",
-                color: "warning",
-                label: "Code Content",
             },
         };
 
@@ -2370,11 +2235,6 @@ class KnowledgePanel {
                 icon: "bi-diagram-2",
                 color: "info",
                 label: "Shared Entities",
-            },
-            technical: {
-                icon: "bi-code-slash",
-                color: "warning",
-                label: "Technical Content",
             },
             temporal: {
                 icon: "bi-clock-history",
@@ -2924,26 +2784,8 @@ class KnowledgePanel {
                                 <input type="text" class="form-control form-control-sm" id="domainFilter" 
                                        placeholder="e.g., github.com">
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Technical Level</label>
-                                <select class="form-select form-select-sm" id="technicalLevelFilter">
-                                    <option value="">Any Level</option>
-                                    <option value="beginner">Beginner</option>
-                                    <option value="intermediate">Intermediate</option>
-                                    <option value="advanced">Advanced</option>
-                                    <option value="expert">Expert</option>
-                                </select>
-                            </div>
                         </div>
                         <div class="row g-2 mt-2">
-                            <div class="col-md-6">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="hasCodeFilter">
-                                    <label class="form-check-label" for="hasCodeFilter">
-                                        Has Code/Technical Content
-                                    </label>
-                                </div>
-                            </div>
                             <div class="col-md-6">
                                 <button type="button" class="btn btn-sm btn-outline-secondary" id="clearFilters">
                                     <i class="bi bi-x-circle me-1"></i>Clear Filters
@@ -3007,11 +2849,6 @@ class KnowledgePanel {
         ).value = "";
         (document.getElementById("domainFilter") as HTMLInputElement).value =
             "";
-        (
-            document.getElementById("technicalLevelFilter") as HTMLSelectElement
-        ).value = "";
-        (document.getElementById("hasCodeFilter") as HTMLInputElement).checked =
-            false;
     }
 
     private async submitEnhancedQuery(query: string): Promise<void> {
@@ -3034,16 +2871,6 @@ class KnowledgePanel {
             document.getElementById("domainFilter") as HTMLInputElement
         )?.value;
         if (domain) filters.domain = domain;
-
-        const technicalLevel = (
-            document.getElementById("technicalLevelFilter") as HTMLSelectElement
-        )?.value;
-        if (technicalLevel) filters.technicalLevel = technicalLevel;
-
-        const hasCode = (
-            document.getElementById("hasCodeFilter") as HTMLInputElement
-        )?.checked;
-        if (hasCode) filters.hasCode = true;
 
         queryResults.innerHTML = this.createEnhancedSearchLoadingState();
 

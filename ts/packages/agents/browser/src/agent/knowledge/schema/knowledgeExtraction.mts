@@ -16,7 +16,6 @@ export interface EnhancedKnowledgeExtractionResult
     contentMetrics: {
         readingTime: number;
         wordCount: number;
-        hasCode: boolean;
         interactivity: string;
     };
 }
@@ -61,10 +60,8 @@ export interface EnhancedQueryRequest {
     searchScope: "current_page" | "all_indexed" | "domain" | "topic";
     filters?: {
         contentType?: string;
-        technicalLevel?: string;
         domain?: string;
         timeRange?: "week" | "month" | "quarter" | "year";
-        hasCode?: boolean;
         pageType?: string;
     };
     maxResults?: number;

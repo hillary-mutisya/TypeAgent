@@ -119,7 +119,6 @@ export async function extractKnowledgeFromPage(
             contentMetrics: {
                 readingTime: 0,
                 wordCount: 0,
-                hasCode: false,
                 interactivity: "static",
             },
         };
@@ -226,8 +225,6 @@ export async function extractKnowledgeFromPage(
             wordCount:
                 enhancedContent?.pageContent?.wordCount ||
                 textContent.split(/\s+/).length,
-            hasCode:
-                (enhancedContent?.pageContent?.codeBlocks?.length || 0) > 0,
             interactivity:
                 enhancedContent?.actionSummary?.actionTypes?.join(", ") ||
                 "static",
@@ -259,7 +256,6 @@ export async function extractKnowledgeFromPage(
             contentMetrics: {
                 readingTime: 0,
                 wordCount: 0,
-                hasCode: false,
                 interactivity: "static",
             },
         };
@@ -659,15 +655,6 @@ async function generateSmartSuggestedQuestions(
 
     // Content-specific questions based on enhanced content
     if (enhancedContent?.pageContent) {
-        const hasCode =
-            enhancedContent.pageContent.codeBlocks &&
-            enhancedContent.pageContent.codeBlocks.length > 0;
-
-        if (hasCode) {
-            questions.push("Show me other code examples I've saved");
-            questions.push("Find similar programming content");
-        }
-
         if (enhancedContent.pageContent.readingTime > 10) {
             questions.push("What are the key points from this long article?");
         }
@@ -726,14 +713,6 @@ function generateEnhancedSummary(
             details.push(`${enhancedContent.pageContent.readingTime} min read`);
         }
 
-        if (
-            enhancedContent.pageContent.codeBlocks &&
-            enhancedContent.pageContent.codeBlocks.length > 0
-        ) {
-            details.push(
-                `${enhancedContent.pageContent.codeBlocks.length} code examples`,
-            );
-        }
 
         if (
             enhancedContent.detectedActions &&
@@ -1023,14 +1002,6 @@ async function applyMetadataFilters(
                 }
             }
 
-            // Code content filtering
-            if (filters.hasCode !== undefined) {
-                const knowledge = website.getKnowledge();
-                const hasCodeContent = hasCodeIndicators(knowledge, website);
-                if (filters.hasCode !== hasCodeContent) {
-                    includeWebsite = false;
-                }
-            }
 
             // Page type filtering
             if (
@@ -1059,9 +1030,6 @@ function buildEnhancedSearchTerms(query: string, filters?: any): string[] {
         terms.push(filters.contentType);
     }
 
-    if (filters?.technicalLevel) {
-        terms.push(filters.technicalLevel);
-    }
 
     if (filters?.pageType) {
         terms.push(filters.pageType);
@@ -1257,30 +1225,6 @@ function getTimeRangeThreshold(timeRange: string): Date {
     return new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 }
 
-function hasCodeIndicators(knowledge: any, website: any): boolean {
-    // Check for code-related topics
-    const codeTopics = (knowledge?.topics || []).some((topic: string) =>
-        /code|programming|javascript|python|react|api|function|class|method|library|framework/i.test(
-            topic,
-        ),
-    );
-
-    // Check for technical entities
-    const techEntities = (knowledge?.entities || []).some((entity: any) =>
-        /api|function|method|class|library|framework|code|programming/i.test(
-            entity.type,
-        ),
-    );
-
-    // Check URL patterns
-    const techUrl =
-        /github|stackoverflow|docs?\.|developer|api\.|dev\.|codepen|jsfiddle|repl\.it/i.test(
-            website.metadata.url,
-        );
-
-    return codeTopics || techEntities || techUrl;
-}
-
 function getAppliedFilters(filters?: any): string[] {
     if (!filters) return [];
 
@@ -1289,9 +1233,6 @@ function getAppliedFilters(filters?: any): string[] {
         applied.push(`Content Type: ${filters.contentType}`);
     if (filters.timeRange) applied.push(`Time Range: ${filters.timeRange}`);
     if (filters.domain) applied.push(`Domain: ${filters.domain}`);
-    if (filters.hasCode) applied.push("Has Code");
-    if (filters.technicalLevel)
-        applied.push(`Technical Level: ${filters.technicalLevel}`);
 
     return applied;
 }

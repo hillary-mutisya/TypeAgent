@@ -105,22 +105,19 @@ export async function createKnowproWebsiteCommands(
         visitInfo.visitDate = new Date().toISOString();
         if (namedArgs.title) visitInfo.title = namedArgs.title;
         if (namedArgs.folder) visitInfo.folder = namedArgs.folder;
-        if (namedArgs.pageType) {
-            visitInfo.pageType = namedArgs.pageType;
-        } else {
-            visitInfo.pageType = website.determinePageType(
-                namedArgs.url,
-                namedArgs.title,
-            );
-        }
 
         if (visitInfo.source === "bookmark") {
             visitInfo.bookmarkDate = visitInfo.visitDate;
         }
 
-        const websiteMessage = website.importWebsiteVisit(
-            visitInfo,
-            namedArgs.content,
+        const meta = new website.WebsiteMeta(visitInfo);
+        const knowledge = meta.getKnowledge();
+        const websiteMessage = new website.WebsiteDocPart(
+            meta,
+            namedArgs.content || "",
+            [],
+            undefined,
+            knowledge,
         );
 
         context.printer.writeLine(`Adding website: ${visitInfo.url}`);
@@ -314,7 +311,7 @@ export async function createKnowproWebsiteCommands(
                 importOptions.days = parseInt(daysStr);
             }
 
-            let websites: website.Website[] = [];
+            let websites: website.WebsiteDocPart[] = [];
 
             // Enhanced import with content extraction
             if (namedArgs.extractContent) {
@@ -335,7 +332,7 @@ export async function createKnowproWebsiteCommands(
                     );
                 }
 
-                websites = await website.importWebsitesWithContent(
+                const docParts = await website.importWebsitesWithContent(
                     namedArgs.source as "chrome" | "edge",
                     "bookmarks",
                     bookmarksPath,
@@ -359,6 +356,8 @@ export async function createKnowproWebsiteCommands(
                         );
                     },
                 );
+                // Use WebsiteDocPart[] directly
+                websites = docParts;
 
                 context.printer.writeLine(
                     `✅ Content extraction completed for ${websites.length} bookmarks`,
@@ -406,19 +405,21 @@ export async function createKnowproWebsiteCommands(
             } else {
                 // Use existing basic import
                 if (namedArgs.source === "chrome") {
-                    websites = await website.importWebsites(
+                    const docParts = await website.importWebsites(
                         "chrome",
                         "bookmarks",
                         bookmarksPath,
                         importOptions,
                     );
+                    websites = docParts;
                 } else if (namedArgs.source === "edge") {
-                    websites = await website.importWebsites(
+                    const docParts = await website.importWebsites(
                         "edge",
                         "bookmarks",
                         bookmarksPath,
                         importOptions,
                     );
+                    websites = docParts;
                 }
             }
 
@@ -516,21 +517,23 @@ export async function createKnowproWebsiteCommands(
                 importOptions.days = parseInt(daysStr);
             }
 
-            let websites: website.Website[] = [];
+            let websites: website.WebsiteDocPart[] = [];
             if (namedArgs.source === "chrome") {
-                websites = await website.importWebsites(
+                const docParts = await website.importWebsites(
                     "chrome",
                     "history",
                     historyPath,
                     importOptions,
                 );
+                websites = docParts;
             } else if (namedArgs.source === "edge") {
-                websites = await website.importWebsites(
+                const docParts = await website.importWebsites(
                     "edge",
                     "history",
                     historyPath,
                     importOptions,
                 );
+                websites = docParts;
             }
 
             if (websites.length === 0) {
@@ -636,14 +639,6 @@ export async function createKnowproWebsiteCommands(
                 domainCounts.set(
                     metadata.domain,
                     (domainCounts.get(metadata.domain) || 0) + 1,
-                );
-            }
-
-            // Page type tracking
-            if (metadata.pageType) {
-                pageTypeCounts.set(
-                    metadata.pageType,
-                    (pageTypeCounts.get(metadata.pageType) || 0) + 1,
                 );
             }
 
@@ -1605,8 +1600,15 @@ export async function createKnowproWebsiteCommands(
                     if (analysis.actions)
                         visitInfo.extractedActions = analysis.actions;
 
-                    const websiteMessage =
-                        website.importWebsiteVisit(visitInfo);
+                    const meta = new website.WebsiteMeta(visitInfo);
+                    const knowledge = meta.getKnowledge();
+                    const websiteMessage = new website.WebsiteDocPart(
+                        meta,
+                        "",
+                        [],
+                        undefined,
+                        knowledge,
+                    );
                     const result = await addMessagesToCollection(
                         websiteCollection,
                         [websiteMessage],
@@ -1858,7 +1860,7 @@ export async function createKnowproWebsiteCommands(
             });
     }
 
-    function calculateActionStats(websites: website.Website[]) {
+    function calculateActionStats(websites: website.WebsiteDocPart[]) {
         let sitesWithActions = 0;
         let totalActions = 0;
         let highConfidenceActions = 0;
@@ -1965,7 +1967,7 @@ export async function createKnowproWebsiteCommands(
                     );
                     if (matchedEntities.length > 0) {
                         context.printer.writeLine(
-                            `   Matched entities: ${matchedEntities.map((e) => e.name).join(", ")}`,
+                            `   Matched entities: ${matchedEntities.map((e: any) => e.name).join(", ")}`,
                         );
                     }
                 }

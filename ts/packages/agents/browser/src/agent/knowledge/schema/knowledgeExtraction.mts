@@ -18,7 +18,6 @@ export interface EnhancedKnowledgeExtractionResult
         wordCount: number;
         hasCode: boolean;
         interactivity: string;
-        pageType: string;
     };
 }
 

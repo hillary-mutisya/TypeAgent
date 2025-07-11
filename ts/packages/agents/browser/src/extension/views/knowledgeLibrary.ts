@@ -12,6 +12,16 @@ import {
     ImportProgress,
     ImportResult,
 } from "../interfaces/websiteImport.types";
+import { WebsiteDocPart } from "website-memory";
+
+// Helper functions for property access
+function getDomain(website: WebsiteDocPart): string {
+    return website.domain || "";
+}
+
+function getTitle(website: WebsiteDocPart): string {
+    return website.title || "";
+}
 
 interface FullPageNavigation {
     currentPage: "search" | "discover" | "analytics";
@@ -30,7 +40,7 @@ interface DiscoverInsights {
         activity: number;
         peak: boolean;
     }>;
-    popularPages: Website[];
+    popularPages: WebsiteDocPart[];
     topDomains: Array<{
         domain: string;
         count: number;
@@ -111,7 +121,7 @@ interface Website {
 }
 
 interface SearchResult {
-    websites: Website[];
+    websites: WebsiteDocPart[];
     summary: {
         text: string;
         totalFound: number;
@@ -143,7 +153,7 @@ class WebsiteLibraryPanelFullPage {
     };
 
     // Search functionality
-    private currentResults: Website[] = [];
+    private currentResults: WebsiteDocPart[] = [];
     private currentViewMode: "list" | "grid" | "timeline" | "domain" = "list";
     private searchDebounceTimer: number | null = null;
     private recentSearches: string[] = [];
@@ -771,12 +781,14 @@ class WebsiteLibraryPanelFullPage {
     }
 
     // Enhanced knowledge integration
-    private async enhanceResultsWithKnowledge(websites: Website[]) {
+    private async enhanceResultsWithKnowledge(websites: WebsiteDocPart[]) {
         const knowledgePromises = websites.map(async (website) => {
             try {
                 // Check cache first
                 if (this.knowledgeCache.has(website.url)) {
-                    website.knowledge = this.knowledgeCache.get(website.url);
+                    website.knowledge = this.knowledgeCache.get(
+                        website.url,
+                    ) as any;
                     return;
                 }
 
@@ -786,7 +798,7 @@ class WebsiteLibraryPanelFullPage {
                         await this.chromeExtensionService.checkKnowledgeStatus(
                             website.url,
                         );
-                    website.knowledge = knowledge;
+                    website.knowledge = knowledge as any;
                     this.knowledgeCache.set(website.url, knowledge);
                 } else {
                     // No connection - skip knowledge check
@@ -794,7 +806,7 @@ class WebsiteLibraryPanelFullPage {
                         hasKnowledge: false,
                         status: "none",
                         confidence: 0,
-                    };
+                    } as any;
                 }
             } catch (error) {
                 console.error(
@@ -910,7 +922,7 @@ class WebsiteLibraryPanelFullPage {
         }
     }
 
-    private renderSearchResults(websites: Website[]) {
+    private renderSearchResults(websites: WebsiteDocPart[]) {
         const container = document.getElementById("resultsContainer");
         if (!container) return;
 
@@ -938,7 +950,7 @@ class WebsiteLibraryPanelFullPage {
         container.innerHTML = `<div class="results-content">${html}</div>`;
     }
 
-    private renderListView(websites: Website[]): string {
+    private renderListView(websites: WebsiteDocPart[]): string {
         return websites
             .map(
                 (website) => `
@@ -957,10 +969,10 @@ class WebsiteLibraryPanelFullPage {
                         
                         <div class="d-flex align-items-center justify-content-between">
                             <div class="knowledge-badges">
-                                ${this.renderKnowledgeBadges(website.knowledge)}
+                                ${this.renderKnowledgeBadges(website.knowledge as any)}
                             </div>
                             <div class="d-flex align-items-center gap-2">
-                                ${website.knowledge?.confidence ? this.renderConfidenceIndicator(website.knowledge.confidence) : ""}
+                                ${(website.knowledge as any)?.confidence ? this.renderConfidenceIndicator((website.knowledge as any).confidence) : ""}
                                 ${website.score ? `<span class="result-score">${Math.round(website.score * 100)}%</span>` : ""}
                             </div>
                         </div>
@@ -972,7 +984,7 @@ class WebsiteLibraryPanelFullPage {
             .join("");
     }
 
-    private renderGridView(websites: Website[]): string {
+    private renderGridView(websites: WebsiteDocPart[]): string {
         const gridHtml = websites
             .map(
                 (website) => `
@@ -989,17 +1001,17 @@ class WebsiteLibraryPanelFullPage {
                     ${website.snippet ? `<p class="card-text small mb-3">${website.snippet}</p>` : ""}
                     
                     ${
-                        website.knowledge?.confidence
+                        (website.knowledge as any)?.confidence
                             ? `
                         <div class="mb-2">
-                            ${this.renderConfidenceIndicator(website.knowledge.confidence)}
+                            ${this.renderConfidenceIndicator((website.knowledge as any).confidence)}
                         </div>
                     `
                             : ""
                     }
                     
                     <div class="knowledge-badges">
-                        ${this.renderKnowledgeBadges(website.knowledge)}
+                        ${this.renderKnowledgeBadges(website.knowledge as any)}
                     </div>
                     
                     <a href="${website.url}" target="_blank" class="stretched-link"></a>
@@ -1012,7 +1024,7 @@ class WebsiteLibraryPanelFullPage {
         return gridHtml;
     }
 
-    private renderTimelineView(websites: Website[]): string {
+    private renderTimelineView(websites: WebsiteDocPart[]): string {
         // Group by date for timeline view
         const grouped = websites.reduce(
             (acc, website) => {
@@ -1023,7 +1035,7 @@ class WebsiteLibraryPanelFullPage {
                 acc[date].push(website);
                 return acc;
             },
-            {} as Record<string, Website[]>,
+            {} as Record<string, WebsiteDocPart[]>,
         );
 
         return Object.entries(grouped)
@@ -1050,10 +1062,10 @@ class WebsiteLibraryPanelFullPage {
                                 
                                 <div class="d-flex align-items-center justify-content-between">
                                     <div class="knowledge-badges">
-                                        ${this.renderKnowledgeBadges(website.knowledge)}
+                                        ${this.renderKnowledgeBadges(website.knowledge as any)}
                                     </div>
                                     <div class="d-flex align-items-center gap-2">
-                                        ${website.knowledge?.confidence ? this.renderConfidenceIndicator(website.knowledge.confidence) : ""}
+                                        ${(website.knowledge as any)?.confidence ? this.renderConfidenceIndicator((website.knowledge as any).confidence) : ""}
                                         ${website.score ? `<span class="result-score">${Math.round(website.score * 100)}%</span>` : ""}
                                     </div>
                                 </div>
@@ -1082,12 +1094,13 @@ class WebsiteLibraryPanelFullPage {
             .join("");
     }
 
-    private renderDomainView(websites: Website[]): string {
+    private renderDomainView(websites: WebsiteDocPart[]): string {
         // Group by domain and calculate knowledge stats
         const grouped = websites.reduce(
             (acc, website) => {
-                if (!acc[website.domain]) {
-                    acc[website.domain] = {
+                const domain = website.domain || "unknown";
+                if (!acc[domain]) {
+                    acc[domain] = {
                         sites: [],
                         totalEntities: 0,
                         totalTopics: 0,
@@ -1095,22 +1108,25 @@ class WebsiteLibraryPanelFullPage {
                         extractedCount: 0,
                     };
                 }
-                acc[website.domain].sites.push(website);
+                acc[domain].sites.push(website);
 
-                if (website.knowledge?.entityCount) {
-                    acc[website.domain].totalEntities +=
-                        website.knowledge.entityCount;
+                if ((website.knowledge as any)?.entityCount) {
+                    acc[domain].totalEntities += (
+                        website.knowledge as any
+                    ).entityCount;
                 }
-                if (website.knowledge?.topicCount) {
-                    acc[website.domain].totalTopics +=
-                        website.knowledge.topicCount;
+                if ((website.knowledge as any)?.topicCount) {
+                    acc[domain].totalTopics += (
+                        website.knowledge as any
+                    ).topicCount;
                 }
-                if (website.knowledge?.suggestionCount) {
-                    acc[website.domain].totalActions +=
-                        website.knowledge.suggestionCount;
+                if ((website.knowledge as any)?.suggestionCount) {
+                    acc[domain].totalActions += (
+                        website.knowledge as any
+                    ).suggestionCount;
                 }
-                if (website.knowledge?.status === "extracted") {
-                    acc[website.domain].extractedCount++;
+                if ((website.knowledge as any)?.status === "extracted") {
+                    acc[domain].extractedCount++;
                 }
 
                 return acc;
@@ -1118,7 +1134,7 @@ class WebsiteLibraryPanelFullPage {
             {} as Record<
                 string,
                 {
-                    sites: Website[];
+                    sites: WebsiteDocPart[];
                     totalEntities: number;
                     totalTopics: number;
                     totalActions: number;
@@ -1178,10 +1194,10 @@ class WebsiteLibraryPanelFullPage {
                             
                             <div class="d-flex align-items-center justify-content-between">
                                 <div class="knowledge-badges">
-                                    ${this.renderKnowledgeBadges(website.knowledge)}
+                                    ${this.renderKnowledgeBadges(website.knowledge as any)}
                                 </div>
                                 <div class="d-flex align-items-center gap-2">
-                                    ${website.knowledge?.confidence ? this.renderConfidenceIndicator(website.knowledge.confidence) : ""}
+                                    ${(website.knowledge as any)?.confidence ? this.renderConfidenceIndicator((website.knowledge as any).confidence) : ""}
                                     ${website.score ? `<span class="result-score">${Math.round(website.score * 100)}%</span>` : ""}
                                 </div>
                             </div>
@@ -1979,8 +1995,8 @@ class WebsiteLibraryPanelFullPage {
 
         const unextractedSites = this.currentResults.filter(
             (site) =>
-                !site.knowledge?.hasKnowledge ||
-                site.knowledge.status !== "extracted",
+                !(site.knowledge as any)?.hasKnowledge ||
+                (site.knowledge as any)?.status !== "extracted",
         );
 
         if (unextractedSites.length === 0) {
@@ -2027,14 +2043,14 @@ class WebsiteLibraryPanelFullPage {
         }
     }
 
-    private async extractKnowledgeForSite(website: Website) {
+    private async extractKnowledgeForSite(website: WebsiteDocPart) {
         try {
             if (this.isConnected) {
                 const knowledge =
                     await this.chromeExtensionService.extractKnowledge(
                         website.url,
                     );
-                website.knowledge = knowledge;
+                website.knowledge = knowledge as any;
                 this.knowledgeCache.set(website.url, knowledge);
             } else {
                 // No connection - cannot extract knowledge
@@ -2042,7 +2058,7 @@ class WebsiteLibraryPanelFullPage {
                     hasKnowledge: false,
                     status: "error",
                     confidence: 0,
-                };
+                } as any;
                 this.notificationManager.showError(
                     "Connection required to extract knowledge",
                 );
@@ -2053,13 +2069,13 @@ class WebsiteLibraryPanelFullPage {
                 error,
             );
             if (website.knowledge) {
-                website.knowledge.status = "error";
+                (website.knowledge as any).status = "error";
             } else {
                 website.knowledge = {
                     hasKnowledge: false,
                     status: "error",
                     confidence: 0,
-                };
+                } as any;
             }
         }
     }

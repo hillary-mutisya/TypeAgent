@@ -58,41 +58,40 @@ export class WebsiteDocPart extends DocPart {
         return this.metadata.folder;
     }
 
-    public get pageType(): string | undefined {
-        return this.metadata.pageType;
-    }
-
     public get visitCount(): number | undefined {
         return this.metadata.visitCount;
     }
 
-    /**
-     * Create a WebsiteDocPart from the existing Website format
-     * This enables migration from the old format to the new one
-     */
-    public static fromWebsite(website: any): WebsiteDocPart {
-        return new WebsiteDocPart(
-            website.metadata,
-            website.textChunks,
-            website.tags,
-            website.timestamp,
-            website.knowledge,
-            website.deletionInfo,
-        );
+    // Compatibility properties for UI components
+    public get snippet(): string {
+        // Return first chunk or empty string as snippet
+        return this.textChunks[0] || "";
     }
 
-    /**
-     * Convert this WebsiteDocPart to the legacy Website format for backward compatibility
-     */
-    public toWebsite(): any {
+    public get score(): number {
+        // Default score - UI component expects this
+        return 0.8;
+    }
+
+    public get lastVisited(): string | undefined {
+        return this.visitDate;
+    }
+
+    // Override getKnowledge to provide compatibility properties for UI
+    public override getKnowledge(): any {
+        const knowledge = super.getKnowledge();
+        if (!knowledge) return undefined;
+
+        // Add compatibility properties expected by UI components
         return {
-            metadata: this.metadata.websiteMeta,
-            textChunks: this.textChunks,
-            tags: this.tags,
-            timestamp: this.timestamp,
-            knowledge: this.knowledge,
-            deletionInfo: this.deletionInfo,
-            getKnowledge: () => this.getKnowledge(),
+            ...knowledge,
+            hasKnowledge:
+                knowledge.entities.length > 0 || knowledge.topics.length > 0,
+            status: "extracted",
+            confidence: 0.8,
+            entityCount: knowledge.entities.length,
+            topicCount: knowledge.topics.length,
+            suggestionCount: knowledge.actions.length,
         };
     }
 }

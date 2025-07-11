@@ -23,7 +23,6 @@ export class WebsiteDocPartMeta extends DocPartMeta {
     public bookmarkDate?: string;
     public websiteSource: "bookmark" | "history" | "reading_list";
     public folder?: string;
-    public pageType?: string;
     public keywords?: string[];
     public description?: string;
     public favicon?: string;
@@ -52,8 +51,6 @@ export class WebsiteDocPartMeta extends DocPartMeta {
             this.bookmarkDate = websiteMeta.bookmarkDate;
         this.websiteSource = websiteMeta.websiteSource;
         if (websiteMeta.folder !== undefined) this.folder = websiteMeta.folder;
-        if (websiteMeta.pageType !== undefined)
-            this.pageType = websiteMeta.pageType;
         if (websiteMeta.keywords !== undefined)
             this.keywords = websiteMeta.keywords;
         if (websiteMeta.description !== undefined)
@@ -92,17 +89,20 @@ export class WebsiteDocPartMeta extends DocPartMeta {
 
     public getKnowledge(): kpLib.KnowledgeResponse | undefined {
         // Check if websiteMeta has the getKnowledge method
-        if (this.websiteMeta && typeof this.websiteMeta.getKnowledge === "function") {
+        if (
+            this.websiteMeta &&
+            typeof this.websiteMeta.getKnowledge === "function"
+        ) {
             return this.websiteMeta.getKnowledge();
         }
-        
+
         // If websiteMeta doesn't have the method, it might be a plain object
         // Reconstruct it as a WebsiteMeta instance
         if (this.websiteMeta) {
             this.websiteMeta = new WebsiteMeta(this.websiteMeta as any);
             return this.websiteMeta.getKnowledge();
         }
-        
+
         return undefined;
     }
 }

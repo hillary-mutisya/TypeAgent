@@ -8,11 +8,8 @@ import {
     NullEmbeddingModel,
 } from "test-lib";
 import { WebsiteCollection } from "../src/websiteCollection.js";
-import {
-    Website,
-    WebsiteVisitInfo,
-    importWebsiteVisit,
-} from "../src/websiteMeta.js";
+import { WebsiteDocPart } from "../src/websiteDocPart.js";
+import { WebsiteVisitInfo, WebsiteMeta } from "../src/websiteMeta.js";
 import fs from "fs";
 import path from "path";
 
@@ -115,8 +112,8 @@ export function createTestWebsiteCollection(
 ): WebsiteCollection {
     const collection = new WebsiteCollection("test-collection");
 
-    // Convert test data to Website objects
-    const websiteObjects: Website[] = websites.map((info) => {
+    // Convert test data to WebsiteDocPart objects
+    const websiteDocParts: WebsiteDocPart[] = websites.map((info) => {
         const visitInfo: WebsiteVisitInfo = {
             url: info.url,
             title: info.title,
@@ -124,16 +121,17 @@ export function createTestWebsiteCollection(
             source: info.source,
         };
 
-        if (info.pageType) visitInfo.pageType = info.pageType;
         if (info.folder) visitInfo.folder = info.folder;
         if (info.visitCount) visitInfo.visitCount = info.visitCount;
         if (info.bookmarkDate) visitInfo.bookmarkDate = info.bookmarkDate;
         if (info.visitDate) visitInfo.visitDate = info.visitDate;
 
-        return importWebsiteVisit(visitInfo);
+        const meta = new WebsiteMeta(visitInfo);
+        const knowledge = meta.getKnowledge();
+        return new WebsiteDocPart(meta, "", [], undefined, knowledge);
     });
 
-    collection.addWebsites(websiteObjects);
+    collection.addWebsiteDocParts(websiteDocParts);
 
     // Update settings
     if (online) {

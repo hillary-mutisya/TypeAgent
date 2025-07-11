@@ -272,7 +272,7 @@ export async function findRequestedWebsites(
     context: BrowserActionContext,
     exactMatch: boolean = false,
     minScore: number = 0.5,
-): Promise<website.Website[]> {
+): Promise<website.WebsiteDocPart[]> {
     if (
         !context.websiteCollection ||
         context.websiteCollection.messages.length === 0
@@ -295,7 +295,7 @@ export async function findRequestedWebsites(
                     );
                     return hybridResults
                         .filter((result) => result.relevanceScore >= minScore)
-                        .map((result) => result.website.toWebsite())
+                        .map((result) => result.website)
                         .slice(0, 20);
                 }
             } catch (hybridError) {
@@ -314,9 +314,7 @@ export async function findRequestedWebsites(
                     debug(
                         `Found ${entityResults.length} results using entity search`,
                     );
-                    return entityResults
-                        .map((result) => result.toWebsite())
-                        .slice(0, 20);
+                    return entityResults.slice(0, 20);
                 }
             } catch (entityError) {
                 debug(`Entity search failed, falling back: ${entityError}`);
@@ -331,9 +329,7 @@ export async function findRequestedWebsites(
                 debug(
                     `Found ${topicResults.length} results using topic search`,
                 );
-                return topicResults
-                    .map((result) => result.toWebsite())
-                    .slice(0, 20);
+                return topicResults.slice(0, 20);
             }
         } catch (topicError) {
             debug(`Topic search failed, falling back: ${topicError}`);
@@ -373,7 +369,8 @@ export async function findRequestedWebsites(
 
         debug(matches);
 
-        const results: { website: website.Website; score: number }[] = [];
+        const results: { website: website.WebsiteDocPart; score: number }[] =
+            [];
         const processedMessages = new Set<number>();
 
         matches.forEach((match: kp.SemanticRefSearchResult) => {
@@ -421,7 +418,7 @@ export async function findRequestedWebsites(
         // Sort by score (highest first) and remove duplicates
         const uniqueResults = new Map<
             string,
-            { website: website.Website; score: number }
+            { website: website.WebsiteDocPart; score: number }
         >();
         results.forEach((result) => {
             const url = result.website.metadata.url;
@@ -602,7 +599,7 @@ export async function importWebsiteDataFromSession(
                 new website.WebsiteCollection();
         }
 
-        context.agentContext.websiteCollection.addWebsites(websites);
+        context.agentContext.websiteCollection.addWebsiteDocParts(websites);
         await context.agentContext.websiteCollection.buildIndex();
 
         // Persist the website collection to disk
@@ -795,10 +792,19 @@ export async function importHtmlFolderFromSession(
 
         // Add all processed websites to the collection
         if (websiteDataResults.length > 0) {
-            const websites = websiteDataResults.map((data) =>
-                convertWebsiteDataToWebsite(data),
-            );
-            context.agentContext.websiteCollection.addWebsites(websites);
+            const docParts = websiteDataResults.map((data) => {
+                const visitInfo: website.WebsiteVisitInfo = {
+                    url: data.url,
+                    title: data.title,
+                    domain: data.domain,
+                    source: "history",
+                    visitDate: data.lastVisited?.toISOString(),
+                    visitCount: data.visitCount,
+                };
+                const meta = new website.WebsiteMeta(visitInfo);
+                return new website.WebsiteDocPart(meta, data.content || "");
+            });
+            context.agentContext.websiteCollection.addWebsiteDocParts(docParts);
 
             await context.agentContext.websiteCollection.buildIndex();
 
@@ -920,30 +926,6 @@ export async function importHtmlFolder(
  * Import HTML files from local file system (ActionContext version for regular actions)
  */
 /**
- * Helper function to convert HTML file data to website data format
- */
-/**
- * Helper function to convert WebsiteData to Website format for collection storage
- */
-function convertWebsiteDataToWebsite(data: WebsiteData): any {
-    return {
-        url: data.url,
-        title: data.title,
-        content: data.content,
-        domain: data.domain,
-        metadata: {
-            ...data.metadata,
-            url: data.url,
-            title: data.title,
-            domain: data.domain,
-        },
-        visitCount: data.visitCount,
-        lastVisited: data.lastVisited,
-        enhancedContent: data.enhancedContent,
-    };
-}
-
-/**
  * Search through imported website data
  */
 export async function searchWebsites(
@@ -1004,7 +986,7 @@ export async function searchWebsites(
         const resultText = matchedWebsites
             .map((site, i) => {
                 const metadata = site.metadata;
-                return `${i + 1}. ${metadata.title || metadata.url}\n   URL: ${metadata.url}\n   Domain: ${metadata.domain} | Type: ${metadata.pageType} | Source: ${metadata.websiteSource}\n`;
+                return `${i + 1}. ${metadata.title || metadata.url}\n   URL: ${metadata.url}\n   Domain: ${metadata.domain} | Source: ${metadata.websiteSource}\n`;
             })
             .join("\n");
 
@@ -1049,9 +1031,6 @@ export async function getWebsiteStats(
             switch (groupBy) {
                 case "domain":
                     key = metadata.domain || "unknown";
-                    break;
-                case "pageType":
-                    key = metadata.pageType || "general";
                     break;
                 case "source":
                     key = metadata.websiteSource;

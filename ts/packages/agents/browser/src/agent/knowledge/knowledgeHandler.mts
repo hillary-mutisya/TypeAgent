@@ -121,7 +121,6 @@ export async function extractKnowledgeFromPage(
                 wordCount: 0,
                 hasCode: false,
                 interactivity: "static",
-                pageType: "other",
             },
         };
     }
@@ -168,13 +167,10 @@ export async function extractKnowledgeFromPage(
         };
 
         // Set page type using website-memory's built-in detection
-        visitInfo.pageType = website.determinePageType(
-            parameters.url,
-            parameters.title,
-        );
 
-        const websiteObj = website.importWebsiteVisit(
-            visitInfo,
+        const meta = new website.WebsiteMeta(visitInfo);
+        const websiteObj = new website.WebsiteDocPart(
+            meta,
             enhancedContent?.pageContent?.mainContent || textContent,
         );
         const knowledge = websiteObj.getKnowledge();
@@ -194,13 +190,13 @@ export async function extractKnowledgeFromPage(
 
         // Transform entities with enhanced information
         const entities: Entity[] =
-            knowledge?.entities?.map((entity) => ({
+            knowledge?.entities?.map((entity: any) => ({
                 name: entity.name,
                 type: Array.isArray(entity.type)
                     ? entity.type.join(", ")
                     : entity.type,
                 description: entity.facets?.find(
-                    (f) => f.name === "description",
+                    (f: any) => f.name === "description",
                 )?.value as string,
                 confidence: 0.8,
             })) || [];
@@ -208,7 +204,7 @@ export async function extractKnowledgeFromPage(
         const keyTopics: string[] = knowledge?.topics || [];
 
         const relationships: Relationship[] =
-            knowledge?.actions?.map((action) => ({
+            knowledge?.actions?.map((action: any) => ({
                 from: action.subjectEntityName || "unknown",
                 relationship: action.verbs?.join(", ") || "related to",
                 to: action.objectEntityName || "unknown",
@@ -235,7 +231,6 @@ export async function extractKnowledgeFromPage(
             interactivity:
                 enhancedContent?.actionSummary?.actionTypes?.join(", ") ||
                 "static",
-            pageType: visitInfo.pageType || "other",
         };
 
         return {
@@ -266,7 +261,6 @@ export async function extractKnowledgeFromPage(
                 wordCount: 0,
                 hasCode: false,
                 interactivity: "static",
-                pageType: "other",
             },
         };
     }
@@ -300,14 +294,13 @@ export async function indexWebPageContent(
             visitDate: parameters.timestamp,
         };
 
-        visitInfo.pageType = website.determinePageType(
-            parameters.url,
-            parameters.title,
-        );
-        const websiteObj = website.importWebsiteVisit(visitInfo, textContent);
+        const meta = new website.WebsiteMeta(visitInfo);
+        const websiteObj = new website.WebsiteDocPart(meta, textContent);
 
         if (context.agentContext.websiteCollection) {
-            context.agentContext.websiteCollection.addWebsites([websiteObj]);
+            context.agentContext.websiteCollection.addWebsiteDocPart(
+                websiteObj,
+            );
 
             if (parameters.extractKnowledge) {
                 await context.agentContext.websiteCollection.buildIndex();
@@ -590,7 +583,6 @@ export async function exportKnowledgeData(
                     entityCount: knowledge?.entities?.length || 0,
                     relationshipCount: knowledge?.actions?.length || 0,
                     keyTopics: knowledge?.topics || [],
-                    pageType: site.metadata.pageType,
                     source: site.metadata.websiteSource,
                 };
             }),
@@ -1298,7 +1290,6 @@ function getAppliedFilters(filters?: any): string[] {
     if (filters.timeRange) applied.push(`Time Range: ${filters.timeRange}`);
     if (filters.domain) applied.push(`Domain: ${filters.domain}`);
     if (filters.hasCode) applied.push("Has Code");
-    if (filters.pageType) applied.push(`Page Type: ${filters.pageType}`);
     if (filters.technicalLevel)
         applied.push(`Technical Level: ${filters.technicalLevel}`);
 

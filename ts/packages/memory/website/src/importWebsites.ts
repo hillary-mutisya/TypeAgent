@@ -1,12 +1,8 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import {
-    WebsiteVisitInfo,
-    Website,
-    WebsiteMeta,
-    importWebsiteVisit,
-} from "./websiteMeta.js";
+import { WebsiteVisitInfo, WebsiteMeta } from "./websiteMeta.js";
+import { WebsiteDocPart } from "./websiteDocPart.js";
 import {
     ContentExtractor,
     ExtractionMode,
@@ -348,14 +344,12 @@ export async function importChromeHistory(
 
                 const domain = extractDomain(row.url);
                 const visitDate = chromeTimeToISOString(row.last_visit_time);
-                const pageType = determinePageType(row.url, row.title);
 
                 const visitInfo: WebsiteVisitInfo = {
                     url: row.url,
                     domain,
                     visitDate,
                     source: "history" as const,
-                    pageType,
                 };
 
                 if (row.title) visitInfo.title = row.title;
@@ -427,7 +421,7 @@ export async function importWebsites(
     filePath: string,
     options?: Partial<ImportOptions>,
     progressCallback?: ImportProgressCallback,
-): Promise<Website[]> {
+): Promise<WebsiteDocPart[]> {
     let visitInfos: WebsiteVisitInfo[] = [];
 
     switch (source) {
@@ -463,8 +457,11 @@ export async function importWebsites(
             break;
     }
 
-    // Convert WebsiteVisitInfo to Website objects
-    return visitInfos.map((visitInfo) => importWebsiteVisit(visitInfo));
+    // Convert WebsiteVisitInfo to WebsiteDocPart objects
+    return visitInfos.map((visitInfo) => {
+        const meta = new WebsiteMeta(visitInfo);
+        return new WebsiteDocPart(meta, visitInfo.description || "");
+    });
 }
 
 /**
@@ -483,7 +480,7 @@ export async function importWebsitesWithContent(
         knowledgeMode?: KnowledgeExtractionMode;
     },
     progressCallback?: ImportProgressCallback,
-): Promise<Website[]> {
+): Promise<WebsiteDocPart[]> {
     // Get basic websites using existing import
     const basicWebsites = await importWebsites(
         source,
@@ -506,10 +503,10 @@ export async function importWebsitesWithContent(
 }
 
 async function enhanceWithContent(
-    websites: Website[],
+    websites: WebsiteDocPart[],
     options: any,
     progressCallback?: ImportProgressCallback,
-): Promise<Website[]> {
+): Promise<WebsiteDocPart[]> {
     const extractor = new ContentExtractor({
         timeout: options.contentTimeout || 10000,
         maxContentLength: 20000,
@@ -520,7 +517,7 @@ async function enhanceWithContent(
 
     // TEMPORARY: Force batch size to 1 for debugging timeout issues
     const maxConcurrent = 1; // options.maxConcurrent || 3;
-    const enhanced: Website[] = [];
+    const enhanced: WebsiteDocPart[] = [];
 
     // Process in batches to avoid overwhelming networks
     for (let i = 0; i < websites.length; i += maxConcurrent) {
@@ -597,9 +594,9 @@ async function enhanceWithContent(
 }
 
 function createEnhancedWebsiteWithKnowledge(
-    originalWebsite: Website,
+    originalWebsite: WebsiteDocPart,
     contentData: EnhancedContent | EnhancedContentWithKnowledge,
-): Website {
+): WebsiteDocPart {
     // Create enhanced visit info with content
     const enhancedVisitInfo: WebsiteVisitInfo = {
         url: originalWebsite.metadata.url,
@@ -620,8 +617,6 @@ function createEnhancedWebsiteWithKnowledge(
         enhancedVisitInfo.bookmarkDate = originalWebsite.metadata.bookmarkDate;
     if (originalWebsite.metadata.folder)
         enhancedVisitInfo.folder = originalWebsite.metadata.folder;
-    if (originalWebsite.metadata.pageType)
-        enhancedVisitInfo.pageType = originalWebsite.metadata.pageType;
     if (originalWebsite.metadata.keywords)
         enhancedVisitInfo.keywords = originalWebsite.metadata.keywords;
     if (originalWebsite.metadata.description)
@@ -666,13 +661,13 @@ function createEnhancedWebsiteWithKnowledge(
     }
 
     // Create website with enhanced knowledge
-    const enhancedWebsite = new Website(
+    const enhancedWebsite = new WebsiteDocPart(
         meta,
         mainText,
         [],
+        originalWebsite.timestamp,
         finalKnowledge,
         undefined,
-        true,
     );
 
     return enhancedWebsite;
@@ -756,83 +751,4 @@ export function getDefaultBrowserPaths(): { chrome: any; edge: any } {
             },
         };
     }
-}
-
-/**
- * Determine page type based on URL and title
- * Legacy function - kept for backward compatibility
- */
-export function determinePageType(url: string, title?: string): string {
-    const domain = extractDomain(url).toLowerCase();
-    const urlLower = url.toLowerCase();
-    const titleLower = title?.toLowerCase() || "";
-
-    // News sites
-    if (
-        domain.includes("news") ||
-        domain.includes("cnn") ||
-        domain.includes("bbc") ||
-        domain.includes("reuters") ||
-        domain.includes("npr") ||
-        domain.includes("guardian")
-    ) {
-        return "news";
-    }
-
-    // Documentation sites
-    if (
-        domain.includes("docs") ||
-        domain.includes("documentation") ||
-        urlLower.includes("/docs/") ||
-        titleLower.includes("documentation")
-    ) {
-        return "documentation";
-    }
-
-    // Shopping/commerce
-    if (
-        domain.includes("amazon") ||
-        domain.includes("shop") ||
-        domain.includes("store") ||
-        domain.includes("ebay") ||
-        urlLower.includes("/shop/") ||
-        urlLower.includes("/cart/")
-    ) {
-        return "commerce";
-    }
-
-    // Social media
-    if (
-        domain.includes("twitter") ||
-        domain.includes("facebook") ||
-        domain.includes("linkedin") ||
-        domain.includes("instagram") ||
-        domain.includes("reddit")
-    ) {
-        return "social";
-    }
-
-    // Travel
-    if (
-        domain.includes("booking") ||
-        domain.includes("expedia") ||
-        domain.includes("travel") ||
-        domain.includes("airbnb") ||
-        titleLower.includes("travel")
-    ) {
-        return "travel";
-    }
-
-    // Development/tech
-    if (
-        domain.includes("github") ||
-        domain.includes("stackoverflow") ||
-        domain.includes("dev") ||
-        titleLower.includes("api") ||
-        titleLower.includes("tutorial")
-    ) {
-        return "development";
-    }
-
-    return "general";
 }

@@ -29,7 +29,6 @@ import {
     KnowledgeTopicTable,
     ActionKnowledgeCorrelationTable,
 } from "./tables.js";
-import { Website } from "./websiteMeta.js";
 import { WebsiteDocPart } from "./websiteDocPart.js";
 import path from "node:path";
 import fs from "node:fs";
@@ -77,18 +76,13 @@ export class WebsiteCollection
 
     constructor(
         nameTag: string = "",
-        websites: Website[] = [],
+        docParts: WebsiteDocPart[] = [],
         tags: string[] = [],
         semanticRefs: SemanticRef[] = [],
         dbPath: string = "",
         db: sqlite.Database | undefined = undefined,
         settings?: DocMemorySettings,
     ) {
-        // Convert Website objects to WebsiteDocPart objects
-        const docParts = websites.map((website) =>
-            WebsiteDocPart.fromWebsite(website),
-        );
-
         // Create settings if not provided
         if (!settings) {
             settings = createTextMemorySettings(64);
@@ -138,34 +132,23 @@ export class WebsiteCollection
     }
 
     /**
-     * Add websites to the collection
+     * Add website document parts to the collection
      */
-    public addWebsites(websites: Website[]): void {
-        for (const website of websites) {
-            const docPart = WebsiteDocPart.fromWebsite(website);
+    public addWebsiteDocParts(docParts: WebsiteDocPart[]): void {
+        for (const docPart of docParts) {
             this.messages.append(docPart);
         }
     }
 
     /**
-     * Add a single website to the collection
+     * Add a single website document part to the collection
      */
-    public addWebsite(website: Website): void {
-        const docPart = WebsiteDocPart.fromWebsite(website);
+    public addWebsiteDocPart(docPart: WebsiteDocPart): void {
         this.messages.append(docPart);
     }
 
     /**
-     * Get websites in the legacy format for backward compatibility
-     */
-    public getWebsites(): Website[] {
-        return this.messages
-            .getAll()
-            .map((docPart) => (docPart as WebsiteDocPart).toWebsite());
-    }
-
-    /**
-     * Get WebsiteDocPart messages (new format)
+     * Get WebsiteDocPart messages
      */
     public getWebsiteDocParts(): WebsiteDocPart[] {
         return this.messages.getAll() as WebsiteDocPart[];
@@ -221,19 +204,6 @@ export class WebsiteCollection
                             lastVisit: lastVisit,
                         });
                     }
-                }
-
-                // Add website categories
-                if (this.websiteCategories && websitePart.pageType) {
-                    const categoryRow: dataFrame.DataFrameRow = {
-                        sourceRef,
-                        record: {
-                            domain: websitePart.domain || websitePart.url,
-                            category: websitePart.pageType,
-                            confidence: 0.8,
-                        },
-                    };
-                    this.websiteCategories.addRows(categoryRow);
                 }
 
                 // Add bookmark folder information
@@ -312,15 +282,15 @@ export class WebsiteCollection
                                 // Find related entities and topics for this action
                                 const relatedEntity =
                                     knowledge.entities.find(
-                                        (e) =>
+                                        (e: any) =>
                                             action.objectEntityName === e.name,
                                     )?.name ||
                                     action.objectEntityName ||
                                     "unknown";
 
                                 const relatedTopic =
-                                    knowledge.topics.find((t) =>
-                                        action.verbs.some((verb) =>
+                                    knowledge.topics.find((t: string) =>
+                                        action.verbs.some((verb: string) =>
                                             t
                                                 .toLowerCase()
                                                 .includes(verb.toLowerCase()),
@@ -553,15 +523,18 @@ export class WebsiteCollection
             const knowledge = websitePart.getKnowledge();
 
             if (knowledge && knowledge.entities) {
-                const entityNames = knowledge.entities.map((e) =>
+                const entityNames = knowledge.entities.map((e: any) =>
                     e.name.toLowerCase(),
                 );
-                const hasMatchingEntity = entities.some((searchEntity) =>
-                    entityNames.some(
-                        (entityName) =>
-                            entityName.includes(searchEntity.toLowerCase()) ||
-                            searchEntity.toLowerCase().includes(entityName),
-                    ),
+                const hasMatchingEntity = entities.some(
+                    (searchEntity: string) =>
+                        entityNames.some(
+                            (entityName: string) =>
+                                entityName.includes(
+                                    searchEntity.toLowerCase(),
+                                ) ||
+                                searchEntity.toLowerCase().includes(entityName),
+                        ),
                 );
 
                 if (hasMatchingEntity) {
@@ -581,9 +554,9 @@ export class WebsiteCollection
             const knowledge = websitePart.getKnowledge();
 
             if (knowledge && knowledge.topics) {
-                const hasMatchingTopic = topics.some((searchTopic) =>
+                const hasMatchingTopic = topics.some((searchTopic: string) =>
                     knowledge.topics.some(
-                        (topic) =>
+                        (topic: string) =>
                             topic
                                 .toLowerCase()
                                 .includes(searchTopic.toLowerCase()) ||
@@ -612,16 +585,17 @@ export class WebsiteCollection
 
             // Check detected actions
             if (websitePart.metadata.detectedActions) {
-                const hasMatchingAction = actionTypes.some((searchAction) =>
-                    websitePart.metadata.detectedActions!.some(
-                        (action) =>
-                            action.actionType
-                                .toLowerCase()
-                                .includes(searchAction.toLowerCase()) ||
-                            action.name
-                                ?.toLowerCase()
-                                .includes(searchAction.toLowerCase()),
-                    ),
+                const hasMatchingAction = actionTypes.some(
+                    (searchAction: string) =>
+                        websitePart.metadata.detectedActions!.some(
+                            (action: any) =>
+                                action.actionType
+                                    .toLowerCase()
+                                    .includes(searchAction.toLowerCase()) ||
+                                action.name
+                                    ?.toLowerCase()
+                                    .includes(searchAction.toLowerCase()),
+                        ),
                 );
 
                 if (hasMatchingAction) {
@@ -632,14 +606,15 @@ export class WebsiteCollection
             // Also check knowledge actions
             const knowledge = websitePart.getKnowledge();
             if (knowledge && knowledge.actions) {
-                const hasKnowledgeAction = actionTypes.some((searchAction) =>
-                    knowledge.actions.some((action) =>
-                        action.verbs.some((verb) =>
-                            verb
-                                .toLowerCase()
-                                .includes(searchAction.toLowerCase()),
+                const hasKnowledgeAction = actionTypes.some(
+                    (searchAction: string) =>
+                        knowledge.actions.some((action: any) =>
+                            action.verbs.some((verb: string) =>
+                                verb
+                                    .toLowerCase()
+                                    .includes(searchAction.toLowerCase()),
+                            ),
                         ),
-                    ),
                 );
 
                 if (hasKnowledgeAction) {
@@ -683,8 +658,8 @@ export class WebsiteCollection
 
             // Search in knowledge topics
             if (knowledge && knowledge.topics) {
-                const topicMatches = knowledge.topics.filter((topic) =>
-                    searchTerms.some((term) =>
+                const topicMatches = knowledge.topics.filter((topic: string) =>
+                    searchTerms.some((term: string) =>
                         topic.toLowerCase().includes(term),
                     ),
                 );
@@ -696,8 +671,8 @@ export class WebsiteCollection
 
             // Search in knowledge entities
             if (knowledge && knowledge.entities) {
-                const entityMatches = knowledge.entities.filter((entity) =>
-                    searchTerms.some((term) =>
+                const entityMatches = knowledge.entities.filter((entity: any) =>
+                    searchTerms.some((term: string) =>
                         entity.name.toLowerCase().includes(term),
                     ),
                 );
@@ -772,20 +747,20 @@ export class WebsiteCollection
                 totalKnowledgeScore += richness;
 
                 // Count entities
-                knowledge.entities.forEach((entity) => {
+                knowledge.entities.forEach((entity: any) => {
                     const current = insights.topEntities.get(entity.name) || 0;
                     insights.topEntities.set(entity.name, current + 1);
                 });
 
                 // Count topics
-                knowledge.topics.forEach((topic) => {
+                knowledge.topics.forEach((topic: string) => {
                     const current = insights.topTopics.get(topic) || 0;
                     insights.topTopics.set(topic, current + 1);
                 });
 
                 // Count action types
-                knowledge.actions.forEach((action) => {
-                    action.verbs.forEach((verb) => {
+                knowledge.actions.forEach((action: any) => {
+                    action.verbs.forEach((verb: string) => {
                         const current = insights.actionTypes.get(verb) || 0;
                         insights.actionTypes.set(verb, current + 1);
                     });
@@ -794,7 +769,7 @@ export class WebsiteCollection
 
             // Also count detected action types
             if (website.metadata.detectedActions) {
-                website.metadata.detectedActions.forEach((action) => {
+                website.metadata.detectedActions.forEach((action: any) => {
                     const actionType = action.actionType;
                     const current = insights.actionTypes.get(actionType) || 0;
                     insights.actionTypes.set(actionType, current + 1);
@@ -857,13 +832,13 @@ export class WebsiteCollection
             const knowledge = website.getKnowledge();
             if (knowledge) {
                 // Track entity growth
-                knowledge.entities.forEach((entity) => {
+                knowledge.entities.forEach((entity: any) => {
                     const count = insights.entityGrowth.get(entity.name) || 0;
                     insights.entityGrowth.set(entity.name, count + 1);
                 });
 
                 // Track topic growth
-                knowledge.topics.forEach((topic) => {
+                knowledge.topics.forEach((topic: string) => {
                     const count = insights.topicGrowth.get(topic) || 0;
                     insights.topicGrowth.set(topic, count + 1);
                 });

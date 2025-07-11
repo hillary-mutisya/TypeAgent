@@ -91,48 +91,54 @@ export async function importWebsitesEnhanced(
         const website = websites[i];
 
         try {
-            // Create WebsiteVisitInfo from existing Website
+            // Create WebsiteVisitInfo from existing WebsiteDocPart
             const visitInfo: WebsiteVisitInfo = {
-                url: website.metadata.url,
-                title: website.metadata.title || "Untitled",
-                source: website.metadata.websiteSource,
+                url: website.metadata.websiteMeta.url,
+                title: website.metadata.websiteMeta.title || "Untitled",
+                source: website.metadata.websiteMeta.websiteSource,
             };
 
             // Add optional properties if they exist
-            if (website.metadata.domain)
-                visitInfo.domain = website.metadata.domain;
-            if (website.metadata.visitDate)
-                visitInfo.visitDate = website.metadata.visitDate;
-            if (website.metadata.bookmarkDate)
-                visitInfo.bookmarkDate = website.metadata.bookmarkDate;
-            if (website.metadata.folder)
-                visitInfo.folder = website.metadata.folder;
-            if (website.metadata.pageType)
-                visitInfo.pageType = website.metadata.pageType;
-            if (website.metadata.keywords)
-                visitInfo.keywords = website.metadata.keywords;
-            if (website.metadata.description)
-                visitInfo.description = website.metadata.description;
-            if (website.metadata.favicon)
-                visitInfo.favicon = website.metadata.favicon;
-            if (website.metadata.visitCount)
-                visitInfo.visitCount = website.metadata.visitCount;
-            if (website.metadata.lastVisitTime)
-                visitInfo.lastVisitTime = website.metadata.lastVisitTime;
-            if (website.metadata.typedCount)
-                visitInfo.typedCount = website.metadata.typedCount;
-            if (website.metadata.pageContent)
-                visitInfo.pageContent = website.metadata.pageContent;
-            if (website.metadata.metaTags)
-                visitInfo.metaTags = website.metadata.metaTags;
-            if (website.metadata.structuredData)
-                visitInfo.structuredData = website.metadata.structuredData;
-            if (website.metadata.extractedActions)
-                visitInfo.extractedActions = website.metadata.extractedActions;
-            if (website.metadata.detectedActions)
-                visitInfo.detectedActions = website.metadata.detectedActions;
-            if (website.metadata.actionSummary)
-                visitInfo.actionSummary = website.metadata.actionSummary;
+            if (website.metadata.websiteMeta.domain)
+                visitInfo.domain = website.metadata.websiteMeta.domain;
+            if (website.metadata.websiteMeta.visitDate)
+                visitInfo.visitDate = website.metadata.websiteMeta.visitDate;
+            if (website.metadata.websiteMeta.bookmarkDate)
+                visitInfo.bookmarkDate =
+                    website.metadata.websiteMeta.bookmarkDate;
+            if (website.metadata.websiteMeta.folder)
+                visitInfo.folder = website.metadata.websiteMeta.folder;
+            if (website.metadata.websiteMeta.keywords)
+                visitInfo.keywords = website.metadata.websiteMeta.keywords;
+            if (website.metadata.websiteMeta.description)
+                visitInfo.description =
+                    website.metadata.websiteMeta.description;
+            if (website.metadata.websiteMeta.favicon)
+                visitInfo.favicon = website.metadata.websiteMeta.favicon;
+            if (website.metadata.websiteMeta.visitCount)
+                visitInfo.visitCount = website.metadata.websiteMeta.visitCount;
+            if (website.metadata.websiteMeta.lastVisitTime)
+                visitInfo.lastVisitTime =
+                    website.metadata.websiteMeta.lastVisitTime;
+            if (website.metadata.websiteMeta.typedCount)
+                visitInfo.typedCount = website.metadata.websiteMeta.typedCount;
+            if (website.metadata.websiteMeta.pageContent)
+                visitInfo.pageContent =
+                    website.metadata.websiteMeta.pageContent;
+            if (website.metadata.websiteMeta.metaTags)
+                visitInfo.metaTags = website.metadata.websiteMeta.metaTags;
+            if (website.metadata.websiteMeta.structuredData)
+                visitInfo.structuredData =
+                    website.metadata.websiteMeta.structuredData;
+            if (website.metadata.websiteMeta.extractedActions)
+                visitInfo.extractedActions =
+                    website.metadata.websiteMeta.extractedActions;
+            if (website.metadata.websiteMeta.detectedActions)
+                visitInfo.detectedActions =
+                    website.metadata.websiteMeta.detectedActions;
+            if (website.metadata.websiteMeta.actionSummary)
+                visitInfo.actionSummary =
+                    website.metadata.websiteMeta.actionSummary;
 
             // Get the main content from the website
             const mainContent = website.textChunks.join("\n\n");
@@ -150,18 +156,17 @@ export async function importWebsitesEnhanced(
                 progressCallback(
                     i + 1,
                     websites.length,
-                    `Processing ${website.metadata.title || website.metadata.url}`,
+                    `Processing ${website.metadata.websiteMeta.title || website.metadata.websiteMeta.url}`,
                 );
             }
         } catch (error) {
             console.warn(
-                `Enhanced processing failed for ${website.metadata.url}, using fallback:`,
+                `Enhanced processing failed for ${website.metadata.websiteMeta.url}, using fallback:`,
                 error,
             );
 
-            // Fallback: convert directly to WebsiteDocPart
-            const fallbackDocPart = WebsiteDocPart.fromWebsite(website);
-            websiteDocParts.push(fallbackDocPart);
+            // Fallback: use the original WebsiteDocPart
+            websiteDocParts.push(website);
         }
     }
 

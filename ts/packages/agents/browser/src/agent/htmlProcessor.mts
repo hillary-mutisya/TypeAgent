@@ -80,7 +80,6 @@ export interface WebsiteData {
         url: string;
         title: string;
         domain: string;
-        pageType?: string;
         filename?: string;
         fileSize?: number;
         importDate: string;
@@ -155,7 +154,6 @@ export async function processHtmlContent(
                 fileMetadata?.filename ||
                 "Untitled",
             domain,
-            pageType: determinePageType(enhancedContent, parsedContent),
             importDate: new Date().toISOString(),
             lastModified: fileMetadata?.lastModified || new Date(),
             originalMetadata: enhancedContent.metaTags,
@@ -515,69 +513,6 @@ export function extractDomainFromUrl(url: string): string {
     }
 }
 
-export function determinePageType(
-    enhancedContent: Partial<EnhancedContent>,
-    parsedContent: ParsedHtmlContent,
-): string {
-    // Check for common page type indicators
-    const title =
-        enhancedContent.pageContent?.title || parsedContent.title || "";
-    const content =
-        enhancedContent.pageContent?.mainContent || parsedContent.content || "";
-    const metaTags = enhancedContent.metaTags;
-
-    // Check Open Graph type first
-    if (metaTags?.ogType) {
-        return metaTags.ogType;
-    }
-
-    // Analyze content patterns
-    const titleLower = title.toLowerCase();
-    const contentLower = content.toLowerCase();
-
-    // News/article patterns
-    if (
-        titleLower.includes("news") ||
-        titleLower.includes("article") ||
-        contentLower.includes("published") ||
-        contentLower.includes("author")
-    ) {
-        return "article";
-    }
-
-    // Blog patterns
-    if (
-        titleLower.includes("blog") ||
-        contentLower.includes("posted by") ||
-        contentLower.includes("written by")
-    ) {
-        return "blog";
-    }
-
-    // Documentation patterns
-    if (
-        titleLower.includes("documentation") ||
-        titleLower.includes("docs") ||
-        titleLower.includes("api") ||
-        titleLower.includes("reference")
-    ) {
-        return "documentation";
-    }
-
-    // Product/commerce patterns
-    if (
-        titleLower.includes("product") ||
-        titleLower.includes("buy") ||
-        titleLower.includes("price") ||
-        contentLower.includes("add to cart")
-    ) {
-        return "product";
-    }
-
-    // Default to general document
-    return "document";
-}
-
 /**
  * Create file URL from file path
  */
@@ -686,7 +621,6 @@ export function createWebsiteDataFromContent(
             url,
             title,
             domain,
-            pageType: enhancedContent.metaTags?.ogType || "document",
             importDate: new Date().toISOString(),
             lastModified: new Date(),
             originalMetadata: enhancedContent.metaTags,

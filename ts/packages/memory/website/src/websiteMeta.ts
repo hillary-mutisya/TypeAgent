@@ -10,7 +10,6 @@ import {
     ActionInfo,
 } from "./contentExtractor.js";
 import { DetectedAction, ActionSummary } from "./actionExtractor.js";
-import { websiteToTextChunksEnhanced } from "./chunkingUtils.js";
 
 export interface WebsiteVisitInfo {
     url: string;
@@ -20,7 +19,6 @@ export interface WebsiteVisitInfo {
     bookmarkDate?: string;
     source: "bookmark" | "history" | "reading_list";
     folder?: string;
-    pageType?: string; // e.g., "news", "commerce", "travel", "documentation"
     keywords?: string[];
     description?: string;
     favicon?: string;
@@ -48,7 +46,6 @@ export class WebsiteMeta implements kp.IMessageMetadata, kp.IKnowledgeSource {
     public bookmarkDate?: string;
     public websiteSource: "bookmark" | "history" | "reading_list";
     public folder?: string;
-    public pageType?: string;
     public keywords?: string[];
     public description?: string;
     public favicon?: string;
@@ -78,8 +75,6 @@ export class WebsiteMeta implements kp.IMessageMetadata, kp.IKnowledgeSource {
             this.bookmarkDate = visitInfo.bookmarkDate;
         this.websiteSource = visitInfo.source;
         if (visitInfo.folder !== undefined) this.folder = visitInfo.folder;
-        if (visitInfo.pageType !== undefined)
-            this.pageType = visitInfo.pageType;
         if (visitInfo.keywords !== undefined)
             this.keywords = visitInfo.keywords;
         if (visitInfo.description !== undefined)
@@ -268,18 +263,7 @@ export class WebsiteMeta implements kp.IMessageMetadata, kp.IKnowledgeSource {
                 });
             }
 
-            // Category and source facets for filtering
-            if (this.pageType) {
-                domainEntity.facets.push({
-                    name: "category",
-                    value: this.pageType,
-                });
-                const confidence = this.calculatePageTypeConfidence();
-                domainEntity.facets.push({
-                    name: "categoryConfidence",
-                    value: confidence.toString(),
-                });
-            }
+            // Source facets for filtering
 
             if (this.websiteSource) {
                 domainEntity.facets.push({
@@ -334,19 +318,6 @@ export class WebsiteMeta implements kp.IMessageMetadata, kp.IKnowledgeSource {
         } else if (this.visitCount !== undefined && this.visitCount <= 2) {
             topics.push("rarely visited site");
             topics.push("infrequent visit");
-        }
-
-        // Enhanced category topics
-        if (this.pageType) {
-            topics.push(this.pageType);
-            topics.push(`${this.pageType} site`);
-            topics.push(`${this.pageType} website`);
-
-            // Category-specific temporal topics
-            if (this.bookmarkDate) {
-                const year = new Date(this.bookmarkDate).getFullYear();
-                topics.push(`${this.pageType} bookmark from ${year}`);
-            }
         }
 
         // Add title as topic if available
@@ -424,24 +395,6 @@ export class WebsiteMeta implements kp.IMessageMetadata, kp.IKnowledgeSource {
         if (this.visitCount >= 20) return "high";
         if (this.visitCount >= 5) return "medium";
         return "low";
-    }
-
-    private calculatePageTypeConfidence(): number {
-        // Simple confidence scoring - can be enhanced later
-        if (!this.pageType) return 0.5;
-
-        // Higher confidence for URL-based detection
-        if (this.url.toLowerCase().includes(this.pageType.toLowerCase())) {
-            return 0.9;
-        }
-
-        // Medium confidence for title-based detection
-        if (this.title?.toLowerCase().includes(this.pageType.toLowerCase())) {
-            return 0.8;
-        }
-
-        // Default confidence
-        return 0.7;
     }
 
     private addBasicContentTopics(topics: string[]): void {
@@ -720,76 +673,4 @@ export class WebsiteMeta implements kp.IMessageMetadata, kp.IKnowledgeSource {
             });
         }
     }
-}
-
-export class Website implements kp.IMessage {
-    public textChunks: string[];
-    public tags: string[];
-    public timestamp: string | undefined;
-    public knowledge: kpLib.KnowledgeResponse | undefined;
-    public deletionInfo: kp.DeletionInfo | undefined;
-
-    constructor(
-        public metadata: WebsiteMeta,
-        pageContent: string | string[],
-        tags: string[] = [],
-        knowledge?: kpLib.KnowledgeResponse | undefined,
-        deletionInfo?: kp.DeletionInfo | undefined,
-        isNew: boolean = true,
-    ) {
-        this.tags = tags;
-        this.knowledge = knowledge;
-        this.deletionInfo = deletionInfo;
-        this.timestamp = metadata.visitDate || metadata.bookmarkDate;
-
-        if (isNew) {
-            const chunks = websiteToTextChunksEnhanced(
-                pageContent,
-                metadata.title,
-                metadata.url,
-                2000, // Default chunk size, can be made configurable
-            );
-            pageContent = chunks;
-        }
-
-        if (Array.isArray(pageContent)) {
-            this.textChunks = pageContent;
-        } else {
-            this.textChunks = [pageContent];
-        }
-    }
-
-    public getKnowledge(): kpLib.KnowledgeResponse | undefined {
-        let metaKnowledge = this.metadata.getKnowledge();
-        if (!metaKnowledge) {
-            return this.knowledge;
-        }
-        if (!this.knowledge) {
-            return metaKnowledge;
-        }
-        // Merge knowledge from metadata and message
-        return {
-            entities: [...metaKnowledge.entities, ...this.knowledge.entities],
-            topics: [...metaKnowledge.topics, ...this.knowledge.topics],
-            actions: [...metaKnowledge.actions, ...this.knowledge.actions],
-            inverseActions: [
-                ...metaKnowledge.inverseActions,
-                ...this.knowledge.inverseActions,
-            ],
-        };
-    }
-}
-
-export function importWebsiteVisit(
-    visitInfo: WebsiteVisitInfo,
-    pageContent?: string,
-): Website {
-    const meta = new WebsiteMeta(visitInfo);
-    const knowledge = meta.getKnowledge(); // Extract knowledge from metadata
-    return new Website(
-        meta,
-        pageContent || visitInfo.description || "",
-        [],
-        knowledge,
-    );
 }

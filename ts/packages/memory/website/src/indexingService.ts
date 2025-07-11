@@ -206,7 +206,7 @@ if (
             );
 
             // Add websites to collection
-            websites.addWebsites(importedWebsites);
+            websites.addWebsiteDocParts(importedWebsites);
 
             debug(
                 `Imported ${importedWebsites.length} websites from ${browserType} ${sourceType}`,

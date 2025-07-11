@@ -44,16 +44,16 @@ export function getIndexingState(collection: website.WebsiteCollection) {
 
 export async function addMessagesToCollection(
     collection: website.WebsiteCollection,
-    messages: website.Website | website.Website[],
+    messages: website.WebsiteDocPart | website.WebsiteDocPart[],
     updateIndex: boolean = true,
 ): Promise<
     Result<{ lastMessageOrdinal: number; lastSemanticRefOrdinal: number }>
 > {
     try {
         if (Array.isArray(messages)) {
-            collection.addWebsites(messages);
+            collection.addWebsiteDocParts(messages);
         } else {
-            collection.addWebsites([messages]);
+            collection.addWebsiteDocPart(messages);
         }
 
         if (updateIndex) {

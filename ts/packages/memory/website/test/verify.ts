@@ -73,16 +73,6 @@ export function verifyWebsitesByDomain(
     }
 }
 
-export function verifyWebsitesByPageType(
-    collection: WebsiteCollection,
-    pageType: string,
-    expectedCount: number,
-): void {
-    const websites = collection.messages.getAll() as WebsiteDocPart[];
-    const matchingWebsites = websites.filter((w) => w.pageType === pageType);
-    expect(matchingWebsites.length).toBe(expectedCount);
-}
-
 export function verifyBookmarksByFolder(
     collection: WebsiteCollection,
     folder: string,

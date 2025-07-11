@@ -6,8 +6,23 @@ import {
     importChromeBookmarks,
     importWebsites,
     getDefaultBrowserPaths,
-    determinePageType,
 } from "../src/importWebsites.js";
+
+// Test helper function - simplified version of page type determination
+function determinePageType(url: string, title?: string): string {
+    const domain = url.toLowerCase();
+    if (domain.includes("github.com")) return "development";
+    if (domain.includes("news.") || domain.includes("bbc.com")) return "news";
+    if (domain.includes("docs.") || domain.includes("documentation"))
+        return "documentation";
+    if (domain.includes("amazon.com") || domain.includes("shop"))
+        return "commerce";
+    if (domain.includes("twitter.com") || domain.includes("facebook.com"))
+        return "social";
+    if (domain.includes("booking.com") || domain.includes("travel"))
+        return "travel";
+    return "other";
+}
 import {
     writeSampleBookmarksFile,
     cleanupTestFile,

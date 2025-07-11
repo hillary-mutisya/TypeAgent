@@ -61,7 +61,9 @@ describeIf(
 
             const additionalWebsites =
                 createTestWebsiteCollection(moreWebsites);
-            collection.addWebsites(additionalWebsites.getWebsites());
+            collection.addWebsiteDocParts(
+                additionalWebsites.getWebsiteDocParts(),
+            );
 
             // Incremental indexing
             const incrementalResults = await collection.buildIndex();

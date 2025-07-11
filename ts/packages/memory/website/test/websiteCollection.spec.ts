@@ -16,7 +16,6 @@ import {
     verifyNumberCompleted,
     verifyWebsiteDataFrames,
     verifyWebsitesByDomain,
-    verifyWebsitesByPageType,
     verifyBookmarksByFolder,
     verifySerializationRoundtrip,
 } from "./verify.js";
@@ -43,9 +42,6 @@ describeIf(
 
             // Verify bookmark-specific data
             verifyBookmarksByFolder(collection, "Development", 2);
-            verifyWebsitesByPageType(collection, "development", 1);
-            verifyWebsitesByPageType(collection, "documentation", 1);
-            verifyWebsitesByPageType(collection, "news", 1);
         });
 
         test("create collection with history", () => {
@@ -54,11 +50,6 @@ describeIf(
 
             verifyWebsiteCollection(collection, history.length);
             verifyWebsiteDataFrames(collection);
-
-            // Verify history-specific data
-            verifyWebsitesByPageType(collection, "development", 1);
-            verifyWebsitesByPageType(collection, "social", 1);
-            verifyWebsitesByPageType(collection, "news", 1);
         });
 
         test("create collection with mixed data", () => {

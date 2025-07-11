@@ -99,7 +99,6 @@ describe("Stage 2 Enhanced Import", () => {
                 domain: "example.com",
                 visitDate: "2025-01-01T00:00:00.000Z",
                 folder: "Test Folder",
-                pageType: "documentation",
             };
 
             const content = "Test content for metadata preservation.";
@@ -114,7 +113,6 @@ describe("Stage 2 Enhanced Import", () => {
             expect(docPart.domain).toBe(visitInfo.domain);
             expect(docPart.visitDate).toBe(visitInfo.visitDate);
             expect(docPart.folder).toBe(visitInfo.folder);
-            expect(docPart.pageType).toBe(visitInfo.pageType);
         });
     });
 

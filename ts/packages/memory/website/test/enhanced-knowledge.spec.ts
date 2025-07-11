@@ -14,7 +14,6 @@ describe("Enhanced Website Knowledge Generation", () => {
             domain: "github.com",
             bookmarkDate: "2024-01-15T10:30:00Z",
             source: "bookmark",
-            pageType: "development",
             visitCount: 25,
         };
 
@@ -92,7 +91,6 @@ describe("Enhanced Website Knowledge Generation", () => {
             domain: "github.com",
             bookmarkDate: "2022-01-01T00:00:00Z",
             source: "bookmark",
-            pageType: "development",
         });
 
         // Recent bookmark (current year)
@@ -101,7 +99,6 @@ describe("Enhanced Website Knowledge Generation", () => {
             domain: "github.com",
             bookmarkDate: "2024-12-01T00:00:00Z",
             source: "bookmark",
-            pageType: "development",
         });
 
         const earlyKnowledge = earlyBookmark.getKnowledge();
@@ -125,7 +122,6 @@ describe("Enhanced Website Knowledge Generation", () => {
             domain: "stackoverflow.com",
             source: "history",
             visitCount: 45,
-            pageType: "development",
         });
 
         // Medium frequency site
@@ -134,7 +130,6 @@ describe("Enhanced Website Knowledge Generation", () => {
             domain: "docs.react.dev",
             source: "bookmark",
             visitCount: 8,
-            pageType: "development",
         });
 
         // Low frequency site
@@ -186,7 +181,6 @@ describe("Enhanced Website Knowledge Generation", () => {
             domain: "docs.typescript.org",
             bookmarkDate: "2023-06-15T14:20:00Z",
             source: "bookmark",
-            pageType: "development",
             title: "TypeScript Documentation",
         });
 

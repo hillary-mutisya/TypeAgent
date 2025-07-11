@@ -91,6 +91,18 @@ export class WebsiteDocPartMeta extends DocPartMeta {
     }
 
     public getKnowledge(): kpLib.KnowledgeResponse | undefined {
-        return this.websiteMeta.getKnowledge();
+        // Check if websiteMeta has the getKnowledge method
+        if (this.websiteMeta && typeof this.websiteMeta.getKnowledge === "function") {
+            return this.websiteMeta.getKnowledge();
+        }
+        
+        // If websiteMeta doesn't have the method, it might be a plain object
+        // Reconstruct it as a WebsiteMeta instance
+        if (this.websiteMeta) {
+            this.websiteMeta = new WebsiteMeta(this.websiteMeta as any);
+            return this.websiteMeta.getKnowledge();
+        }
+        
+        return undefined;
     }
 }

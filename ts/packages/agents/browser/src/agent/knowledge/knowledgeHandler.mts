@@ -102,6 +102,9 @@ export async function handleKnowledgeAction(
         case "getDiscoverInsights":
             return await getDiscoverInsights(parameters, context);
 
+        case "getAnalyticsInsights":
+            return await getAnalyticsInsights(parameters, context);
+
         default:
             throw new Error(`Unknown knowledge action: ${actionName}`);
     }
@@ -1662,4 +1665,166 @@ function analyzeTopDomains(websites: any[], limit: number) {
                 favicon: `https://www.google.com/s2/favicons?domain=${domain}`,
             };
         });
+}
+
+export async function getAnalyticsInsights(
+    parameters: {
+        timeRange?: string;
+        limit?: number;
+    },
+    context: SessionContext<BrowserActionContext>,
+): Promise<{
+    overview: {
+        totalSites: number;
+        totalBookmarks: number;
+        totalHistory: number;
+        knowledgeExtracted: number;
+        totalEntities: number;
+        knowledgeQuality: number;
+    };
+    trends: Array<{
+        date: string;
+        visits: number;
+        bookmarks: number;
+    }>;
+    topDomains: Array<{
+        domain: string;
+        count: number;
+        percentage: number;
+        favicon?: string;
+    }>;
+    insights: Array<{
+        category: string;
+        value: number;
+        change: number;
+    }>;
+    summary: {
+        totalActivity: number;
+        peakDay: string | null;
+        averagePerDay: number;
+        timeRange: string;
+    };
+    success: boolean;
+}> {
+    try {
+        const websiteCollection = context.agentContext.websiteCollection;
+
+        if (!websiteCollection) {
+            return {
+                overview: {
+                    totalSites: 0,
+                    totalBookmarks: 0,
+                    totalHistory: 0,
+                    knowledgeExtracted: 0,
+                    totalEntities: 0,
+                    knowledgeQuality: 0,
+                },
+                trends: [],
+                topDomains: [],
+                insights: [],
+                summary: {
+                    totalActivity: 0,
+                    peakDay: null,
+                    averagePerDay: 0,
+                    timeRange: parameters.timeRange || "30d",
+                },
+                success: false,
+            };
+        }
+
+        const websites = websiteCollection.messages.getAll();
+        const timeRange = parameters.timeRange || "30d";
+        const limit = parameters.limit || 10;
+
+        // Calculate overview statistics
+        let totalBookmarks = 0;
+        let totalHistory = 0;
+        let totalEntities = 0;
+        let pagesWithKnowledge = 0;
+
+        for (const site of websites) {
+            const metadata = site.metadata as any;
+            
+            if (metadata.bookmarkDate) {
+                totalBookmarks++;
+            }
+            if (metadata.visitDate) {
+                totalHistory++;
+            }
+
+            const knowledge = site.getKnowledge();
+            if (knowledge) {
+                if (knowledge.entities && knowledge.entities.length > 0) {
+                    totalEntities += knowledge.entities.length;
+                    pagesWithKnowledge++;
+                }
+            }
+        }
+
+        const knowledgeQuality = websites.length > 0 ? Math.round((pagesWithKnowledge / websites.length) * 100) : 0;
+
+        // Generate activity trends (reuse existing logic)
+        const trendsResult = await getActivityTrends({ timeRange }, context);
+        
+        // Generate top domains (reuse existing logic)
+        const domainsResult = await getTopDomains({ limit }, context);
+
+        const overview = {
+            totalSites: websites.length,
+            totalBookmarks,
+            totalHistory,
+            knowledgeExtracted: pagesWithKnowledge,
+            totalEntities,
+            knowledgeQuality,
+        };
+
+        const insights = [
+            {
+                category: "Entities",
+                value: totalEntities,
+                change: 0,
+            },
+            {
+                category: "Knowledge Quality",
+                value: knowledgeQuality,
+                change: 0,
+            },
+        ];
+
+        return {
+            overview,
+            trends: trendsResult.trends || [],
+            topDomains: domainsResult.domains || [],
+            insights,
+            summary: trendsResult.summary || {
+                totalActivity: 0,
+                peakDay: null,
+                averagePerDay: 0,
+                timeRange,
+            },
+            success: true,
+        };
+    } catch (error) {
+        console.error("Error getting analytics insights:", error);
+        return {
+            overview: {
+                totalSites: 0,
+                totalBookmarks: 0,
+                totalHistory: 0,
+                knowledgeExtracted: 0,
+                totalEntities: 0,
+                knowledgeQuality: 0,
+            },
+            trends: [],
+            topDomains: [],
+            insights: [],
+            summary: {
+                totalActivity: 0,
+                peakDay: null,
+                averagePerDay: 0,
+                timeRange: parameters.timeRange || "30d",
+            },
+            success: false,
+        };
+    }
 }

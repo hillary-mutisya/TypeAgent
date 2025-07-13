@@ -399,6 +399,7 @@ async function updateBrowserContext(
                         case "getTopDomains":
                         case "getActivityTrends":
                         case "getDiscoverInsights":
+                        case "getAnalyticsInsights":
                         case "getKnowledgeIndexStats":
                         case "clearKnowledgeIndex": {
                             const knowledgeResult = await handleKnowledgeAction(

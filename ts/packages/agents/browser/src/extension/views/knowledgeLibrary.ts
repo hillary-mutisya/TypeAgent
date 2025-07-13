@@ -55,17 +55,31 @@ interface AnalyticsData {
         totalBookmarks: number;
         totalHistory: number;
         knowledgeExtracted: number;
+        totalEntities: number;
+        knowledgeQuality: number;
     };
     trends: Array<{
         date: string;
         visits: number;
         bookmarks: number;
     }>;
+    topDomains: Array<{
+        domain: string;
+        count: number;
+        percentage: number;
+        favicon?: string;
+    }>;
     insights: Array<{
         category: string;
         value: number;
         change: number;
     }>;
+    summary: {
+        totalActivity: number;
+        peakDay: string | null;
+        averagePerDay: number;
+        timeRange: string;
+    };
 }
 
 // Import existing interfaces
@@ -1608,63 +1622,58 @@ class WebsiteLibraryPanelFullPage {
         }
 
         try {
-            // Get real knowledge index statistics
-            const indexStats = await chrome.runtime.sendMessage({
-                type: "getIndexStats",
-            });
+            const response = await this.chromeExtensionService.getAnalyticsInsights("30d", 10);
 
-            // Get library stats for total counts
-            const libraryStats =
-                await this.chromeExtensionService.getLibraryStats();
-
-            this.analyticsData = {
-                overview: {
-                    totalSites: indexStats.totalPages || 0,
-                    totalBookmarks: libraryStats.totalBookmarks || 0,
-                    totalHistory: libraryStats.totalHistory || 0,
-                    knowledgeExtracted: indexStats.totalPages || 0,
-                },
-                trends: [],
-                insights: [
-                    {
-                        category: "Entities",
-                        value: indexStats.totalEntities || 0,
-                        change: 0,
-                    },
-                    {
-                        category: "Relationships",
-                        value: indexStats.totalRelationships || 0,
-                        change: 0,
-                    },
-                    {
-                        category: "Knowledge Quality",
-                        value: this.calculateKnowledgeQuality(indexStats),
-                        change: 0,
-                    },
-                ],
-            };
-
-            // Store the actual statistics for the visualization section
-            this.updateKnowledgeVisualizationData(indexStats);
+            if (response.success) {
+                this.analyticsData = {
+                    overview: response.overview,
+                    trends: response.trends,
+                    topDomains: response.topDomains,
+                    insights: response.insights,
+                    summary: response.summary,
+                };
+            } else {
+                this.handleAnalyticsDataError(response.error);
+            }
         } catch (error) {
-            console.error("Failed to load analytics data:", error);
-            this.analyticsData = {
-                overview: {
-                    totalSites: this.libraryStats.totalWebsites,
-                    totalBookmarks: this.libraryStats.totalBookmarks,
-                    totalHistory: this.libraryStats.totalHistory,
-                    knowledgeExtracted: 0,
-                },
-                trends: [],
-                insights: [],
-            };
+            this.handleAnalyticsDataError(error);
+        }
+    }
 
-            // Update metric displays with zeros since no real data is available
-            this.updateMetricDisplaysWithZeros();
-
-            this.clearPlaceholderContent();
-            this.updateRecentEntitiesDisplay([]);
-            this.updateRecentTopicsDisplay([]);
+    private handleAnalyticsDataError(error: any) {
+        console.error("Error loading analytics data:", error);
+        this.analyticsData = {
+            overview: {
+                totalSites: 0,
+                totalBookmarks: 0,
+                totalHistory: 0,
+                knowledgeExtracted: 0,
+                totalEntities: 0,
+                knowledgeQuality: 0,
+            },
+            trends: [],
+            topDomains: [],
+            insights: [],
+            summary: {
+                totalActivity: 0,
+                peakDay: null,
+                averagePerDay: 0,
+                timeRange: "30d",
+            },
+        };
+        
+        const container = document.getElementById("analyticsContent");
+        if (container) {
+            container.innerHTML = `
+                <div class="error-state">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <h3>Unable to Load Analytics Data</h3>
+                    <p>There was an error loading your analytics insights. Please try again.</p>
+                    <button class="btn btn-primary" onclick="window.location.reload()">
+                        <i class="bi bi-arrow-repeat"></i> Retry
+                    </button>
+                </div>
+            `;
         }
     }
 
@@ -1996,65 +2005,43 @@ class WebsiteLibraryPanelFullPage {
         this.renderTopDomains();
     }
 
-    private async renderTopDomains() {
+    private renderTopDomains() {
         const container = document.getElementById("topDomainsList");
-        if (!container) return;
+        if (!container || !this.analyticsData) return;
 
-        try {
-            // Show loading state
+        if (!this.analyticsData.topDomains || this.analyticsData.topDomains.length === 0) {
             container.innerHTML = `
-                <div class="loading-message">
-                    <i class="bi bi-hourglass-split"></i>
-                    <span>Loading top domains...</span>
+                <div class="empty-message">
+                    <i class="bi bi-globe"></i>
+                    <span>No domain data available</span>
                 </div>
             `;
+            return;
+        }
 
-            // Fetch top domains data
-            const domainsData = await this.chromeExtensionService.getTopDomains(10);
-            
-            if (!domainsData.domains || domainsData.domains.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-message">
-                        <i class="bi bi-globe"></i>
-                        <span>No domain data available</span>
-                    </div>
-                `;
-                return;
-            }
-
-            // Render domain list
-            const domainsHtml = domainsData.domains
-                .map((domain: any) => `
-                    <div class="domain-item">
-                        <div class="domain-info">
-                            <img src="https://www.google.com/s2/favicons?domain=${domain.domain}" 
-                                 class="domain-favicon" alt="Favicon" loading="lazy"
-                                 onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2216%22 height=%2216%22 fill=%22%23999%22><rect width=%2216%22 height=%2216%22 rx=%222%22/></svg>'">
-                            <div class="domain-details">
-                                <div class="domain-name">${domain.domain}</div>
-                                <div class="domain-stats">
-                                    <span class="site-count">${domain.count} sites</span>
-                                    <span class="percentage">${domain.percentage}%</span>
-                                </div>
+        // Render domain list
+        const domainsHtml = this.analyticsData.topDomains
+            .map((domain: any) => `
+                <div class="domain-item">
+                    <div class="domain-info">
+                        <img src="${domain.favicon || `https://www.google.com/s2/favicons?domain=${domain.domain}`}" 
+                             class="domain-favicon" alt="Favicon" loading="lazy"
+                             onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2216%22 height=%2216%22 fill=%22%23999%22><rect width=%2216%22 height=%2216%22 rx=%222%22/></svg>'">
+                        <div class="domain-details">
+                            <div class="domain-name">${domain.domain}</div>
+                            <div class="domain-stats">
+                                <span class="site-count">${domain.count} sites</span>
+                                <span class="percentage">${domain.percentage}%</span>
                             </div>
                         </div>
-                        <div class="domain-bar">
-                            <div class="bar-fill" style="width: ${Math.min(domain.percentage, 100)}%"></div>
-                        </div>
                     </div>
-                `).join("");
-
-            container.innerHTML = domainsHtml;
-
-        } catch (error) {
-            console.error("Failed to render top domains:", error);
-            container.innerHTML = `
-                <div class="error-message">
-                    <i class="bi bi-exclamation-triangle"></i>
-                    <span>Failed to load domain data</span>
+                    <div class="domain-bar">
+                        <div class="bar-fill" style="width: ${Math.min(domain.percentage, 100)}%"></div>
+                    </div>
                 </div>
-            `;
-        }
+            `).join("");
+
+        container.innerHTML = domainsHtml;
     }
 
     private renderKnowledgeInsights() {
@@ -2321,123 +2308,91 @@ class WebsiteLibraryPanelFullPage {
         `;
     }
 
-    private async renderActivityCharts() {
+    private renderActivityCharts() {
         const container = document.getElementById("activityCharts");
-        if (!container) return;
+        if (!container || !this.analyticsData) return;
 
-        try {
-            // Show loading state
+        if (!this.analyticsData.trends || this.analyticsData.trends.length === 0) {
             container.innerHTML = `
                 <div class="card">
                     <div class="card-body">
                         <h6 class="card-title">Activity Trends</h6>
-                        <div class="loading-message">
-                            <i class="bi bi-hourglass-split"></i>
-                            <span>Loading activity trends...</span>
+                        <div class="empty-message">
+                            <i class="bi bi-bar-chart"></i>
+                            <span>No activity data available</span>
+                            <small>Import bookmarks or browse websites to see trends</small>
                         </div>
                     </div>
                 </div>
             `;
+            return;
+        }
 
-            // Fetch activity trends data
-            const trendsData = await this.chromeExtensionService.getActivityTrends("30d");
-            
-            if (!trendsData.trends || trendsData.trends.length === 0) {
-                container.innerHTML = `
-                    <div class="card">
-                        <div class="card-body">
-                            <h6 class="card-title">Activity Trends</h6>
-                            <div class="empty-message">
-                                <i class="bi bi-bar-chart"></i>
-                                <span>No activity data available</span>
-                                <small>Import bookmarks or browse websites to see trends</small>
-                            </div>
-                        </div>
+        // Create bar chart visualization
+        const trends = this.analyticsData.trends;
+        const maxActivity = Math.max(...trends.map((t: any) => t.visits + t.bookmarks));
+        const recentTrends = trends.slice(-14); // Show last 14 data points
+
+        const chartBars = recentTrends
+            .map((trend: any) => {
+                const totalActivity = trend.visits + trend.bookmarks;
+                const date = new Date(trend.date).toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric' 
+                });
+                
+                const visitsHeight = maxActivity > 0 ? (trend.visits / maxActivity) * 100 : 0;
+                const bookmarksHeight = maxActivity > 0 ? (trend.bookmarks / maxActivity) * 100 : 0;
+                
+                return `
+                    <div class="chart-bar" title="${date}: ${totalActivity} activities">
+                        <div class="bar-segment visits" style="height: ${visitsHeight}%" title="Visits: ${trend.visits}"></div>
+                        <div class="bar-segment bookmarks" style="height: ${bookmarksHeight}%" title="Bookmarks: ${trend.bookmarks}"></div>
+                        <div class="bar-label">${date}</div>
                     </div>
                 `;
-                return;
-            }
+            }).join('');
 
-            // Create bar chart visualization
-            const trends = trendsData.trends;
-            const maxActivity = Math.max(...trends.map((t: any) => t.visits + t.bookmarks));
-            const recentTrends = trends.slice(-14); // Show last 14 data points
-
-            const chartBars = recentTrends
-                .map((trend: any) => {
-                    const totalActivity = trend.visits + trend.bookmarks;
-                    const date = new Date(trend.date).toLocaleDateString('en-US', { 
-                        month: 'short', 
-                        day: 'numeric' 
-                    });
+        const summary = this.analyticsData.summary || {};
+        
+        container.innerHTML = `
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title">Activity Trends</h6>
                     
-                    const visitsHeight = maxActivity > 0 ? (trend.visits / maxActivity) * 100 : 0;
-                    const bookmarksHeight = maxActivity > 0 ? (trend.bookmarks / maxActivity) * 100 : 0;
+                    <div class="activity-summary mb-3">
+                        <div class="summary-stat">
+                            <span class="stat-label">Total Activity</span>
+                            <span class="stat-value">${summary.totalActivity || 0}</span>
+                        </div>
+                        <div class="summary-stat">
+                            <span class="stat-label">Daily Average</span>
+                            <span class="stat-value">${Math.round(summary.averagePerDay || 0)}</span>
+                        </div>
+                        <div class="summary-stat">
+                            <span class="stat-label">Peak Day</span>
+                            <span class="stat-value">${summary.peakDay ? new Date(summary.peakDay).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'N/A'}</span>
+                        </div>
+                    </div>
                     
-                    return `
-                        <div class="chart-bar" title="${date}: ${totalActivity} activities">
-                            <div class="bar-segment visits" style="height: ${visitsHeight}%" title="Visits: ${trend.visits}"></div>
-                            <div class="bar-segment bookmarks" style="height: ${bookmarksHeight}%" title="Bookmarks: ${trend.bookmarks}"></div>
-                            <div class="bar-label">${date}</div>
+                    <div class="activity-chart">
+                        <div class="chart-container">
+                            ${chartBars}
                         </div>
-                    `;
-                }).join('');
-
-            const summary = trendsData.summary || {};
-            
-            container.innerHTML = `
-                <div class="card">
-                    <div class="card-body">
-                        <h6 class="card-title">Activity Trends</h6>
-                        
-                        <div class="activity-summary mb-3">
-                            <div class="summary-stat">
-                                <span class="stat-label">Total Activity</span>
-                                <span class="stat-value">${summary.totalActivity || 0}</span>
+                        <div class="chart-legend">
+                            <div class="legend-item">
+                                <div class="legend-color visits"></div>
+                                <span>Visits</span>
                             </div>
-                            <div class="summary-stat">
-                                <span class="stat-label">Daily Average</span>
-                                <span class="stat-value">${Math.round(summary.averagePerDay || 0)}</span>
-                            </div>
-                            <div class="summary-stat">
-                                <span class="stat-label">Peak Day</span>
-                                <span class="stat-value">${summary.peakDay ? new Date(summary.peakDay).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'N/A'}</span>
-                            </div>
-                        </div>
-                        
-                        <div class="activity-chart">
-                            <div class="chart-container">
-                                ${chartBars}
-                            </div>
-                            <div class="chart-legend">
-                                <div class="legend-item">
-                                    <div class="legend-color visits"></div>
-                                    <span>Visits</span>
-                                </div>
-                                <div class="legend-item">
-                                    <div class="legend-color bookmarks"></div>
-                                    <span>Bookmarks</span>
-                                </div>
+                            <div class="legend-item">
+                                <div class="legend-color bookmarks"></div>
+                                <span>Bookmarks</span>
                             </div>
                         </div>
                     </div>
                 </div>
-            `;
-
-        } catch (error) {
-            console.error("Failed to render activity charts:", error);
-            container.innerHTML = `
-                <div class="card">
-                    <div class="card-body">
-                        <h6 class="card-title">Activity Trends</h6>
-                        <div class="error-message">
-                            <i class="bi bi-exclamation-triangle"></i>
-                            <span>Failed to load activity data</span>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
+            </div>
+        `;
     }
 
     private renderKnowledgeBadges(knowledge?: KnowledgeStatus): string {
@@ -3125,9 +3080,8 @@ interface ChromeExtensionService {
     getSearchSuggestions(query: string): Promise<string[]>;
     getRecentSearches(): Promise<string[]>;
     saveSearch(query: string, results: SearchResult): Promise<void>;
-    getTopDomains(limit?: number): Promise<any>;
-    getActivityTrends(timeRange?: string): Promise<any>;
     getDiscoverInsights(limit?: number, timeframe?: string): Promise<any>;
+    getAnalyticsInsights(timeRange?: string, limit?: number): Promise<any>;
 }
 
 // NotificationManager Implementation
@@ -3454,48 +3408,6 @@ class ChromeExtensionServiceImpl implements ChromeExtensionService {
         throw new Error("Chrome extension not available");
     }
 
-    async getTopDomains(limit: number = 10): Promise<any> {
-        if (typeof chrome !== "undefined" && chrome.runtime) {
-            try {
-                const response = await chrome.runtime.sendMessage({
-                    type: "getTopDomains",
-                    limit
-                });
-
-                if (response.success) {
-                    return response.domains;
-                } else {
-                    throw new Error(response.error || "Failed to get top domains");
-                }
-            } catch (error) {
-                console.error("Failed to get top domains:", error);
-                throw error;
-            }
-        }
-        throw new Error("Chrome extension not available");
-    }
-
-    async getActivityTrends(timeRange: string = "30d"): Promise<any> {
-        if (typeof chrome !== "undefined" && chrome.runtime) {
-            try {
-                const response = await chrome.runtime.sendMessage({
-                    type: "getActivityTrends",
-                    timeRange
-                });
-
-                if (response.success) {
-                    return response.trends;
-                } else {
-                    throw new Error(response.error || "Failed to get activity trends");
-                }
-            } catch (error) {
-                console.error("Failed to get activity trends:", error);
-                throw error;
-            }
-        }
-        throw new Error("Chrome extension not available");
-    }
-
     async getDiscoverInsights(limit: number = 10, timeframe: string = "30d"): Promise<any> {
         if (typeof chrome !== "undefined" && chrome.runtime) {
             try {
@@ -3512,6 +3424,28 @@ class ChromeExtensionServiceImpl implements ChromeExtensionService {
                 }
             } catch (error) {
                 console.error("Failed to get discover insights:", error);
+                throw error;
+            }
+        }
+        throw new Error("Chrome extension not available");
+    }
+
+    async getAnalyticsInsights(timeRange: string = "30d", limit: number = 10): Promise<any> {
+        if (typeof chrome !== "undefined" && chrome.runtime) {
+            try {
+                const response = await chrome.runtime.sendMessage({
+                    type: "getAnalyticsInsights",
+                    timeRange,
+                    limit
+                });
+
+                if (response.success) {
+                    return response;
+                } else {
+                    throw new Error(response.error || "Failed to get analytics insights");
+                }
+            } catch (error) {
+                console.error("Failed to get analytics insights:", error);
                 throw error;
             }
         }

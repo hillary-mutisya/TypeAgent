@@ -272,9 +272,6 @@ export async function extractKnowledgeFromPage(
 
         return {
             ...aggregatedResults,
-            // Enhanced content data - commented out due to type compatibility issues
-            // detectedActions: extractionResults.flatMap(r => r.detectedActions || []),
-            // actionSummary: extractionResults.find(r => r.actionSummary)?.actionSummary,
         };
     } catch (error) {
         console.error("Error extracting knowledge from fragments:", error);

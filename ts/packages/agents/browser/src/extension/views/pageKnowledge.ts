@@ -7,27 +7,10 @@ interface KnowledgeData {
     keyTopics: string[];
     suggestedQuestions: string[];
     summary: string;
-    // Enhanced content data
-    detectedActions?: DetectedAction[];
-    actionSummary?: ActionSummary;
     contentMetrics?: {
         readingTime: number;
         wordCount: number;
     };
-}
-
-interface DetectedAction {
-    type: string;
-    element: string;
-    text?: string;
-    confidence: number;
-}
-
-interface ActionSummary {
-    totalActions: number;
-    actionTypes: string[];
-    highConfidenceActions: number;
-    actionDistribution: { [key: string]: number };
 }
 
 interface Entity {
@@ -45,7 +28,7 @@ interface Relationship {
 }
 
 interface ExtractionSettings {
-    mode: "basic" | "content" | "actions" | "full";
+    mode: "basic" | "content";
     suggestQuestions: boolean;
 }
 
@@ -72,29 +55,9 @@ const MODE_DESCRIPTIONS: Record<string, ExtractionModeInfo> = {
             "AI content analysis",
             "Entity extraction",
             "Topic identification",
+            "Relationship extraction",
         ],
         performance: "Fast",
-    },
-    actions: {
-        description: "AI analysis plus interaction detection for dynamic pages",
-        requiresAI: true,
-        features: [
-            "AI content analysis",
-            "Action detection",
-            "Interactive elements",
-        ],
-        performance: "Medium",
-    },
-    full: {
-        description:
-            "Complete AI analysis with relationships and cross-references",
-        requiresAI: true,
-        features: [
-            "Full AI analysis",
-            "Relationship extraction",
-            "Cross-references",
-        ],
-        performance: "Thorough",
     },
 };
 
@@ -629,7 +592,6 @@ class KnowledgePanel {
             ${this.renderEntitiesCard()}
             ${this.renderRelationshipsCard()}
             ${this.renderTopicsCard()}
-            ${knowledge.detectedActions && knowledge.detectedActions.length > 0 ? this.renderActionsCard() : ""}
         `;
 
         if (knowledge.contentMetrics) {
@@ -639,12 +601,6 @@ class KnowledgePanel {
         this.renderEntities(knowledge.entities);
         this.renderRelationships(knowledge.relationships);
         this.renderKeyTopics(knowledge.keyTopics);
-        if (knowledge.detectedActions && knowledge.detectedActions.length > 0) {
-            this.renderDetectedActions(
-                knowledge.detectedActions,
-                knowledge.actionSummary,
-            );
-        }
         this.renderSuggestedQuestions(knowledge.suggestedQuestions);
 
         // Auto-load cross-page intelligence
@@ -969,9 +925,7 @@ class KnowledgePanel {
         const hasRelationships =
             this.knowledgeData?.relationships &&
             this.knowledgeData.relationships.length > 0;
-        const hasActions =
-            this.knowledgeData?.detectedActions &&
-            this.knowledgeData.detectedActions.length > 0;
+
         const hasTopics =
             this.knowledgeData?.keyTopics &&
             this.knowledgeData.keyTopics.length > 0;
@@ -1005,25 +959,15 @@ class KnowledgePanel {
             lowerQ.includes("implementation") ||
             lowerQ.includes("library") ||
             lowerQ.includes("framework") ||
-            lowerQ.includes("how to use") ||
-            (hasActions &&
-                (lowerQ.includes("interact") ||
-                    lowerQ.includes("click") ||
-                    lowerQ.includes("action")))
+            lowerQ.includes("how to use")
         ) {
             category = "technical";
             priority = "high";
             confidence = 0.85;
             recommended =
-                lowerQ.includes("example") ||
-                lowerQ.includes("tutorial") ||
-                (hasActions ?? false);
+                lowerQ.includes("example") || lowerQ.includes("tutorial");
 
-            // Boost for pages with detected actions
-            if (hasActions) {
-                confidence += 0.1;
-                recommended = true;
-            }
+            // Actions are no longer part of knowledge extraction
         }
         // Discovery questions (enhanced with entity/topic context)
         else if (
@@ -1463,20 +1407,6 @@ class KnowledgePanel {
                 </div>
             </div>`;
 
-        // Show enhanced capabilities if detected
-        if (
-            this.knowledgeData.detectedActions &&
-            this.knowledgeData.detectedActions.length > 0
-        ) {
-            content += `
-                <div class="mt-2 p-2 bg-light rounded">
-                    <small class="text-success">
-                        <i class="bi bi-lightning-fill me-1"></i>
-                        <strong>Action Detection:</strong> ${this.knowledgeData.detectedActions.length} interactive elements identified
-                    </small>
-                </div>`;
-        }
-
         if (this.pageSourceInfo?.isBookmarked) {
             content += " • Available in bookmarks";
         }
@@ -1902,19 +1832,6 @@ class KnowledgePanel {
             "relatedContentCount",
         );
     }
-    private renderActionsCard(): string {
-        const content = this.createContainer(
-            "detectedActionsContainer",
-            this.createEmptyState("bi bi-info-circle", "No actions detected"),
-        );
-        return this.createCard(
-            "Detected Actions",
-            content,
-            "bi bi-lightning",
-            "actionsCount",
-        );
-    }
-
     // Render enhanced content metrics with visual indicators
     private renderContentMetrics(metrics: any) {
         const container = document.getElementById("contentMetricsContainer")!;
@@ -1980,62 +1897,6 @@ class KnowledgePanel {
                 </div>
             </div>
         `;
-    }
-
-    // Render detected actions
-    private renderDetectedActions(
-        actions: DetectedAction[],
-        summary?: ActionSummary,
-    ) {
-        const container = document.getElementById("detectedActionsContainer")!;
-        const countBadge = document.getElementById("actionsCount");
-
-        if (countBadge) {
-            countBadge.textContent = actions.length.toString();
-        }
-
-        if (actions.length === 0) {
-            container.innerHTML = `
-                <div class="text-muted text-center">
-                    <i class="bi bi-info-circle"></i>
-                    No actions detected on this page
-                </div>
-            `;
-            return;
-        }
-
-        let summaryHtml = "";
-        if (summary) {
-            summaryHtml = `
-                <div class="mb-3 p-2 bg-light rounded">
-                    <small class="text-muted">Summary:</small><br>
-                    <span class="fw-semibold">${summary.totalActions} total actions</span>
-                    ${summary.actionTypes.length > 0 ? `<br><small>Types: ${summary.actionTypes.join(", ")}</small>` : ""}
-                </div>
-            `;
-        }
-
-        const actionsHtml = actions
-            .slice(0, 10)
-            .map(
-                (action) => `
-                <div class="d-flex justify-content-between align-items-center mb-2 p-2 border rounded">
-                    <div>
-                        <span class="fw-semibold">${action.type}</span>
-                        <span class="badge bg-secondary ms-2">${action.element}</span>
-                        ${action.text ? `<br><small class="text-muted">${action.text}</small>` : ""}
-                    </div>
-                    <div>
-                        <div class="progress" style="width: 50px; height: 4px;">
-                            <div class="progress-bar bg-success" style="width: ${action.confidence * 100}%"></div>
-                        </div>
-                    </div>
-                </div>
-            `,
-            )
-            .join("");
-
-        container.innerHTML = summaryHtml + actionsHtml;
     }
 
     // Helper methods for enhanced content metrics
@@ -2895,16 +2756,13 @@ class KnowledgePanel {
         const entityCount = knowledge.entities?.length || 0;
         const relationshipCount = knowledge.relationships?.length || 0;
         const topicCount = knowledge.keyTopics?.length || 0;
-        const actionCount = knowledge.detectedActions?.length || 0;
 
         // Calculate component scores
         const entityScore = Math.min(entityCount * 10, 40); // Max 40 points for entities
         const relationshipScore = Math.min(relationshipCount * 15, 30); // Max 30 points for relationships
         const topicScore = Math.min(topicCount * 8, 20); // Max 20 points for topics
-        const actionScore = Math.min(actionCount * 2, 10); // Max 10 points for actions
 
-        const totalScore =
-            entityScore + relationshipScore + topicScore + actionScore;
+        const totalScore = entityScore + relationshipScore + topicScore;
 
         // Determine quality level and color
         let label: string, color: string;
@@ -2950,15 +2808,6 @@ class KnowledgePanel {
                     topicCount >= 4
                         ? "success"
                         : topicCount >= 2
-                          ? "primary"
-                          : "secondary",
-            },
-            actions: {
-                count: actionCount,
-                color:
-                    actionCount >= 5
-                        ? "success"
-                        : actionCount >= 1
                           ? "primary"
                           : "secondary",
             },
@@ -3338,9 +3187,7 @@ class KnowledgePanel {
         );
     }
 
-    private updateExtractionMode(
-        mode: "basic" | "content" | "actions" | "full",
-    ) {
+    private updateExtractionMode(mode: "basic" | "content") {
         this.extractionSettings.mode = mode;
 
         this.updateModeDescription(mode);

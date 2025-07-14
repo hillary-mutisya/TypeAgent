@@ -333,10 +333,6 @@ export async function handleMessage(
                             suggestedQuestions:
                                 knowledgeResult.suggestedQuestions || [],
                             summary: knowledgeResult.summary || "",
-                            // Enhanced content data
-                            detectedActions:
-                                knowledgeResult.detectedActions || [],
-                            actionSummary: knowledgeResult.actionSummary,
                             contentMetrics: knowledgeResult.contentMetrics || {
                                 readingTime: 0,
                                 wordCount: 0,

@@ -964,12 +964,6 @@ export async function importHtmlFolderFromSession(
                     options?.mode !== "basic" ? successCount : 0,
                 entitiesFound: 0, // Entities extraction would need different logic
                 topicsIdentified: 0, // Topics extraction would need different logic
-                actionsDetected: websiteDataResults.reduce(
-                    (sum, data) =>
-                        sum +
-                        (data.extractionResult?.detectedActions?.length || 0),
-                    0,
-                ),
             },
         };
     } catch (error: any) {
@@ -992,7 +986,6 @@ export async function importHtmlFolderFromSession(
                 knowledgeExtracted: 0,
                 entitiesFound: 0,
                 topicsIdentified: 0,
-                actionsDetected: 0,
             },
         };
     }

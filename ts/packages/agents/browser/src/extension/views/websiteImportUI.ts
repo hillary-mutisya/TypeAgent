@@ -820,8 +820,6 @@ export class WebsiteImportUI {
                                                 <select id="extractionMode" class="form-select form-select-sm">
                                                     <option value="basic">Basic - Fast extraction</option>
                                                     <option value="content" selected>Content - Good quality</option>
-                                                    <option value="actions">Actions - Include action detection</option>
-                                                    <option value="full">Full - Maximum detail</option>
                                                 </select>
                                             </div>
 
@@ -1015,8 +1013,6 @@ export class WebsiteImportUI {
                                                 <select id="folderExtractionMode" class="form-select form-select-sm">
                                                     <option value="basic">Basic - Fast processing</option>
                                                     <option value="content" selected>Content - Good quality</option>
-                                                    <option value="actions">Actions - Include action detection</option>
-                                                    <option value="full">Full - Maximum detail</option>
                                                 </select>
                                             </div>
 

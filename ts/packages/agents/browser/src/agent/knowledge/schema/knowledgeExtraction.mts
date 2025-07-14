@@ -11,27 +11,14 @@ export interface KnowledgeExtractionResult {
 
 export interface EnhancedKnowledgeExtractionResult
     extends KnowledgeExtractionResult {
-    detectedActions?: DetectedAction[];
-    actionSummary?: ActionSummary;
+    // Actions are no longer part of knowledge extraction
     contentMetrics: {
         readingTime: number;
         wordCount: number;
     };
 }
 
-export interface DetectedAction {
-    type: string;
-    element: string;
-    text?: string;
-    confidence: number;
-}
-
-export interface ActionSummary {
-    totalActions: number;
-    actionTypes: string[];
-    highConfidenceActions: number;
-    actionDistribution: { [key: string]: number };
-}
+// Action-related interfaces removed as part of knowledge extraction simplification
 
 export interface Entity {
     name: string;

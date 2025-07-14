@@ -77,7 +77,7 @@ interface LocalImportOptions {
     folder?: string;
     extractContent?: boolean;
     enableIntelligentAnalysis?: boolean;
-    extractionMode?: "basic" | "content" | "actions" | "full";
+    extractionMode?: "basic" | "content";
     maxConcurrent?: number;
     contentTimeout?: number;
 }
@@ -103,7 +103,6 @@ interface KnowledgeStatus {
     extractionDate?: string;
     entityCount?: number;
     topicCount?: number;
-    suggestionCount?: number;
     status: "extracted" | "pending" | "error" | "none" | "extracting";
     confidence?: number;
 }
@@ -574,7 +573,6 @@ class WebsiteLibraryPanelFullPage {
         const knowledgeFilters = [
             "hasEntitiesFilter",
             "hasTopicsFilter",
-            "hasActionsFilter",
             "knowledgeExtractedFilter",
         ];
 
@@ -1166,7 +1164,6 @@ class WebsiteLibraryPanelFullPage {
                         sites: [],
                         totalEntities: 0,
                         totalTopics: 0,
-                        totalActions: 0,
                         extractedCount: 0,
                     };
                 }
@@ -1180,10 +1177,7 @@ class WebsiteLibraryPanelFullPage {
                     acc[website.domain].totalTopics +=
                         website.knowledge.topicCount;
                 }
-                if (website.knowledge?.suggestionCount) {
-                    acc[website.domain].totalActions +=
-                        website.knowledge.suggestionCount;
-                }
+                // Actions are no longer part of knowledge extraction
                 if (website.knowledge?.status === "extracted") {
                     acc[website.domain].extractedCount++;
                 }
@@ -1196,7 +1190,6 @@ class WebsiteLibraryPanelFullPage {
                     sites: Website[];
                     totalEntities: number;
                     totalTopics: number;
-                    totalActions: number;
                     extractedCount: number;
                 }
             >,
@@ -1223,15 +1216,13 @@ class WebsiteLibraryPanelFullPage {
                     </div>
                     
                     ${
-                        data.totalEntities > 0 ||
-                        data.totalTopics > 0 ||
-                        data.totalActions > 0
+                        data.totalEntities > 0 || data.totalTopics > 0
                             ? `
                         <div class="domain-knowledge-summary mt-2">
                             <div class="knowledge-badges">
                                 ${data.totalEntities > 0 ? `<span class="knowledge-badge entity small">${data.totalEntities} Entities</span>` : ""}
                                 ${data.totalTopics > 0 ? `<span class="knowledge-badge topic small">${data.totalTopics} Topics</span>` : ""}
-                                ${data.totalActions > 0 ? `<span class="knowledge-badge action small">${data.totalActions} Actions</span>` : ""}
+                            </div>
                             </div>
                         </div>
                     `
@@ -1754,7 +1745,7 @@ class WebsiteLibraryPanelFullPage {
             document.getElementById("knowledgeExtracted");
         const totalEntitiesElement = document.getElementById("totalEntities");
         const totalTopicsElement = document.getElementById("totalTopics");
-        const totalActionsElement = document.getElementById("totalActions");
+        // Actions are no longer part of knowledge extraction
 
         if (knowledgeExtractedElement) {
             knowledgeExtractedElement.textContent = (
@@ -1773,11 +1764,7 @@ class WebsiteLibraryPanelFullPage {
             );
             totalTopicsElement.textContent = estimatedTopics.toString();
         }
-        if (totalActionsElement) {
-            totalActionsElement.textContent = (
-                indexStats.totalRelationships || 0
-            ).toString();
-        }
+        // Actions are no longer part of knowledge extraction
 
         // Update knowledge visualization cards with real data
         this.updateKnowledgeVisualizationCards(indexStats);
@@ -1824,36 +1811,12 @@ class WebsiteLibraryPanelFullPage {
     }
 
     private replaceVisualizationSampleData(indexStats: any) {
-        // Just update the metrics if needed
-
-        // Update the actions breakdown with real data
-        const actionBreakdown = document.querySelector(
-            ".knowledge-card.actions .action-breakdown",
+        // Actions are no longer part of knowledge extraction
+        // This method previously updated action-related visualization data
+        // Since actions are removed, this method now does minimal updates
+        console.log(
+            "Visualization data updated for simplified knowledge extraction",
         );
-        if (actionBreakdown && indexStats.totalRelationships > 0) {
-            actionBreakdown.innerHTML = `
-                <div class="action-type">
-                    <i class="bi bi-diagram-2"></i>
-                    <span>Relationships Found</span>
-                    <span class="action-count">${indexStats.totalRelationships}</span>
-                </div>
-                <div class="action-type">
-                    <i class="bi bi-link-45deg"></i>
-                    <span>Cross-references</span>
-                    <span class="action-count">${Math.round(indexStats.totalRelationships * 0.7)}</span>
-                </div>
-                <div class="action-type">
-                    <i class="bi bi-search"></i>
-                    <span>Searchable Items</span>
-                    <span class="action-count">${indexStats.totalEntities + indexStats.totalRelationships}</span>
-                </div>
-                <div class="action-type">
-                    <i class="bi bi-clock-history"></i>
-                    <span>Last Updated</span>
-                    <span class="action-count">${this.formatDate(indexStats.lastIndexed)}</span>
-                </div>
-            `;
-        }
     }
 
     private updateMetricDisplaysWithZeros() {
@@ -1862,10 +1825,8 @@ class WebsiteLibraryPanelFullPage {
             "knowledgeExtracted",
             "totalEntities",
             "totalTopics",
-            "totalActions",
             "totalEntitiesMetric",
             "totalTopicsMetric",
-            "totalActionsMetric",
         ];
 
         elements.forEach((elementId) => {
@@ -2530,14 +2491,7 @@ class WebsiteLibraryPanelFullPage {
             `);
         }
 
-        if (knowledge.suggestionCount && knowledge.suggestionCount > 0) {
-            badges.push(`
-                <span class="knowledge-badge action" title="${knowledge.suggestionCount} actions detected">
-                    <i class="bi bi-lightning"></i>
-                    ${knowledge.suggestionCount} Actions
-                </span>
-            `);
-        }
+        // Actions are no longer part of knowledge extraction
 
         if (knowledge.status === "extracted") {
             badges.push(`

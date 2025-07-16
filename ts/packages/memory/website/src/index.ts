@@ -26,6 +26,7 @@ export * from "./websiteDocPartMeta.js";
 export * from "./tables.js";
 export * from "./websiteMeta.js";
 
+// Legacy extraction system (existing)
 export {
     AIModelManager,
     BatchProcessor,
@@ -41,3 +42,6 @@ export {
     AIExtractionFailedError,
     getEffectiveConfig,
 } from "./extraction/index.js";
+
+// NEW: Pipeline-based processing system
+export * from "./pipeline/index.js";

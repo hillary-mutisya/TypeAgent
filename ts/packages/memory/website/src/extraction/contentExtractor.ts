@@ -17,6 +17,10 @@ import {
     AIModelRequiredError,
     AIExtractionFailedError,
 } from "./types.js";
+import { 
+    createBasicPipeline, 
+    createComprehensivePipeline
+} from "../pipeline/index.js";
 
 /**
  * Enhanced ContentExtractor with extraction mode capabilities
@@ -26,14 +30,20 @@ export class ContentExtractor {
     private aiModelManager?: AIModelManager;
     private extractionConfig?: ExtractionConfig;
     private htmlFetcher: HtmlFetcher;
+    private usePipeline: boolean;
 
     constructor(
         inputConfig?: ExtractionConfig & {
             knowledgeExtractor?: kpLib.KnowledgeExtractor;
+            usePipeline?: boolean;
         },
     ) {
         // Initialize HTML fetcher
         this.htmlFetcher = new HtmlFetcher();
+        
+        // Enable pipeline by default (can be disabled via environment variable or config)
+        this.usePipeline = inputConfig?.usePipeline ?? 
+            (process.env.TYPEAGENT_USE_PIPELINE !== 'false');
 
         if (inputConfig) {
             // Create a clean config object with only defined values
@@ -89,6 +99,20 @@ export class ContentExtractor {
         const modeConfig = EXTRACTION_MODE_CONFIGS[mode];
 
         try {
+            // Try pipeline approach first if enabled
+            if (this.usePipeline) {
+                try {
+                    console.log(`Using pipeline for extraction (mode: ${mode})`);
+                    return await this.extractWithPipeline(content, mode);
+                } catch (error) {
+                    console.warn('Pipeline extraction failed, falling back to legacy method:', error);
+                    // Fall through to legacy processing
+                }
+            }
+
+            // Legacy extraction logic
+            console.log(`Using legacy extraction (mode: ${mode})`);
+            
             // Fetch HTML if needed and not provided
             if (
                 mode !== "basic" &&
@@ -544,6 +568,108 @@ export class ContentExtractor {
                     links: [],
                 },
             };
+        }
+    }
+
+    /**
+     * Extract content using the pipeline approach
+     */
+    private async extractWithPipeline(
+        content: ExtractionInput,
+        mode: ExtractionMode = "content",
+    ): Promise<ExtractionResult> {
+        const startTime = Date.now();
+        
+        // Determine which pipeline to use based on mode
+        const pipeline = this.createPipelineForMode(mode);
+        
+        // Prepare input for pipeline
+        const htmlContent = content.htmlContent || content.htmlFragments?.[0] || '';
+        
+        // Ensure htmlContent is a string
+        const htmlString = typeof htmlContent === 'string' ? htmlContent : 
+                          (htmlContent?.toString?.() || '');
+        
+        console.log(`Pipeline input debug - HTML type: ${typeof htmlContent}, length: ${htmlString.length}`);
+        
+        // Execute pipeline - pass just the HTML string as the first step expects it
+        const result = await pipeline.execute(htmlString);
+        
+        if (!result.success) {
+            throw new Error(`Pipeline processing failed: ${result.error?.message}`);
+        }
+        
+        // Convert pipeline result to ExtractionResult format
+        const pipelineData = result.data as any; // Type the result data
+        const pageContent = pipelineData?.pageContent || pipelineData;
+        
+        const extractionResult: ExtractionResult = {
+            pageContent: {
+                title: pageContent?.title || content.title || 'Untitled',
+                mainContent: pageContent?.mainContent || '',
+                headings: pageContent?.headings || [],
+                images: pageContent?.images || [],
+                links: pageContent?.links || [],
+                wordCount: pageContent?.wordCount || 0,
+                readingTime: pageContent?.readingTime || 0,
+            },
+            knowledge: pipelineData?.knowledge || {
+                entities: [],
+                topics: [],
+                actions: [],
+                chunks: [],
+                extractionTime: Date.now() - startTime,
+                extractionMethod: 'pipeline',
+            },
+            success: true,
+            extractionTime: Date.now() - startTime,
+            extractionMode: mode,
+            aiProcessingUsed: false, // TODO: Set based on mode
+            source: 'pipeline',
+            timestamp: new Date().toISOString(),
+            processingTime: Date.now() - startTime,
+            qualityMetrics: {
+                confidence: 0.8, // Pipeline processing is generally reliable
+                entityCount: 0, // Will be filled by knowledge extraction if enabled
+                topicCount: 0,
+                actionCount: 0,
+                extractionTime: Date.now() - startTime,
+                knowledgeStrategy: mode === 'basic' ? 'basic' : 'hybrid',
+            },
+        };
+        
+        // Add knowledge data if available from pipeline
+        if (pipelineData?.knowledge) {
+            extractionResult.knowledge = pipelineData.knowledge;
+            extractionResult.aiProcessingUsed = true;
+            extractionResult.qualityMetrics.entityCount = pipelineData.knowledge.entities?.length || 0;
+            extractionResult.qualityMetrics.topicCount = pipelineData.knowledge.topics?.length || 0;
+            extractionResult.qualityMetrics.actionCount = pipelineData.knowledge.actions?.length || 0;
+        }
+        
+        return extractionResult;
+    }
+
+    /**
+     * Create appropriate pipeline based on extraction mode
+     */
+    private createPipelineForMode(mode: ExtractionMode) {
+        const pipelineOptions = {
+            enableLogging: true,
+            enableMetrics: true,
+            enableRetry: true,
+            timeout: this.extractionConfig?.timeout || 30000,
+        };
+
+        switch (mode) {
+            case 'basic':
+                return createBasicPipeline(pipelineOptions);
+            case 'content':
+            case 'actions':
+            case 'full':
+                return createComprehensivePipeline(pipelineOptions);
+            default:
+                return createBasicPipeline(pipelineOptions);
         }
     }
 }

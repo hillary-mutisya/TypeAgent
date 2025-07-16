@@ -97,6 +97,26 @@ export async function processHtmlContent(
     options: ProcessingOptions = {},
     fileMetadata?: FileMetadata,
 ): Promise<WebsiteData> {
+    // Feature flag to enable/disable pipeline processing
+    const usePipeline = process.env.TYPEAGENT_USE_PIPELINE !== 'false';
+    
+    if (usePipeline) {
+        try {
+            // Use new pipeline-based processing
+            const { PipelineHtmlProcessor } = await import('./pipeline/PipelineAdapter.mjs');
+            return await PipelineHtmlProcessor.processHtmlContent(
+                html,
+                sourceIdentifier,
+                options,
+                fileMetadata
+            );
+        } catch (error) {
+            console.warn('Pipeline processing failed, falling back to legacy method:', error);
+            // Fall through to legacy processing
+        }
+    }
+
+    // Legacy processing (preserved for backward compatibility and fallback)
     const config: any = {
         mode: options.mode || "content",
     };
@@ -705,6 +725,25 @@ export async function processHtmlBatch(
     options: ProcessingOptions = {},
     progressCallback?: (current: number, total: number, item: string) => void,
 ): Promise<WebsiteData[]> {
+    // Feature flag to enable/disable pipeline processing
+    const usePipeline = process.env.TYPEAGENT_USE_PIPELINE !== 'false';
+    
+    if (usePipeline) {
+        try {
+            // Use new pipeline-based batch processing
+            const { PipelineHtmlProcessor } = await import('./pipeline/PipelineAdapter.mjs');
+            return await PipelineHtmlProcessor.processHtmlBatch(
+                htmlFiles,
+                options,
+                progressCallback
+            );
+        } catch (error) {
+            console.warn('Pipeline batch processing failed, falling back to legacy method:', error);
+            // Fall through to legacy processing
+        }
+    }
+
+    // Legacy batch processing (preserved for backward compatibility)
     const results: WebsiteData[] = [];
     const total = htmlFiles.length;
 

@@ -65,6 +65,7 @@ export interface Website {
     score?: number;
     snippet?: string;
     knowledge?: KnowledgeStatus;
+    favicon?: string;
 }
 
 export interface SourceReference {

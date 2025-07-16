@@ -58,8 +58,8 @@ const sharedScripts = {
     "views/options": "views/options.ts",
     "views/pageActions": "views/pageActions.ts",
     "views/actionsLibrary": "views/actionsLibrary.ts",
-    "views/pageKnowledge": "views/pageKnowledge.ts",
-    "views/knowledgeLibrary": "views/knowledgeLibrary.ts",
+    "views/pageKnowledge": "views/pageKnowledge/index.ts",
+    "views/knowledgeLibrary": "views/knowledgeLibrary/index.ts",
     "views/pdfView": "views/pdfView.ts",
     uiEventsDispatcher: "uiEventsDispatcher.ts",
     "sites/paleobiodb": "sites/paleobiodb.ts",
@@ -151,7 +151,7 @@ copyFileSync(
     `${chromeOutDir}/views/actionsLibrary.html`,
 );
 copyFileSync(
-    `${srcDir}/views/pageKnowledge.html`,
+    `${srcDir}/views/pageKnowledge/pageKnowledge.html`,
     `${chromeOutDir}/views/pageKnowledge.html`,
 );
 copyFileSync(
@@ -159,7 +159,7 @@ copyFileSync(
     `${chromeOutDir}/views/options.html`,
 );
 copyFileSync(
-    `${srcDir}/views/knowledgeLibrary.html`,
+    `${srcDir}/views/knowledgeLibrary/knowledgeLibrary.html`,
     `${chromeOutDir}/views/knowledgeLibrary.html`,
 );
 copyFileSync(
@@ -167,7 +167,7 @@ copyFileSync(
     `${chromeOutDir}/views/pdfView.html`,
 );
 copyFileSync(
-    `${srcDir}/views/knowledgeLibrary.css`,
+    `${srcDir}/views/knowledgeLibrary/knowledgeLibrary.css`,
     `${chromeOutDir}/views/knowledgeLibrary.css`,
 );
 mkdirSync(`${chromeOutDir}/sites`, { recursive: true });

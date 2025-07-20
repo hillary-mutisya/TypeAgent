@@ -24,9 +24,9 @@ interface GraphData {
  * Entity Graph Visualizer using Cytoscape.js
  */
 export class EntityGraphVisualizer {
-    private cy: any = null;
+    protected cy: any = null;
     private container: HTMLElement;
-    private currentLayout: string = 'force';
+    protected currentLayout: string = 'force';
     private entityClickCallback: ((entity: EntityData) => void) | null = null;
 
     constructor(container: HTMLElement) {
@@ -76,7 +76,7 @@ export class EntityGraphVisualizer {
     /**
      * Get default styles for the graph
      */
-    private getDefaultStyles(): any[] {
+    protected getDefaultStyles(): any[] {
         return [
             // Node styles by type
             {

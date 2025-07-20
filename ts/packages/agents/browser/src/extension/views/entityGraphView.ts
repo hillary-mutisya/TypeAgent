@@ -1,5 +1,5 @@
 // Entity Graph View - Main entry point for entity visualization
-import { EntityGraphVisualizer } from './entityGraphVisualizer.js';
+import { EnhancedEntityGraphVisualizer } from './enhancedEntityGraphVisualizer.js';
 import { EntitySidebar } from './entitySidebar.js';
 
 interface MockScenario {
@@ -12,7 +12,7 @@ interface MockScenario {
  * Main class for the Entity Graph View page
  */
 class EntityGraphView {
-    private visualizer: EntityGraphVisualizer;
+    private visualizer: EnhancedEntityGraphVisualizer;
     private sidebar: EntitySidebar;
     private currentEntity: string | null = null;
     private mockMode: boolean = true;
@@ -30,7 +30,7 @@ class EntityGraphView {
         const graphContainer = document.getElementById('cytoscape-container')!;
         const sidebarContainer = document.getElementById('entitySidebar')!;
         
-        this.visualizer = new EntityGraphVisualizer(graphContainer);
+        this.visualizer = new EnhancedEntityGraphVisualizer(graphContainer);
         this.sidebar = new EntitySidebar(sidebarContainer);
         
         this.initialize();

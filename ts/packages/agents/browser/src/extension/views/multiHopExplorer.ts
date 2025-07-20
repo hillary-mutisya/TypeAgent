@@ -1,6 +1,8 @@
 // Multi-hop Entity Exploration Implementation
 // Advanced entity network expansion and multi-hop exploration
 
+import { EntityGraphServices, DefaultEntityGraphServices } from './knowledgeUtilities';
+
 export interface EntityExpansionData {
     centerEntity: string;
     entities: any[];
@@ -39,9 +41,11 @@ export class MultiHopExplorer {
     private networkCache: Map<string, EntityExpansionData> = new Map();
     private mockMode: boolean = true;
     private isExpanding: boolean = false;
+    private entityGraphService: EntityGraphServices;
 
-    constructor(visualizer: any) {
+    constructor(visualizer: any, entityGraphService?: EntityGraphServices) {
         this.visualizer = visualizer;
+        this.entityGraphService = entityGraphService || new DefaultEntityGraphServices();
         this.setupExpansionControls();
         this.setupExpansionEventHandlers();
     }
@@ -160,6 +164,50 @@ export class MultiHopExplorer {
     }
 
     private async generateExpansionData(entityName: string, depth: number): Promise<EntityExpansionData> {
+        if (this.mockMode) {
+            return this.generateMockExpansionData(entityName, depth);
+        } else {
+            return this.generateRealExpansionData(entityName, depth);
+        }
+    }
+
+    /**
+     * Generate real expansion data using enhanced search
+     */
+    private async generateRealExpansionData(entityName: string, depth: number): Promise<EntityExpansionData> {
+        try {
+            // Get entity graph from enhanced search
+            const graphData = await this.entityGraphService.getEntityGraph(entityName, depth);
+            
+            // Convert to expansion data format
+            return {
+                centerEntity: entityName,
+                entities: graphData.entities.map((e: any) => ({
+                    name: e.name,
+                    type: e.type,
+                    confidence: e.confidence
+                })),
+                relationships: graphData.relationships.map((r: any) => ({
+                    from: r.relatedEntity,
+                    to: entityName, // Assuming relationships point to center entity
+                    type: r.relationshipType,
+                    strength: r.strength
+                })),
+                depth: depth,
+                expansionType: 'importance_based'
+            };
+            
+        } catch (error) {
+            console.error('Failed to generate real expansion data:', error);
+            // Fallback to mock data
+            return this.generateMockExpansionData(entityName, depth);
+        }
+    }
+
+    /**
+     * Generate mock expansion data
+     */
+    private generateMockExpansionData(entityName: string, depth: number): EntityExpansionData {
         // Mock data generation
         return {
             centerEntity: entityName,

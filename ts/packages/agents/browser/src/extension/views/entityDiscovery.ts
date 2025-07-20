@@ -1,6 +1,8 @@
 // Entity Discovery Implementation
 // Advanced search, discovery, and exploration features for entity graphs
 
+import { EntityGraphServices, DefaultEntityGraphServices } from './knowledgeUtilities';
+
 export interface EntitySearchPattern {
     entityType?: string;
     relationshipType?: string;
@@ -57,8 +59,10 @@ export class EntityDiscovery {
     private mockMode: boolean = true;
     private currentQuery: string = '';
     private searchTimeout: number | null = null;
+    private entityGraphService: EntityGraphServices;
 
-    constructor() {
+    constructor(entityGraphService?: EntityGraphServices) {
+        this.entityGraphService = entityGraphService || new DefaultEntityGraphServices();
         this.initialize();
     }
 
@@ -181,8 +185,30 @@ export class EntityDiscovery {
         if (this.mockMode) {
             return this.searchMockEntities(query);
         } else {
-            // Real search would integrate with actual entity data
             return this.searchRealEntities(query);
+        }
+    }
+
+    /**
+     * Real entity search using enhanced search
+     */
+    private async searchRealEntities(query: string): Promise<any[]> {
+        try {
+            const searchResults = await this.entityGraphService.searchByEntity(query, {
+                maxResults: 8,
+                sortBy: 'relevance'
+            });
+
+            return searchResults.entities.map((entity: any) => ({
+                name: entity.name,
+                type: entity.type,
+                confidence: entity.confidence,
+                score: entity.confidence * Math.min(entity.mentionCount / 10, 1) // Relevance score
+            }));
+
+        } catch (error) {
+            console.error('Real entity search failed:', error);
+            return [];
         }
     }
 
@@ -208,15 +234,6 @@ export class EntityDiscovery {
             .filter(entity => entity.name.toLowerCase().includes(queryLower))
             .sort((a, b) => b.score - a.score)
             .slice(0, 8);
-    }
-
-    /**
-     * Real entity search (placeholder)
-     */
-    private async searchRealEntities(query: string): Promise<any[]> {
-        // This would integrate with real entity search
-        console.log('Real entity search for:', query);
-        return [];
     }
 
     /**
@@ -321,12 +338,44 @@ export class EntityDiscovery {
     }
 
     /**
-     * Real advanced search (placeholder)
+     * Real advanced search (with enhanced search integration)
      */
     private async realAdvancedSearch(query: string, pattern: EntitySearchPattern): Promise<any> {
-        // This would integrate with real search backend
-        console.log('Real advanced search for:', query, pattern);
-        return { query, entities: [], clusters: [], paths: [], suggestions: [], totalResults: 0 };
+        try {
+            const searchResults = await this.entityGraphService.searchByEntity(query, {
+                entityType: pattern.entityType,
+                confidenceThreshold: pattern.confidenceThreshold,
+                maxResults: 20,
+                sortBy: 'relevance',
+                domainFilter: pattern.domainFilter,
+                timeRange: pattern.timeRange
+            });
+
+            // Generate clusters and paths from real data
+            const clusters = this.generateClustersFromResults(searchResults.entities);
+            const paths = this.generatePathsFromResults(searchResults.entities);
+            const suggestions = searchResults.suggestions;
+
+            return {
+                query,
+                entities: searchResults.entities,
+                clusters,
+                paths,
+                suggestions,
+                totalResults: searchResults.totalCount
+            };
+
+        } catch (error) {
+            console.error('Real advanced search failed:', error);
+            return { 
+                query, 
+                entities: [], 
+                clusters: [], 
+                paths: [], 
+                suggestions: [], 
+                totalResults: 0 
+            };
+        }
     }
 
     /**
@@ -647,4 +696,70 @@ export class EntityDiscovery {
             this.searchInput.value = '';
         }
     }
+
+    // Helper methods for real data processing
+
+    /**
+     * Generate clusters from search results
+     */
+    private generateClustersFromResults(entities: any[]): any[] {
+        const clusters: any[] = [];
+        
+        // Group entities by type
+        const typeGroups = entities.reduce((groups, entity) => {
+            const type = entity.type;
+            if (!groups[type]) {
+                groups[type] = [];
+            }
+            groups[type].push(entity);
+            return groups;
+        }, {});
+
+        // Create clusters for each type with multiple entities
+        for (const [type, typeEntities] of Object.entries(typeGroups)) {
+            if ((typeEntities as any[]).length > 1) {
+                clusters.push({
+                    clusterId: `cluster-${type}`,
+                    description: `${type.charAt(0).toUpperCase() + type.slice(1)} Cluster`,
+                    entities: (typeEntities as any[]).slice(0, 5), // Top 5 entities
+                    clusterType: 'topical',
+                    coherenceScore: 0.8
+                });
+            }
+        }
+
+        return clusters;
+    }
+
+    /**
+     * Generate discovery paths from search results
+     */
+    private generatePathsFromResults(entities: any[]): any[] {
+        const paths: any[] = [];
+        
+        if (entities.length > 2) {
+            // Create a learning journey path
+            paths.push({
+                pathId: 'learning-journey',
+                description: 'Entity Learning Journey',
+                entities: entities.slice(0, 4).map(e => e.name),
+                pathType: 'learning_journey',
+                estimatedValue: 0.85
+            });
+        }
+
+        if (entities.length > 3) {
+            // Create a relationship chain path
+            paths.push({
+                pathId: 'relationship-chain',
+                description: 'Entity Relationship Chain',
+                entities: entities.slice(1, 5).map(e => e.name),
+                pathType: 'relationship_chain',
+                estimatedValue: 0.75
+            });
+        }
+
+        return paths;
+    }
 }
+

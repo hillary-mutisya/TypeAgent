@@ -5,6 +5,7 @@ import { EntityDiscovery } from './entityDiscovery.js';
 import { MultiHopExplorer } from './multiHopExplorer.js';
 import { RelationshipDetailsManager } from './relationshipDetailsManager.js';
 import { EntityComparisonManager } from './entityComparison.js';
+import { EntityGraphServices, EntityCacheServices, DefaultEntityGraphServices, DefaultEntityCacheServices } from './knowledgeUtilities';
 
 interface MockScenario {
     id: string;
@@ -23,8 +24,10 @@ class EntityGraphView {
     private relationshipManager: RelationshipDetailsManager;
     private comparisonManager: EntityComparisonManager;
     private currentEntity: string | null = null;
-    private mockMode: boolean = true;
+    private mockMode: boolean = false; // Default to real data in Phase 4
     private currentMockScenario: string | null = null;
+    private entityGraphService: EntityGraphServices;
+    private entityCacheService: EntityCacheServices;
 
     private mockScenarios: MockScenario[] = [
         { id: 'tech_ecosystem', name: 'Tech Ecosystem', description: 'Tesla, SpaceX, and tech innovation' },
@@ -34,6 +37,10 @@ class EntityGraphView {
     ];
 
     constructor() {
+        // Initialize services
+        this.entityGraphService = new DefaultEntityGraphServices();
+        this.entityCacheService = new DefaultEntityCacheServices();
+        
         // Initialize components
         const graphContainer = document.getElementById('cytoscape-container')!;
         const sidebarContainer = document.getElementById('entitySidebar')!;
@@ -41,11 +48,14 @@ class EntityGraphView {
         this.visualizer = new EnhancedEntityGraphVisualizer(graphContainer);
         this.sidebar = new EntitySidebar(sidebarContainer);
         
-        // Initialize interactive components
-        this.discovery = new EntityDiscovery();
-        this.multiHopExplorer = new MultiHopExplorer(this.visualizer);
+        // Initialize interactive components with real data support
+        this.discovery = new EntityDiscovery(this.entityGraphService);
+        this.multiHopExplorer = new MultiHopExplorer(this.visualizer, this.entityGraphService);
         this.relationshipManager = new RelationshipDetailsManager();
         this.comparisonManager = new EntityComparisonManager();
+        
+        // Set initial data mode
+        this.setComponentDataModes();
         
         this.initialize();
     }
@@ -294,17 +304,25 @@ class EntityGraphView {
     }
 
     /**
+     * Set data modes for all components
+     */
+    private setComponentDataModes(): void {
+        // Component data modes would be set here if the services supported it
+        console.log('Setting data mode to:', this.mockMode ? 'mock' : 'real');
+        this.discovery.setMockMode(this.mockMode);
+        this.multiHopExplorer.setMockMode(this.mockMode);
+        this.relationshipManager.setMockMode(this.mockMode);
+        this.comparisonManager.setMockMode(this.mockMode);
+        this.sidebar.setMockMode(this.mockMode);
+    }
+    /**
      * Toggle between mock and real data mode
      */
     async toggleMockMode(): Promise<void> {
         this.mockMode = !this.mockMode;
         
         // Update all components
-        this.discovery.setMockMode(this.mockMode);
-        this.multiHopExplorer.setMockMode(this.mockMode);
-        this.relationshipManager.setMockMode(this.mockMode);
-        this.comparisonManager.setMockMode(this.mockMode);
-        this.sidebar.setMockMode(this.mockMode);
+        this.setComponentDataModes();
         
         // Update UI
         this.updateMockModeIndicator();
@@ -459,8 +477,28 @@ class EntityGraphView {
 
     private updateMockModeIndicator(): void {
         const indicator = document.getElementById('mockModeIndicator');
+        const toggle = document.getElementById('mockModeToggle') as HTMLInputElement;
+        
         if (indicator) {
             indicator.style.display = this.mockMode ? 'block' : 'none';
+            
+            // Update indicator text
+            const scenarioName = document.getElementById('mockScenarioName');
+            if (scenarioName && this.currentMockScenario) {
+                const scenario = this.mockScenarios.find(s => s.id === this.currentMockScenario);
+                scenarioName.textContent = scenario ? ` - ${scenario.name}` : '';
+            }
+        }
+        
+        if (toggle) {
+            toggle.checked = this.mockMode;
+        }
+
+        // Update data source indicator in UI
+        const dataSourceInfo = document.querySelector('.data-source-info');
+        if (dataSourceInfo) {
+            dataSourceInfo.textContent = this.mockMode ? 'Mock Data' : 'Real Data';
+            dataSourceInfo.className = `data-source-info ${this.mockMode ? 'mock-mode' : 'real-mode'}`;
         }
     }
 
@@ -483,13 +521,128 @@ class EntityGraphView {
 
     // Real data methods  
     private async loadRealEntityData(entityName: string): Promise<void> {
-        // Implementation for real entity data loading
-        console.log('Loading real entity data for:', entityName);
+        try {
+            this.showGraphLoading();
+
+            // Load entity graph using enhanced search
+            const graphData = await this.entityGraphService.getEntityGraph(entityName, 2);
+            
+            if (graphData.entities.length > 0) {
+                // Load the graph into the visualizer
+                await this.visualizer.loadEntityGraph({
+                    centerEntity: graphData.centerEntity,
+                    entities: graphData.entities.map((e: any) => ({
+                        name: e.name,
+                        type: e.type,
+                        confidence: e.confidence
+                    })),
+                    relationships: graphData.relationships.map((r: any) => ({
+                        from: r.relatedEntity,
+                        to: graphData.centerEntity,
+                        type: r.relationshipType,
+                        strength: r.strength
+                    }))
+                });
+
+                // Load entity data into sidebar  
+                const entityData = await this.entityGraphService.searchByEntity(entityName, { maxResults: 1 });
+                if (entityData && entityData.entities && entityData.entities.length > 0) {
+                    await this.sidebar.loadEntity(entityData.entities[0]);
+                }
+
+                this.hideGraphLoading();
+                console.log(`Loaded real entity graph for ${entityName}: ${graphData.entities.length} entities, ${graphData.relationships.length} relationships`);
+            } else {
+                this.showGraphError(`No data found for entity: ${entityName}`);
+            }
+
+        } catch (error) {
+            console.error('Failed to load real entity data:', error);
+            this.showGraphError('Failed to load entity data. Please try again.');
+        }
     }
 
     private async searchRealEntity(query: string): Promise<void> {
-        // Implementation for real entity search
-        console.log('Searching real entities for:', query);
+        try {
+            const searchResults = await this.entityGraphService.searchByEntity(query, {
+                maxResults: 10,
+                includeRelationships: true,
+                sortBy: 'relevance'
+            });
+
+            if (searchResults.entities.length > 0) {
+                // Navigate to the first result
+                await this.navigateToEntity(searchResults.entities[0].name);
+                
+                console.log(`Real entity search for "${query}" found ${searchResults.entities.length} results`);
+            } else {
+                this.showMessage(`No entities found for search: ${query}`, 'warning');
+            }
+
+        } catch (error) {
+            console.error('Real entity search failed:', error);
+            this.showMessage('Search failed. Please try again.', 'error');
+        }
+    }
+
+    /**
+     * Load entity data with automatic fallback
+     */
+    private async loadEntityData(entityName: string): Promise<void> {
+        if (this.mockMode) {
+            return this.loadMockEntityData(entityName);
+        } else {
+            return this.loadRealEntityData(entityName);
+        }
+    }
+
+    /**
+     * Load mock entity data
+     */
+    private async loadMockEntityData(entityName: string): Promise<void> {
+        // Implementation for loading mock data
+        console.log('Loading mock data for entity:', entityName);
+        // This would integrate with mock data provider
+    }
+
+    /**
+     * Refresh entity data from source
+     */
+    async refreshEntityData(entityName: string): Promise<void> {
+        try {
+            this.showGraphLoading();
+            
+            // Refresh data using enhanced search
+            const refreshedEntity = await this.entityGraphService.refreshEntityData(entityName);
+            
+            if (refreshedEntity) {
+                await this.loadEntityData(entityName);
+                this.showMessage(`Refreshed data for ${entityName}`, 'success');
+            } else {
+                this.showMessage(`No updated data available for ${entityName}`, 'info');
+            }
+            
+        } catch (error) {
+            console.error('Failed to refresh entity data:', error);
+            this.showMessage('Failed to refresh entity data', 'error');
+        } finally {
+            this.hideGraphLoading();
+        }
+    }
+
+    /**
+     * Get cache statistics
+     */
+    getCacheStats(): any {
+        return this.entityCacheService.getCacheStats();
+    }
+
+    /**
+     * Clear all cached data
+     */
+    async clearCache(): Promise<void> {
+        await this.entityCacheService.clearAll();
+        this.showMessage('Cache cleared successfully', 'success');
     }
 
     /**

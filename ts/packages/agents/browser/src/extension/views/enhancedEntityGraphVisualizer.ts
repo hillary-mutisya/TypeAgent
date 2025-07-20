@@ -1,4 +1,4 @@
-// Enhanced Entity Graph Visualizer - Phase 2 Implementation
+// Enhanced Entity Graph Visualizer Implementation
 // Extends the basic EntityGraphVisualizer with rich interactive features
 
 import { EntityGraphVisualizer } from './entityGraphVisualizer.js';
@@ -37,7 +37,7 @@ export interface EntitySuggestion {
 }
 
 /**
- * Enhanced Entity Graph Visualizer with Phase 2 Interactive Features
+ * Enhanced Entity Graph Visualizer with Interactive Features
  */
 export class EnhancedEntityGraphVisualizer extends EntityGraphVisualizer {
     private selectedEntities: Set<string> = new Set();
@@ -45,9 +45,10 @@ export class EnhancedEntityGraphVisualizer extends EntityGraphVisualizer {
     private relationshipPanel: HTMLElement | null = null;
     private discoveryPanel: HTMLElement | null = null;
     private isMultiSelectMode: boolean = false;
+    private edgeClickCallback: ((edgeData: any) => void) | null = null;
 
     /**
-     * Set up advanced interactions for Phase 2
+     * Set up advanced interactions
      */
     setupAdvancedInteractions(): void {
         if (!this.cy) return;
@@ -63,9 +64,13 @@ export class EnhancedEntityGraphVisualizer extends EntityGraphVisualizer {
             this.hideEntityPreview();
         });
 
-        // Relationship exploration - simplified for now
+        // Relationship exploration
         this.cy.on('tap', 'edge', (evt: any) => {
-            console.log('Edge clicked:', evt.target.data());
+            const edgeData = evt.target.data();
+            if (this.edgeClickCallback) {
+                this.edgeClickCallback(edgeData);
+            }
+            console.log('Edge clicked:', edgeData);
         });
 
         // Multi-selection for comparison (right-click)
@@ -304,7 +309,7 @@ export class EnhancedEntityGraphVisualizer extends EntityGraphVisualizer {
     protected getDefaultStyles(): any[] {
         const baseStyles = super.getDefaultStyles();
         
-        // Add enhanced styles for Phase 2 features
+        // Add enhanced styles for interactive features
         const enhancedStyles = [
             // Hover and selection states
             {
@@ -390,8 +395,96 @@ export class EnhancedEntityGraphVisualizer extends EntityGraphVisualizer {
     }
 
     /**
-     * Clean up enhanced features
+     * Set edge click callback
      */
+    onEdgeClick(callback: (edgeData: any) => void): void {
+        this.edgeClickCallback = callback;
+    }
+
+    /**
+     * Add elements to the graph (for multi-hop expansion)
+     */
+    async addElements(data: { entities: any[], relationships: any[] }): Promise<void> {
+        if (!this.cy) return;
+
+        const newElements: any[] = [];
+
+        // Add new entities (check if they don't already exist)
+        data.entities.forEach(entity => {
+            if (this.cy.getElementById(entity.name).length === 0) {
+                newElements.push({
+                    group: 'nodes',
+                    data: {
+                        id: entity.name,
+                        name: entity.name,
+                        type: entity.type,
+                        confidence: entity.confidence
+                    }
+                });
+            }
+        });
+
+        // Add new relationships
+        data.relationships.forEach(rel => {
+            const edgeId = `${rel.from}-${rel.to}`;
+            if (this.cy.getElementById(edgeId).length === 0) {
+                newElements.push({
+                    group: 'edges',
+                    data: {
+                        id: edgeId,
+                        source: rel.from,
+                        target: rel.to,
+                        type: rel.type,
+                        strength: rel.strength
+                    }
+                });
+            }
+        });
+
+        // Add new elements to graph
+        if (newElements.length > 0) {
+            this.cy.add(newElements);
+        }
+    }
+
+    /**
+     * Remove connected elements (for collapse functionality)
+     */
+    async removeConnectedElements(centerEntity: string): Promise<void> {
+        if (!this.cy) return;
+
+        const centerNode = this.cy.getElementById(centerEntity);
+        if (centerNode.length === 0) return;
+
+        // Get connected elements that should be removed
+        const connectedEdges = centerNode.connectedEdges();
+        const connectedNodes = connectedEdges.connectedNodes();
+        
+        // Remove nodes that have degree 1 (only connected to center)
+        const nodesToRemove = connectedNodes.filter((node: any) => node.degree() === 1);
+        const edgesToRemove = nodesToRemove.connectedEdges();
+        
+        // Remove elements
+        this.cy.remove(nodesToRemove);
+        this.cy.remove(edgesToRemove);
+    }
+
+    /**
+     * Reset graph to initial state
+     */
+    async reset(): Promise<void> {
+        if (!this.cy) return;
+
+        this.cy.elements().remove();
+        this.clearSelections();
+    }
+
+    /**
+     * Apply layout
+     */
+    applyCurrentLayout(): void {
+        this.changeLayout(this.getCurrentLayout());
+    }
     destroy(): void {
         // Clean up created elements
         if (this.previewContainer) {

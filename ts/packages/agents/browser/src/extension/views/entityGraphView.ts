@@ -1,6 +1,10 @@
 // Entity Graph View - Main entry point for entity visualization
 import { EnhancedEntityGraphVisualizer } from './enhancedEntityGraphVisualizer.js';
 import { EntitySidebar } from './entitySidebar.js';
+import { EntityDiscovery } from './entityDiscovery.js';
+import { MultiHopExplorer } from './multiHopExplorer.js';
+import { RelationshipDetailsManager } from './relationshipDetailsManager.js';
+import { EntityComparisonManager } from './entityComparison.js';
 
 interface MockScenario {
     id: string;
@@ -14,6 +18,10 @@ interface MockScenario {
 class EntityGraphView {
     private visualizer: EnhancedEntityGraphVisualizer;
     private sidebar: EntitySidebar;
+    private discovery: EntityDiscovery;
+    private multiHopExplorer: MultiHopExplorer;
+    private relationshipManager: RelationshipDetailsManager;
+    private comparisonManager: EntityComparisonManager;
     private currentEntity: string | null = null;
     private mockMode: boolean = true;
     private currentMockScenario: string | null = null;
@@ -33,6 +41,12 @@ class EntityGraphView {
         this.visualizer = new EnhancedEntityGraphVisualizer(graphContainer);
         this.sidebar = new EntitySidebar(sidebarContainer);
         
+        // Initialize interactive components
+        this.discovery = new EntityDiscovery();
+        this.multiHopExplorer = new MultiHopExplorer(this.visualizer);
+        this.relationshipManager = new RelationshipDetailsManager();
+        this.comparisonManager = new EntityComparisonManager();
+        
         this.initialize();
     }
 
@@ -50,6 +64,7 @@ class EntityGraphView {
             this.setupControlHandlers();
             this.setupLayoutControls();
             this.setupSearchHandlers();
+            this.setupInteractiveHandlers();
 
             // Show loading state initially
             this.showGraphLoading();
@@ -284,6 +299,13 @@ class EntityGraphView {
     async toggleMockMode(): Promise<void> {
         this.mockMode = !this.mockMode;
         
+        // Update all components
+        this.discovery.setMockMode(this.mockMode);
+        this.multiHopExplorer.setMockMode(this.mockMode);
+        this.relationshipManager.setMockMode(this.mockMode);
+        this.comparisonManager.setMockMode(this.mockMode);
+        this.sidebar.setMockMode(this.mockMode);
+        
         // Update UI
         this.updateMockModeIndicator();
         
@@ -294,8 +316,73 @@ class EntityGraphView {
     }
 
     /**
-     * Search for an entity
+     * Set up interactive event handlers
      */
+    private setupInteractiveHandlers(): void {
+        // Entity navigation from discovery
+        document.addEventListener('entityNavigate', (e: any) => {
+            this.navigateToEntity(e.detail.entityName);
+        });
+
+        // Entity selection from discovery
+        document.addEventListener('entitySelected', (e: any) => {
+            this.navigateToEntity(e.detail.entityName);
+        });
+
+        // Cluster exploration
+        document.addEventListener('clusterExplore', (e: any) => {
+            this.exploreCluster(e.detail.clusterId);
+        });
+
+        // Discovery path following
+        document.addEventListener('pathFollow', (e: any) => {
+            this.followDiscoveryPath(e.detail.pathId);
+        });
+
+        // Entity comparison requests
+        document.addEventListener('requestEntityComparison', (e: any) => {
+            this.comparisonManager.startComparison(e.detail.entities);
+        });
+
+        // Edge/relationship clicks for details
+        this.visualizer.onEdgeClick((edgeData: any) => {
+            this.relationshipManager.showRelationshipDetails(edgeData);
+        });
+
+        // Sidebar entity navigation
+        document.addEventListener('entityNavigate', (e: any) => {
+            if (e.target.closest('.entity-sidebar')) {
+                this.navigateToEntity(e.detail.entityName);
+            }
+        });
+    }
+
+    /**
+     * Explore a cluster
+     */
+    private async exploreCluster(clusterId: string): Promise<void> {
+        try {
+            console.log('Exploring cluster:', clusterId);
+            // This would load and visualize the cluster
+            // For now, just show a message
+            this.showMessage(`Exploring cluster: ${clusterId}`, 'info');
+        } catch (error) {
+            console.error('Failed to explore cluster:', error);
+        }
+    }
+
+    /**
+     * Follow a discovery path
+     */
+    private async followDiscoveryPath(pathId: string): Promise<void> {
+        try {
+            console.log('Following discovery path:', pathId);
+            // This would navigate through the discovery path
+            this.showMessage(`Following path: ${pathId}`, 'info');
+        } catch (error) {
+            console.error('Failed to follow discovery path:', error);
+        }
+    }
     async searchEntity(query: string): Promise<void> {
         if (!query.trim()) return;
 
@@ -403,6 +490,17 @@ class EntityGraphView {
     private async searchRealEntity(query: string): Promise<void> {
         // Implementation for real entity search
         console.log('Searching real entities for:', query);
+    }
+
+    /**
+     * Show message to user
+     */
+    private showMessage(message: string, type: 'success' | 'info' | 'warning' | 'error'): void {
+        // This would show a toast or notification
+        console.log(`${type.toUpperCase()}: ${message}`);
+        
+        // You could implement a toast notification here
+        // For now, just log to console
     }
 }
 

@@ -1,7 +1,10 @@
 // Entity Discovery Implementation
 // Advanced search, discovery, and exploration features for entity graphs
 
-import { EntityGraphServices, DefaultEntityGraphServices } from './knowledgeUtilities';
+import {
+    EntityGraphServices,
+    DefaultEntityGraphServices,
+} from "./knowledgeUtilities";
 
 export interface EntitySearchPattern {
     entityType?: string;
@@ -21,7 +24,7 @@ export interface EntityCluster {
     clusterId: string;
     centerEntity: string;
     entities: string[];
-    clusterType: 'topic' | 'organization' | 'geographic' | 'temporal';
+    clusterType: "topic" | "organization" | "geographic" | "temporal";
     coherenceScore: number;
     description: string;
 }
@@ -31,14 +34,14 @@ export interface EntityMergeCandidate {
     duplicateEntity: string;
     similarityScore: number;
     reasons: string[];
-    suggestedAction: 'merge' | 'keep_separate' | 'review';
+    suggestedAction: "merge" | "keep_separate" | "review";
 }
 
 export interface DiscoveryPath {
     pathId: string;
     description: string;
     entities: string[];
-    pathType: 'learning_journey' | 'relationship_chain' | 'topic_exploration';
+    pathType: "learning_journey" | "relationship_chain" | "topic_exploration";
     estimatedValue: number;
 }
 
@@ -57,12 +60,13 @@ export class EntityDiscovery {
     private suggestionsContainer: HTMLElement | null = null;
     private searchResults: HTMLElement | null = null;
     private mockMode: boolean = true;
-    private currentQuery: string = '';
+    private currentQuery: string = "";
     private searchTimeout: number | null = null;
     private entityGraphService: EntityGraphServices;
 
     constructor(entityGraphService?: EntityGraphServices) {
-        this.entityGraphService = entityGraphService || new DefaultEntityGraphServices();
+        this.entityGraphService =
+            entityGraphService || new DefaultEntityGraphServices();
         this.initialize();
     }
 
@@ -80,21 +84,28 @@ export class EntityDiscovery {
      * Set up search UI elements
      */
     private setupSearchElements(): void {
-        this.searchInput = document.getElementById('entitySearchInput') as HTMLInputElement;
-        this.suggestionsContainer = document.getElementById('entitySearchSuggestions') as HTMLElement;
-        
+        this.searchInput = document.getElementById(
+            "entitySearchInput",
+        ) as HTMLInputElement;
+        this.suggestionsContainer = document.getElementById(
+            "entitySearchSuggestions",
+        ) as HTMLElement;
+
         // Create search results container if it doesn't exist
         if (!this.searchResults) {
-            this.searchResults = document.createElement('div');
-            this.searchResults.id = 'entitySearchResults';
-            this.searchResults.className = 'entity-search-results';
-            this.searchResults.style.display = 'none';
-            
+            this.searchResults = document.createElement("div");
+            this.searchResults.id = "entitySearchResults";
+            this.searchResults.className = "entity-search-results";
+            this.searchResults.style.display = "none";
+
             // Insert after suggestions container
-            if (this.suggestionsContainer && this.suggestionsContainer.parentNode) {
+            if (
+                this.suggestionsContainer &&
+                this.suggestionsContainer.parentNode
+            ) {
                 this.suggestionsContainer.parentNode.insertBefore(
-                    this.searchResults, 
-                    this.suggestionsContainer.nextSibling
+                    this.searchResults,
+                    this.suggestionsContainer.nextSibling,
                 );
             }
         }
@@ -107,14 +118,14 @@ export class EntityDiscovery {
         if (!this.searchInput) return;
 
         // Real-time search suggestions
-        this.searchInput.addEventListener('input', (e) => {
+        this.searchInput.addEventListener("input", (e) => {
             const query = (e.target as HTMLInputElement).value.trim();
             this.currentQuery = query;
-            
+
             if (this.searchTimeout) {
                 clearTimeout(this.searchTimeout);
             }
-            
+
             if (query.length >= 2) {
                 this.searchTimeout = window.setTimeout(() => {
                     this.performSearch(query);
@@ -125,24 +136,26 @@ export class EntityDiscovery {
         });
 
         // Handle search submission
-        this.searchInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
+        this.searchInput.addEventListener("keypress", (e) => {
+            if (e.key === "Enter") {
                 this.executeSearch(this.currentQuery);
             }
         });
 
         // Handle search button click
-        const searchButton = document.getElementById('entitySearchButton');
+        const searchButton = document.getElementById("entitySearchButton");
         if (searchButton) {
-            searchButton.addEventListener('click', () => {
+            searchButton.addEventListener("click", () => {
                 this.executeSearch(this.currentQuery);
             });
         }
 
         // Handle clicks outside to close suggestions
-        document.addEventListener('click', (e) => {
-            if (!this.searchInput?.contains(e.target as Node) && 
-                !this.suggestionsContainer?.contains(e.target as Node)) {
+        document.addEventListener("click", (e) => {
+            if (
+                !this.searchInput?.contains(e.target as Node) &&
+                !this.suggestionsContainer?.contains(e.target as Node)
+            ) {
                 this.hideSearchSuggestions();
             }
         });
@@ -156,7 +169,7 @@ export class EntityDiscovery {
             const suggestions = await this.searchEntities(query);
             this.renderEntitySuggestions(suggestions);
         } catch (error) {
-            console.error('Search failed:', error);
+            console.error("Search failed:", error);
             this.hideSearchSuggestions();
         }
     }
@@ -173,8 +186,8 @@ export class EntityDiscovery {
             this.displaySearchResults(searchResults);
             this.hideSearchSuggestions();
         } catch (error) {
-            console.error('Advanced search failed:', error);
-            this.showSearchError('Search failed. Please try again.');
+            console.error("Advanced search failed:", error);
+            this.showSearchError("Search failed. Please try again.");
         }
     }
 
@@ -194,20 +207,23 @@ export class EntityDiscovery {
      */
     private async searchRealEntities(query: string): Promise<any[]> {
         try {
-            const searchResults = await this.entityGraphService.searchByEntity(query, {
-                maxResults: 8,
-                sortBy: 'relevance'
-            });
+            const searchResults = await this.entityGraphService.searchByEntity(
+                query,
+                {
+                    maxResults: 8,
+                    sortBy: "relevance",
+                },
+            );
 
             return searchResults.entities.map((entity: any) => ({
                 name: entity.name,
                 type: entity.type,
                 confidence: entity.confidence,
-                score: entity.confidence * Math.min(entity.mentionCount / 10, 1) // Relevance score
+                score:
+                    entity.confidence * Math.min(entity.mentionCount / 10, 1), // Relevance score
             }));
-
         } catch (error) {
-            console.error('Real entity search failed:', error);
+            console.error("Real entity search failed:", error);
             return [];
         }
     }
@@ -217,21 +233,51 @@ export class EntityDiscovery {
      */
     private searchMockEntities(query: string): any[] {
         const mockEntities = [
-            { name: 'Tesla', type: 'organization', confidence: 0.95, score: 0.9 },
-            { name: 'Elon Musk', type: 'person', confidence: 0.98, score: 0.95 },
-            { name: 'SpaceX', type: 'organization', confidence: 0.92, score: 0.88 },
-            { name: 'Neuralink', type: 'organization', confidence: 0.85, score: 0.8 },
-            { name: 'OpenAI', type: 'organization', confidence: 0.98, score: 0.92 },
-            { name: 'ChatGPT', type: 'product', confidence: 0.92, score: 0.85 },
-            { name: 'Sam Altman', type: 'person', confidence: 0.95, score: 0.9 },
-            { name: 'Anthropic', type: 'organization', confidence: 0.88, score: 0.82 },
-            { name: 'Claude', type: 'product', confidence: 0.85, score: 0.8 },
-            { name: 'GPT-4', type: 'product', confidence: 0.90, score: 0.87 }
+            {
+                name: "Microsoft",
+                type: "organization",
+                confidence: 0.95,
+                score: 0.9,
+            },
+            {
+                name: "Satya Nadella",
+                type: "person",
+                confidence: 0.98,
+                score: 0.95,
+            },
+            { name: "Azure", type: "product", confidence: 0.92, score: 0.88 },
+            {
+                name: "Office365",
+                type: "product",
+                confidence: 0.85,
+                score: 0.8,
+            },
+            {
+                name: "OpenAI",
+                type: "organization",
+                confidence: 0.98,
+                score: 0.92,
+            },
+            { name: "ChatGPT", type: "product", confidence: 0.92, score: 0.85 },
+            {
+                name: "Sam Altman",
+                type: "person",
+                confidence: 0.95,
+                score: 0.9,
+            },
+            {
+                name: "Anthropic",
+                type: "organization",
+                confidence: 0.88,
+                score: 0.82,
+            },
+            { name: "Claude", type: "product", confidence: 0.85, score: 0.8 },
+            { name: "GPT-4", type: "product", confidence: 0.9, score: 0.87 },
         ];
 
         const queryLower = query.toLowerCase();
         return mockEntities
-            .filter(entity => entity.name.toLowerCase().includes(queryLower))
+            .filter((entity) => entity.name.toLowerCase().includes(queryLower))
             .sort((a, b) => b.score - a.score)
             .slice(0, 8);
     }
@@ -247,7 +293,9 @@ export class EntityDiscovery {
             return;
         }
 
-        const suggestionsHtml = entities.map(entity => `
+        const suggestionsHtml = entities
+            .map(
+                (entity) => `
             <div class="entity-suggestion" data-entity="${entity.name}">
                 <div class="entity-suggestion-icon entity-type-${entity.type}">
                     ${this.getEntityIcon(entity.type)}
@@ -260,20 +308,24 @@ export class EntityDiscovery {
                     ${Math.round(entity.confidence * 100)}%
                 </div>
             </div>
-        `).join('');
+        `,
+            )
+            .join("");
 
         this.suggestionsContainer.innerHTML = suggestionsHtml;
-        this.suggestionsContainer.style.display = 'block';
+        this.suggestionsContainer.style.display = "block";
 
         // Add click handlers for suggestions
-        this.suggestionsContainer.querySelectorAll('.entity-suggestion').forEach(suggestion => {
-            suggestion.addEventListener('click', () => {
-                const entityName = suggestion.getAttribute('data-entity');
-                if (entityName) {
-                    this.selectEntity(entityName);
-                }
+        this.suggestionsContainer
+            .querySelectorAll(".entity-suggestion")
+            .forEach((suggestion) => {
+                suggestion.addEventListener("click", () => {
+                    const entityName = suggestion.getAttribute("data-entity");
+                    if (entityName) {
+                        this.selectEntity(entityName);
+                    }
+                });
             });
-        });
     }
 
     /**
@@ -281,7 +333,7 @@ export class EntityDiscovery {
      */
     private hideSearchSuggestions(): void {
         if (this.suggestionsContainer) {
-            this.suggestionsContainer.style.display = 'none';
+            this.suggestionsContainer.style.display = "none";
         }
     }
 
@@ -292,12 +344,12 @@ export class EntityDiscovery {
         if (this.searchInput) {
             this.searchInput.value = entityName;
         }
-        
+
         this.hideSearchSuggestions();
-        
+
         // Emit entity selection event
-        const event = new CustomEvent('entitySelected', {
-            detail: { entityName }
+        const event = new CustomEvent("entitySelected", {
+            detail: { entityName },
         });
         document.dispatchEvent(event);
     }
@@ -308,7 +360,7 @@ export class EntityDiscovery {
     private async performAdvancedSearch(query: string): Promise<any> {
         const searchPattern: EntitySearchPattern = {
             confidenceThreshold: 0.5,
-            strengthThreshold: 0.3
+            strengthThreshold: 0.3,
         };
 
         if (this.mockMode) {
@@ -321,7 +373,10 @@ export class EntityDiscovery {
     /**
      * Mock advanced search
      */
-    private mockAdvancedSearch(query: string, pattern: EntitySearchPattern): any {
+    private mockAdvancedSearch(
+        query: string,
+        pattern: EntitySearchPattern,
+    ): any {
         const entities = this.searchMockEntities(query);
         const clusters = this.generateMockClusters(entities);
         const paths = this.generateMockDiscoveryPaths(query);
@@ -333,26 +388,34 @@ export class EntityDiscovery {
             clusters,
             paths,
             suggestions,
-            totalResults: entities.length
+            totalResults: entities.length,
         };
     }
 
     /**
      * Real advanced search (with enhanced search integration)
      */
-    private async realAdvancedSearch(query: string, pattern: EntitySearchPattern): Promise<any> {
+    private async realAdvancedSearch(
+        query: string,
+        pattern: EntitySearchPattern,
+    ): Promise<any> {
         try {
-            const searchResults = await this.entityGraphService.searchByEntity(query, {
-                entityType: pattern.entityType,
-                confidenceThreshold: pattern.confidenceThreshold,
-                maxResults: 20,
-                sortBy: 'relevance',
-                domainFilter: pattern.domainFilter,
-                timeRange: pattern.timeRange
-            });
+            const searchResults = await this.entityGraphService.searchByEntity(
+                query,
+                {
+                    entityType: pattern.entityType,
+                    confidenceThreshold: pattern.confidenceThreshold,
+                    maxResults: 20,
+                    sortBy: "relevance",
+                    domainFilter: pattern.domainFilter,
+                    timeRange: pattern.timeRange,
+                },
+            );
 
             // Generate clusters and paths from real data
-            const clusters = this.generateClustersFromResults(searchResults.entities);
+            const clusters = this.generateClustersFromResults(
+                searchResults.entities,
+            );
             const paths = this.generatePathsFromResults(searchResults.entities);
             const suggestions = searchResults.suggestions;
 
@@ -362,18 +425,17 @@ export class EntityDiscovery {
                 clusters,
                 paths,
                 suggestions,
-                totalResults: searchResults.totalCount
+                totalResults: searchResults.totalCount,
             };
-
         } catch (error) {
-            console.error('Real advanced search failed:', error);
-            return { 
-                query, 
-                entities: [], 
-                clusters: [], 
-                paths: [], 
-                suggestions: [], 
-                totalResults: 0 
+            console.error("Real advanced search failed:", error);
+            return {
+                query,
+                entities: [],
+                clusters: [],
+                paths: [],
+                suggestions: [],
+                totalResults: 0,
             };
         }
     }
@@ -394,15 +456,15 @@ export class EntityDiscovery {
             </div>
 
             <div class="search-results-content">
-                ${this.renderSearchResultsSection('Entities', results.entities, this.renderEntityResult.bind(this))}
-                ${this.renderSearchResultsSection('Clusters', results.clusters, this.renderClusterResult.bind(this))}
-                ${this.renderSearchResultsSection('Discovery Paths', results.paths, this.renderPathResult.bind(this))}
-                ${this.renderSearchResultsSection('Suggestions', results.suggestions, this.renderSuggestionResult.bind(this))}
+                ${this.renderSearchResultsSection("Entities", results.entities, this.renderEntityResult.bind(this))}
+                ${this.renderSearchResultsSection("Clusters", results.clusters, this.renderClusterResult.bind(this))}
+                ${this.renderSearchResultsSection("Discovery Paths", results.paths, this.renderPathResult.bind(this))}
+                ${this.renderSearchResultsSection("Suggestions", results.suggestions, this.renderSuggestionResult.bind(this))}
             </div>
         `;
 
         this.searchResults.innerHTML = resultsHtml;
-        this.searchResults.style.display = 'block';
+        this.searchResults.style.display = "block";
 
         // Add event handlers for results
         this.setupSearchResultHandlers();
@@ -411,14 +473,18 @@ export class EntityDiscovery {
     /**
      * Render a search results section
      */
-    private renderSearchResultsSection(title: string, items: any[], renderFunc: (item: any) => string): string {
-        if (!items || items.length === 0) return '';
+    private renderSearchResultsSection(
+        title: string,
+        items: any[],
+        renderFunc: (item: any) => string,
+    ): string {
+        if (!items || items.length === 0) return "";
 
         return `
             <div class="search-results-section">
                 <h4>${title}</h4>
                 <div class="search-results-list">
-                    ${items.map(renderFunc).join('')}
+                    ${items.map(renderFunc).join("")}
                 </div>
             </div>
         `;
@@ -511,34 +577,40 @@ export class EntityDiscovery {
         if (!this.searchResults) return;
 
         // Entity results
-        this.searchResults.querySelectorAll('.entity-result').forEach(result => {
-            result.addEventListener('click', () => {
-                const entityName = result.getAttribute('data-entity');
-                if (entityName) {
-                    this.navigateToEntity(entityName);
-                }
+        this.searchResults
+            .querySelectorAll(".entity-result")
+            .forEach((result) => {
+                result.addEventListener("click", () => {
+                    const entityName = result.getAttribute("data-entity");
+                    if (entityName) {
+                        this.navigateToEntity(entityName);
+                    }
+                });
             });
-        });
 
         // Cluster results
-        this.searchResults.querySelectorAll('.cluster-result').forEach(result => {
-            result.addEventListener('click', () => {
-                const clusterId = result.getAttribute('data-cluster');
-                if (clusterId) {
-                    this.exploreCluster(clusterId);
-                }
+        this.searchResults
+            .querySelectorAll(".cluster-result")
+            .forEach((result) => {
+                result.addEventListener("click", () => {
+                    const clusterId = result.getAttribute("data-cluster");
+                    if (clusterId) {
+                        this.exploreCluster(clusterId);
+                    }
+                });
             });
-        });
 
         // Path results
-        this.searchResults.querySelectorAll('.path-result').forEach(result => {
-            result.addEventListener('click', () => {
-                const pathId = result.getAttribute('data-path');
-                if (pathId) {
-                    this.followDiscoveryPath(pathId);
-                }
+        this.searchResults
+            .querySelectorAll(".path-result")
+            .forEach((result) => {
+                result.addEventListener("click", () => {
+                    const pathId = result.getAttribute("data-path");
+                    if (pathId) {
+                        this.followDiscoveryPath(pathId);
+                    }
+                });
             });
-        });
     }
 
     /**
@@ -546,7 +618,7 @@ export class EntityDiscovery {
      */
     private setupAdvancedFilters(): void {
         // This would set up the advanced filter UI
-        console.log('Setting up advanced filters');
+        console.log("Setting up advanced filters");
     }
 
     /**
@@ -554,7 +626,7 @@ export class EntityDiscovery {
      */
     private setupDiscoveryPaths(): void {
         // This would set up the discovery paths UI
-        console.log('Setting up discovery paths');
+        console.log("Setting up discovery paths");
     }
 
     // Mock data generators
@@ -563,70 +635,70 @@ export class EntityDiscovery {
 
         return [
             {
-                clusterId: 'tech-leaders',
+                clusterId: "tech-leaders",
                 centerEntity: entities[0].name,
-                entities: entities.slice(0, 3).map(e => e.name),
-                clusterType: 'organization',
+                entities: entities.slice(0, 3).map((e) => e.name),
+                clusterType: "organization",
                 coherenceScore: 0.85,
-                description: 'Technology Leadership Cluster'
-            }
+                description: "Technology Leadership Cluster",
+            },
         ];
     }
 
     private generateMockDiscoveryPaths(query: string): DiscoveryPath[] {
         return [
             {
-                pathId: 'ai-evolution',
-                description: 'AI Technology Evolution Path',
-                entities: ['OpenAI', 'ChatGPT', 'GPT-4', 'Sam Altman'],
-                pathType: 'learning_journey',
-                estimatedValue: 0.9
+                pathId: "ai-evolution",
+                description: "AI Technology Evolution Path",
+                entities: ["OpenAI", "ChatGPT", "GPT-4", "Sam Altman"],
+                pathType: "learning_journey",
+                estimatedValue: 0.9,
             },
             {
-                pathId: 'tesla-ecosystem',
-                description: 'Tesla Business Ecosystem',
-                entities: ['Tesla', 'Elon Musk', 'SpaceX', 'Neuralink'],
-                pathType: 'relationship_chain',
-                estimatedValue: 0.85
-            }
+                pathId: "microsoft-ecosystem",
+                description: "Microsoft Business Ecosystem",
+                entities: ["Microsoft", "Satya Nadella", "Azure", "Office365"],
+                pathType: "relationship_chain",
+                estimatedValue: 0.85,
+            },
         ];
     }
 
     private generateMockSuggestions(query: string): EntitySuggestion[] {
         return [
             {
-                entity: 'Microsoft',
-                reason: 'Related to AI development',
+                entity: "Microsoft",
+                reason: "Related to AI development",
                 confidence: 0.75,
-                relationshipTypes: ['competitor', 'partner']
+                relationshipTypes: ["competitor", "partner"],
             },
             {
-                entity: 'Google',
-                reason: 'Technology sector leader',
+                entity: "Google",
+                reason: "Technology sector leader",
                 confidence: 0.82,
-                relationshipTypes: ['competitor', 'technology_provider']
-            }
+                relationshipTypes: ["competitor", "technology_provider"],
+            },
         ];
     }
 
     // Navigation methods
     private navigateToEntity(entityName: string): void {
-        const event = new CustomEvent('entityNavigate', {
-            detail: { entityName }
+        const event = new CustomEvent("entityNavigate", {
+            detail: { entityName },
         });
         document.dispatchEvent(event);
     }
 
     private exploreCluster(clusterId: string): void {
-        const event = new CustomEvent('clusterExplore', {
-            detail: { clusterId }
+        const event = new CustomEvent("clusterExplore", {
+            detail: { clusterId },
         });
         document.dispatchEvent(event);
     }
 
     private followDiscoveryPath(pathId: string): void {
-        const event = new CustomEvent('pathFollow', {
-            detail: { pathId }
+        const event = new CustomEvent("pathFollow", {
+            detail: { pathId },
         });
         document.dispatchEvent(event);
     }
@@ -642,7 +714,7 @@ export class EntityDiscovery {
                     <p>Searching entities...</p>
                 </div>
             `;
-            this.searchResults.style.display = 'block';
+            this.searchResults.style.display = "block";
         }
     }
 
@@ -654,7 +726,7 @@ export class EntityDiscovery {
                     <p>${message}</p>
                 </div>
             `;
-            this.searchResults.style.display = 'block';
+            this.searchResults.style.display = "block";
         }
     }
 
@@ -665,13 +737,13 @@ export class EntityDiscovery {
             product: '<i class="bi bi-box"></i>',
             concept: '<i class="bi bi-lightbulb"></i>',
             location: '<i class="bi bi-geo"></i>',
-            technology: '<i class="bi bi-cpu"></i>'
+            technology: '<i class="bi bi-cpu"></i>',
         };
         return iconMap[type] || '<i class="bi bi-diagram-2"></i>';
     }
 
     private escapeHtml(text: string): string {
-        const div = document.createElement('div');
+        const div = document.createElement("div");
         div.textContent = text;
         return div.innerHTML;
     }
@@ -688,12 +760,12 @@ export class EntityDiscovery {
      */
     clearResults(): void {
         if (this.searchResults) {
-            this.searchResults.style.display = 'none';
+            this.searchResults.style.display = "none";
         }
         this.hideSearchSuggestions();
-        
+
         if (this.searchInput) {
-            this.searchInput.value = '';
+            this.searchInput.value = "";
         }
     }
 
@@ -704,7 +776,7 @@ export class EntityDiscovery {
      */
     private generateClustersFromResults(entities: any[]): any[] {
         const clusters: any[] = [];
-        
+
         // Group entities by type
         const typeGroups = entities.reduce((groups, entity) => {
             const type = entity.type;
@@ -722,8 +794,8 @@ export class EntityDiscovery {
                     clusterId: `cluster-${type}`,
                     description: `${type.charAt(0).toUpperCase() + type.slice(1)} Cluster`,
                     entities: (typeEntities as any[]).slice(0, 5), // Top 5 entities
-                    clusterType: 'topical',
-                    coherenceScore: 0.8
+                    clusterType: "topical",
+                    coherenceScore: 0.8,
                 });
             }
         }
@@ -736,30 +808,29 @@ export class EntityDiscovery {
      */
     private generatePathsFromResults(entities: any[]): any[] {
         const paths: any[] = [];
-        
+
         if (entities.length > 2) {
             // Create a learning journey path
             paths.push({
-                pathId: 'learning-journey',
-                description: 'Entity Learning Journey',
-                entities: entities.slice(0, 4).map(e => e.name),
-                pathType: 'learning_journey',
-                estimatedValue: 0.85
+                pathId: "learning-journey",
+                description: "Entity Learning Journey",
+                entities: entities.slice(0, 4).map((e) => e.name),
+                pathType: "learning_journey",
+                estimatedValue: 0.85,
             });
         }
 
         if (entities.length > 3) {
             // Create a relationship chain path
             paths.push({
-                pathId: 'relationship-chain',
-                description: 'Entity Relationship Chain',
-                entities: entities.slice(1, 5).map(e => e.name),
-                pathType: 'relationship_chain',
-                estimatedValue: 0.75
+                pathId: "relationship-chain",
+                description: "Entity Relationship Chain",
+                entities: entities.slice(1, 5).map((e) => e.name),
+                pathType: "relationship_chain",
+                estimatedValue: 0.75,
             });
         }
 
         return paths;
     }
 }
-

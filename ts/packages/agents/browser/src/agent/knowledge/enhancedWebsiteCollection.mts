@@ -9,12 +9,9 @@ import {
     EntityRelationship,
     EntitySearchOptions,
     EntityGraphQuery,
-    EntityGraphData
+    EntityGraphData,
 } from "./entityGraph.mjs";
-import {
-    EntityMockDataGenerator,
-    MOCK_SCENARIOS
-} from "./mockEntityData.mjs";
+import { EntityMockDataGenerator, MOCK_SCENARIOS } from "./mockEntityData.mjs";
 
 /**
  * Enhanced Website Collection with Entity Graph Support
@@ -63,7 +60,9 @@ export class EnhancedWebsiteCollection extends website.WebsiteCollection {
     /**
      * Get relationships for a specific entity
      */
-    async getEntityRelationships(entityName: string): Promise<EntityRelationship[]> {
+    async getEntityRelationships(
+        entityName: string,
+    ): Promise<EntityRelationship[]> {
         await this.initializeEntityGraph();
         return this.entityGraphManager.getEntityRelationships(entityName);
     }
@@ -71,7 +70,9 @@ export class EnhancedWebsiteCollection extends website.WebsiteCollection {
     /**
      * Find entities by type
      */
-    async findEntitiesByType(type: import("./entityGraph.mjs").EntityType): Promise<EnhancedEntity[]> {
+    async findEntitiesByType(
+        type: import("./entityGraph.mjs").EntityType,
+    ): Promise<EnhancedEntity[]> {
         await this.initializeEntityGraph();
         return this.entityGraphManager.getEntitiesByType(type);
     }
@@ -79,7 +80,10 @@ export class EnhancedWebsiteCollection extends website.WebsiteCollection {
     /**
      * Search entities with advanced options
      */
-    async searchEntities(query: string, options?: EntitySearchOptions): Promise<EnhancedEntity[]> {
+    async searchEntities(
+        query: string,
+        options?: EntitySearchOptions,
+    ): Promise<EnhancedEntity[]> {
         await this.initializeEntityGraph();
         return this.entityGraphManager.searchEntities(query, options);
     }
@@ -87,7 +91,9 @@ export class EnhancedWebsiteCollection extends website.WebsiteCollection {
     /**
      * Get entity graph data for visualization
      */
-    async getEntityGraphData(query: EntityGraphQuery): Promise<EntityGraphData> {
+    async getEntityGraphData(
+        query: EntityGraphQuery,
+    ): Promise<EntityGraphData> {
         await this.initializeEntityGraph();
         return this.entityGraphManager.getEntityGraphData(query);
     }
@@ -97,17 +103,18 @@ export class EnhancedWebsiteCollection extends website.WebsiteCollection {
      */
     async enableMockMode(scenario: string): Promise<void> {
         await this.initializeEntityGraph();
-        
-        const mockGraph = await this.mockDataGenerator.generateScenario(scenario);
+
+        const mockGraph =
+            await this.mockDataGenerator.generateScenario(scenario);
         if (mockGraph) {
             // Clear existing graph and load mock data
             this.entityGraphManager.clear();
-            
+
             // Add all entities from mock graph
             for (const entity of mockGraph.entities.values()) {
                 this.entityGraphManager.addEntity(entity);
             }
-            
+
             this.mockMode = true;
             this.currentMockScenario = scenario;
         }
@@ -126,7 +133,7 @@ export class EnhancedWebsiteCollection extends website.WebsiteCollection {
     async disableMockMode(): Promise<void> {
         this.mockMode = false;
         this.currentMockScenario = null;
-        
+
         // TODO: In Phase 4, this would reload real entity data
         // For now, just clear the graph
         this.entityGraphManager.clear();
@@ -149,7 +156,11 @@ export class EnhancedWebsiteCollection extends website.WebsiteCollection {
     /**
      * Get available mock scenarios
      */
-    getAvailableMockScenarios(): Array<{id: string, name: string, description: string}> {
+    getAvailableMockScenarios(): Array<{
+        id: string;
+        name: string;
+        description: string;
+    }> {
         return this.mockDataGenerator.getAvailableScenarios();
     }
 
@@ -164,9 +175,17 @@ export class EnhancedWebsiteCollection extends website.WebsiteCollection {
     /**
      * Add a relationship between entities
      */
-    async addEntityRelationship(fromEntity: string, toEntity: string, relationship: EntityRelationship): Promise<void> {
+    async addEntityRelationship(
+        fromEntity: string,
+        toEntity: string,
+        relationship: EntityRelationship,
+    ): Promise<void> {
         await this.initializeEntityGraph();
-        this.entityGraphManager.addRelationship(fromEntity, toEntity, relationship);
+        this.entityGraphManager.addRelationship(
+            fromEntity,
+            toEntity,
+            relationship,
+        );
     }
 
     /**
@@ -183,14 +202,16 @@ export class EnhancedWebsiteCollection extends website.WebsiteCollection {
      */
     async extractEntitiesFromWebsites(): Promise<void> {
         await this.initializeEntityGraph();
-        
+
         // TODO: Phase 4 implementation
         // - Iterate through all websites in the collection
         // - Extract entities from their knowledge data
         // - Build relationships based on co-occurrence
         // - Update the entity graph
-        
-        console.log("Entity extraction from websites not yet implemented - use mock data for Phase 1-3");
+
+        console.log(
+            "Entity extraction from websites not yet implemented - use mock data for Phase 1-3",
+        );
     }
 
     /**
@@ -199,14 +220,16 @@ export class EnhancedWebsiteCollection extends website.WebsiteCollection {
      */
     async buildEntityRelationshipsFromWebsites(): Promise<void> {
         await this.initializeEntityGraph();
-        
+
         // TODO: Phase 4 implementation
         // - Analyze co-occurrence patterns
         // - Build semantic relationships
         // - Calculate confidence scores
         // - Update relationship strengths
-        
-        console.log("Entity relationship building not yet implemented - use mock data for Phase 1-3");
+
+        console.log(
+            "Entity relationship building not yet implemented - use mock data for Phase 1-3",
+        );
     }
 
     /**
@@ -223,7 +246,7 @@ export class EnhancedWebsiteCollection extends website.WebsiteCollection {
         // - Update existing entities or create new ones
         // - Build/update relationships
         // - Update graph metrics
-        
+
         console.log("Entity graph update not yet implemented for real data");
     }
 
@@ -232,13 +255,16 @@ export class EnhancedWebsiteCollection extends website.WebsiteCollection {
      */
     addWebsites(websites: any[]): void {
         super.addWebsites(websites);
-        
+
         // Update entity graph if not in mock mode
         if (this.entityGraphInitialized && !this.mockMode) {
             // TODO: Phase 4 - extract entities from new websites
-            websites.forEach(website => {
-                this.updateEntityGraphWithNewWebsite(website).catch(error => {
-                    console.warn("Failed to update entity graph for website:", error);
+            websites.forEach((website) => {
+                this.updateEntityGraphWithNewWebsite(website).catch((error) => {
+                    console.warn(
+                        "Failed to update entity graph for website:",
+                        error,
+                    );
                 });
             });
         }

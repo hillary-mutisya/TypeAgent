@@ -1,7 +1,7 @@
 // Enhanced Entity Graph Visualizer Implementation
 // Extends the basic EntityGraphVisualizer with rich interactive features
 
-import { EntityGraphVisualizer } from './entityGraphVisualizer.js';
+import { EntityGraphVisualizer } from "./entityGraphVisualizer.js";
 
 export interface EntityPreview {
     name: string;
@@ -25,7 +25,7 @@ export interface DiscoveryPath {
     pathId: string;
     description: string;
     entities: string[];
-    pathType: 'learning_journey' | 'relationship_chain' | 'topic_exploration';
+    pathType: "learning_journey" | "relationship_chain" | "topic_exploration";
     estimatedValue: number;
 }
 
@@ -54,34 +54,34 @@ export class EnhancedEntityGraphVisualizer extends EntityGraphVisualizer {
         if (!this.cy) return;
 
         // Entity hover with relationship highlighting
-        this.cy.on('mouseover', 'node', (evt: any) => {
+        this.cy.on("mouseover", "node", (evt: any) => {
             this.highlightEntityNetwork(evt.target);
             this.showEntityPreview(evt.target);
         });
 
-        this.cy.on('mouseout', 'node', (evt: any) => {
+        this.cy.on("mouseout", "node", (evt: any) => {
             this.clearEntityHighlights();
             this.hideEntityPreview();
         });
 
         // Relationship exploration
-        this.cy.on('tap', 'edge', (evt: any) => {
+        this.cy.on("tap", "edge", (evt: any) => {
             const edgeData = evt.target.data();
             if (this.edgeClickCallback) {
                 this.edgeClickCallback(edgeData);
             }
-            console.log('Edge clicked:', edgeData);
+            console.log("Edge clicked:", edgeData);
         });
 
         // Multi-selection for comparison (right-click)
-        this.cy.on('cxttap', 'node', (evt: any) => {
+        this.cy.on("cxttap", "node", (evt: any) => {
             evt.preventDefault();
             this.toggleEntitySelection(evt.target);
         });
 
-        // Double-click for expansion - simplified for now  
-        this.cy.on('dblclick', 'node', (evt: any) => {
-            console.log('Double-click expansion for:', evt.target.data('name'));
+        // Double-click for expansion - simplified for now
+        this.cy.on("dblclick", "node", (evt: any) => {
+            console.log("Double-click expansion for:", evt.target.data("name"));
         });
     }
 
@@ -92,17 +92,17 @@ export class EnhancedEntityGraphVisualizer extends EntityGraphVisualizer {
         if (!this.cy) return;
 
         // Dim all elements
-        this.cy.elements().addClass('dimmed');
-        
+        this.cy.elements().addClass("dimmed");
+
         // Highlight the selected entity
-        entity.removeClass('dimmed').addClass('highlighted');
-        
+        entity.removeClass("dimmed").addClass("highlighted");
+
         // Highlight connected entities and edges
         const connectedEdges = entity.connectedEdges();
         const connectedNodes = connectedEdges.connectedNodes();
-        
-        connectedEdges.removeClass('dimmed').addClass('highlighted-edge');
-        connectedNodes.removeClass('dimmed').addClass('highlighted-neighbor');
+
+        connectedEdges.removeClass("dimmed").addClass("highlighted-edge");
+        connectedNodes.removeClass("dimmed").addClass("highlighted-neighbor");
     }
 
     /**
@@ -110,9 +110,12 @@ export class EnhancedEntityGraphVisualizer extends EntityGraphVisualizer {
      */
     private clearEntityHighlights(): void {
         if (!this.cy) return;
-        
-        this.cy.elements()
-            .removeClass('dimmed highlighted highlighted-edge highlighted-neighbor');
+
+        this.cy
+            .elements()
+            .removeClass(
+                "dimmed highlighted highlighted-edge highlighted-neighbor",
+            );
     }
 
     /**
@@ -121,15 +124,15 @@ export class EnhancedEntityGraphVisualizer extends EntityGraphVisualizer {
     private showEntityPreview(entity: any): void {
         const entityData = entity.data();
         const preview = this.generateEntityPreview(entityData);
-        
+
         if (!this.previewContainer) {
             this.createPreviewContainer();
         }
-        
+
         if (this.previewContainer) {
             this.previewContainer.innerHTML = this.renderEntityPreview(preview);
-            this.previewContainer.style.display = 'block';
-            
+            this.previewContainer.style.display = "block";
+
             // Position preview near cursor
             this.positionPreview(entity);
         }
@@ -140,7 +143,7 @@ export class EnhancedEntityGraphVisualizer extends EntityGraphVisualizer {
      */
     private hideEntityPreview(): void {
         if (this.previewContainer) {
-            this.previewContainer.style.display = 'none';
+            this.previewContainer.style.display = "none";
         }
     }
 
@@ -148,8 +151,8 @@ export class EnhancedEntityGraphVisualizer extends EntityGraphVisualizer {
      * Create preview container
      */
     private createPreviewContainer(): void {
-        this.previewContainer = document.createElement('div');
-        this.previewContainer.className = 'entity-preview-tooltip';
+        this.previewContainer = document.createElement("div");
+        this.previewContainer.className = "entity-preview-tooltip";
         this.previewContainer.style.cssText = `
             position: absolute;
             background: white;
@@ -162,7 +165,7 @@ export class EnhancedEntityGraphVisualizer extends EntityGraphVisualizer {
             font-size: 14px;
             display: none;
         `;
-        
+
         document.body.appendChild(this.previewContainer);
     }
 
@@ -171,13 +174,13 @@ export class EnhancedEntityGraphVisualizer extends EntityGraphVisualizer {
      */
     private positionPreview(entity: any): void {
         if (!this.previewContainer || !this.cy) return;
-        
+
         const renderedPosition = entity.renderedPosition();
         const containerRect = this.cy.container().getBoundingClientRect();
-        
+
         const x = containerRect.left + renderedPosition.x + 20;
         const y = containerRect.top + renderedPosition.y - 10;
-        
+
         this.previewContainer.style.left = `${x}px`;
         this.previewContainer.style.top = `${y}px`;
     }
@@ -191,7 +194,7 @@ export class EnhancedEntityGraphVisualizer extends EntityGraphVisualizer {
             type: entityData.type,
             confidence: entityData.confidence || 0.8,
             relationshipCount: this.getEntityRelationshipCount(entityData.name),
-            summary: `${entityData.type} entity with ${this.getEntityRelationshipCount(entityData.name)} connections`
+            summary: `${entityData.type} entity with ${this.getEntityRelationshipCount(entityData.name)} connections`,
         };
     }
 
@@ -228,7 +231,7 @@ export class EnhancedEntityGraphVisualizer extends EntityGraphVisualizer {
      */
     private getEntityRelationshipCount(entityName: string): number {
         if (!this.cy) return 0;
-        
+
         const entity = this.cy.getElementById(entityName);
         return entity.connectedEdges().length;
     }
@@ -237,14 +240,14 @@ export class EnhancedEntityGraphVisualizer extends EntityGraphVisualizer {
      * Toggle entity selection for comparison
      */
     private toggleEntitySelection(entity: any): void {
-        const entityName = entity.data('name');
-        
+        const entityName = entity.data("name");
+
         if (this.selectedEntities.has(entityName)) {
             this.selectedEntities.delete(entityName);
-            entity.removeClass('selected');
+            entity.removeClass("selected");
         } else {
             this.selectedEntities.add(entityName);
-            entity.addClass('selected');
+            entity.addClass("selected");
         }
 
         this.updateSelectionUI();
@@ -255,13 +258,13 @@ export class EnhancedEntityGraphVisualizer extends EntityGraphVisualizer {
      */
     private updateSelectionUI(): void {
         const count = this.selectedEntities.size;
-        
+
         // Dispatch event for UI updates
-        const event = new CustomEvent('selectionChanged', {
+        const event = new CustomEvent("selectionChanged", {
             detail: {
                 selectedCount: count,
-                selectedEntities: Array.from(this.selectedEntities)
-            }
+                selectedEntities: Array.from(this.selectedEntities),
+            },
         });
         document.dispatchEvent(event);
     }
@@ -272,7 +275,7 @@ export class EnhancedEntityGraphVisualizer extends EntityGraphVisualizer {
     clearSelections(): void {
         this.selectedEntities.clear();
         if (this.cy) {
-            this.cy.nodes().removeClass('selected');
+            this.cy.nodes().removeClass("selected");
         }
         this.updateSelectionUI();
     }
@@ -289,16 +292,16 @@ export class EnhancedEntityGraphVisualizer extends EntityGraphVisualizer {
      */
     focusOnEntity(entityName: string): void {
         if (!this.cy) return;
-        
+
         const entity = this.cy.getElementById(entityName);
         if (entity.length) {
             this.cy.center(entity);
             this.cy.fit(entity, 200);
-            
+
             // Temporarily highlight
-            entity.addClass('focused');
+            entity.addClass("focused");
             setTimeout(() => {
-                entity.removeClass('focused');
+                entity.removeClass("focused");
             }, 2000);
         }
     }
@@ -308,66 +311,66 @@ export class EnhancedEntityGraphVisualizer extends EntityGraphVisualizer {
      */
     protected getDefaultStyles(): any[] {
         const baseStyles = super.getDefaultStyles();
-        
+
         // Add enhanced styles for interactive features
         const enhancedStyles = [
             // Hover and selection states
             {
-                selector: 'node.highlighted',
+                selector: "node.highlighted",
                 style: {
-                    'border-width': 4,
-                    'border-color': '#007acc',
-                    'z-index': 999
-                }
+                    "border-width": 4,
+                    "border-color": "#007acc",
+                    "z-index": 999,
+                },
             },
             {
-                selector: 'node.highlighted-neighbor',
+                selector: "node.highlighted-neighbor",
                 style: {
-                    'border-width': 2,
-                    'border-color': '#4dabf7',
-                    'opacity': 1
-                }
+                    "border-width": 2,
+                    "border-color": "#4dabf7",
+                    opacity: 1,
+                },
             },
             {
-                selector: 'node.selected',
+                selector: "node.selected",
                 style: {
-                    'border-width': 3,
-                    'border-color': '#ff6b35',
-                    'border-style': 'dashed'
-                }
+                    "border-width": 3,
+                    "border-color": "#ff6b35",
+                    "border-style": "dashed",
+                },
             },
             {
-                selector: 'node.focused',
+                selector: "node.focused",
                 style: {
-                    'border-width': 4,
-                    'border-color': '#28a745',
-                    'z-index': 999
-                }
+                    "border-width": 4,
+                    "border-color": "#28a745",
+                    "z-index": 999,
+                },
             },
             {
-                selector: 'node.dimmed',
+                selector: "node.dimmed",
                 style: {
-                    'opacity': 0.3
-                }
+                    opacity: 0.3,
+                },
             },
             {
-                selector: 'edge.highlighted-edge',
+                selector: "edge.highlighted-edge",
                 style: {
-                    'line-color': '#007acc',
-                    'target-arrow-color': '#007acc',
-                    'width': 4,
-                    'opacity': 1,
-                    'z-index': 999
-                }
+                    "line-color": "#007acc",
+                    "target-arrow-color": "#007acc",
+                    width: 4,
+                    opacity: 1,
+                    "z-index": 999,
+                },
             },
             {
-                selector: 'edge.dimmed',
+                selector: "edge.dimmed",
                 style: {
-                    'opacity': 0.2
-                }
-            }
+                    opacity: 0.2,
+                },
+            },
         ];
-        
+
         return [...baseStyles, ...enhancedStyles];
     }
 
@@ -385,11 +388,11 @@ export class EnhancedEntityGraphVisualizer extends EntityGraphVisualizer {
      */
     private setupEnhancedEventHandlers(): void {
         // Listen for external events
-        document.addEventListener('focusEntity', (e: any) => {
+        document.addEventListener("focusEntity", (e: any) => {
             this.focusOnEntity(e.detail.entityName);
         });
 
-        document.addEventListener('clearSelections', () => {
+        document.addEventListener("clearSelections", () => {
             this.clearSelections();
         });
     }
@@ -404,39 +407,42 @@ export class EnhancedEntityGraphVisualizer extends EntityGraphVisualizer {
     /**
      * Add elements to the graph (for multi-hop expansion)
      */
-    async addElements(data: { entities: any[], relationships: any[] }): Promise<void> {
+    async addElements(data: {
+        entities: any[];
+        relationships: any[];
+    }): Promise<void> {
         if (!this.cy) return;
 
         const newElements: any[] = [];
 
         // Add new entities (check if they don't already exist)
-        data.entities.forEach(entity => {
+        data.entities.forEach((entity) => {
             if (this.cy.getElementById(entity.name).length === 0) {
                 newElements.push({
-                    group: 'nodes',
+                    group: "nodes",
                     data: {
                         id: entity.name,
                         name: entity.name,
                         type: entity.type,
-                        confidence: entity.confidence
-                    }
+                        confidence: entity.confidence,
+                    },
                 });
             }
         });
 
         // Add new relationships
-        data.relationships.forEach(rel => {
+        data.relationships.forEach((rel) => {
             const edgeId = `${rel.from}-${rel.to}`;
             if (this.cy.getElementById(edgeId).length === 0) {
                 newElements.push({
-                    group: 'edges',
+                    group: "edges",
                     data: {
                         id: edgeId,
                         source: rel.from,
                         target: rel.to,
                         type: rel.type,
-                        strength: rel.strength
-                    }
+                        strength: rel.strength,
+                    },
                 });
             }
         });
@@ -459,11 +465,13 @@ export class EnhancedEntityGraphVisualizer extends EntityGraphVisualizer {
         // Get connected elements that should be removed
         const connectedEdges = centerNode.connectedEdges();
         const connectedNodes = connectedEdges.connectedNodes();
-        
+
         // Remove nodes that have degree 1 (only connected to center)
-        const nodesToRemove = connectedNodes.filter((node: any) => node.degree() === 1);
+        const nodesToRemove = connectedNodes.filter(
+            (node: any) => node.degree() === 1,
+        );
         const edgesToRemove = nodesToRemove.connectedEdges();
-        
+
         // Remove elements
         this.cy.remove(nodesToRemove);
         this.cy.remove(edgesToRemove);
@@ -491,10 +499,10 @@ export class EnhancedEntityGraphVisualizer extends EntityGraphVisualizer {
             this.previewContainer.remove();
             this.previewContainer = null;
         }
-        
+
         // Clear selections
         this.clearSelections();
-        
+
         // Call parent cleanup
         super.destroy();
     }

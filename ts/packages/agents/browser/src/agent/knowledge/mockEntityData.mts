@@ -7,12 +7,12 @@ import {
     EntityRelationship,
     EntityKnowledgeGraph,
     EntityGraphManager,
-    EntityCoOccurrence
+    EntityCoOccurrence,
 } from "./entityGraph.mjs";
 
 /**
  * Mock Entity Data Generator for Phase 1 Development
- * 
+ *
  * Provides comprehensive mock data scenarios for testing
  * and demonstrating the entity graph visualization.
  */
@@ -32,7 +32,7 @@ export class EntityMockDataGenerator {
 
         // Add tech ecosystem entities
         const entities = this.createTechEcosystemEntities();
-        entities.forEach(entity => this.graphManager.addEntity(entity));
+        entities.forEach((entity) => this.graphManager.addEntity(entity));
 
         return this.graphManager.getGraph();
     }
@@ -45,20 +45,20 @@ export class EntityMockDataGenerator {
         this.graphManager.clear();
 
         const entities = this.createBusinessEcosystemEntities();
-        entities.forEach(entity => this.graphManager.addEntity(entity));
+        entities.forEach((entity) => this.graphManager.addEntity(entity));
 
         return this.graphManager.getGraph();
     }
 
     /**
-     * Generate Tesla ecosystem mock graph
+     * Generate Microsoft ecosystem mock graph
      */
-    async generateTeslaEcosystem(): Promise<EntityKnowledgeGraph> {
+    async generateMicrosoftEcosystem(): Promise<EntityKnowledgeGraph> {
         await this.graphManager.initialize();
         this.graphManager.clear();
 
-        const entities = this.createTeslaEcosystemEntities();
-        entities.forEach(entity => this.graphManager.addEntity(entity));
+        const entities = this.createMicrosoftEcosystemEntities();
+        entities.forEach((entity) => this.graphManager.addEntity(entity));
 
         return this.graphManager.getGraph();
     }
@@ -71,7 +71,7 @@ export class EntityMockDataGenerator {
         this.graphManager.clear();
 
         const entities = this.createOpenAIEcosystemEntities();
-        entities.forEach(entity => this.graphManager.addEntity(entity));
+        entities.forEach((entity) => this.graphManager.addEntity(entity));
 
         return this.graphManager.getGraph();
     }
@@ -84,7 +84,7 @@ export class EntityMockDataGenerator {
         this.graphManager.clear();
 
         const entities = this.createStartupEcosystemEntities();
-        entities.forEach(entity => this.graphManager.addEntity(entity));
+        entities.forEach((entity) => this.graphManager.addEntity(entity));
 
         return this.graphManager.getGraph();
     }
@@ -97,7 +97,7 @@ export class EntityMockDataGenerator {
         this.graphManager.clear();
 
         const entities = this.createAcademicResearchEntities();
-        entities.forEach(entity => this.graphManager.addEntity(entity));
+        entities.forEach((entity) => this.graphManager.addEntity(entity));
 
         return this.graphManager.getGraph();
     }
@@ -105,7 +105,7 @@ export class EntityMockDataGenerator {
     private createTechEcosystemEntities(): EnhancedEntity[] {
         const now = new Date();
         const lastMonth = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        
+
         return [
             this.createEntity({
                 name: "React",
@@ -115,16 +115,23 @@ export class EntityMockDataGenerator {
                 mentionCount: 45,
                 firstSeen: "2024-01-15T10:00:00Z",
                 lastSeen: now.toISOString(),
-                dominantDomains: ["github.com", "reactjs.org", "stackoverflow.com"],
+                dominantDomains: [
+                    "github.com",
+                    "reactjs.org",
+                    "stackoverflow.com",
+                ],
                 relationships: [
                     {
                         relatedEntity: "Next.js",
                         relationshipType: "framework_based_on",
                         confidence: 0.9,
                         strength: 0.8,
-                        evidenceSources: ["github.com/vercel/next.js", "nextjs.org"],
+                        evidenceSources: [
+                            "github.com/vercel/next.js",
+                            "nextjs.org",
+                        ],
                         firstObserved: "2024-01-20T10:00:00Z",
-                        lastObserved: now.toISOString()
+                        lastObserved: now.toISOString(),
                     },
                     {
                         relatedEntity: "Facebook",
@@ -133,16 +140,25 @@ export class EntityMockDataGenerator {
                         strength: 0.9,
                         evidenceSources: ["reactjs.org", "engineering.fb.com"],
                         firstObserved: "2024-01-15T10:00:00Z",
-                        lastObserved: lastMonth.toISOString()
-                    }
+                        lastObserved: lastMonth.toISOString(),
+                    },
                 ],
                 coOccurringEntities: [
-                    { entityName: "Next.js", coOccurrenceCount: 15, contexts: ["documentation", "tutorials"], confidence: 0.9 }
+                    {
+                        entityName: "Next.js",
+                        coOccurrenceCount: 15,
+                        contexts: ["documentation", "tutorials"],
+                        confidence: 0.9,
+                    },
                 ],
                 contextSnippets: [
-                    "React is a JavaScript library for building user interfaces"
+                    "React is a JavaScript library for building user interfaces",
                 ],
-                topicAffinity: ["frontend development", "JavaScript", "web frameworks"]
+                topicAffinity: [
+                    "frontend development",
+                    "JavaScript",
+                    "web frameworks",
+                ],
             }),
 
             this.createEntity({
@@ -162,23 +178,32 @@ export class EntityMockDataGenerator {
                         strength: 0.9,
                         evidenceSources: ["reactjs.org", "engineering.fb.com"],
                         firstObserved: "2024-01-15T10:00:00Z",
-                        lastObserved: lastMonth.toISOString()
-                    }
+                        lastObserved: lastMonth.toISOString(),
+                    },
                 ],
                 coOccurringEntities: [
-                    { entityName: "React", coOccurrenceCount: 18, contexts: ["engineering blog"], confidence: 0.9 }
+                    {
+                        entityName: "React",
+                        coOccurrenceCount: 18,
+                        contexts: ["engineering blog"],
+                        confidence: 0.9,
+                    },
                 ],
                 contextSnippets: [
-                    "Leading social media platform and technology company"
+                    "Leading social media platform and technology company",
                 ],
-                topicAffinity: ["social media", "open source", "web technologies"]
-            })
+                topicAffinity: [
+                    "social media",
+                    "open source",
+                    "web technologies",
+                ],
+            }),
         ];
     }
 
     private createBusinessEcosystemEntities(): EnhancedEntity[] {
         const now = new Date();
-        
+
         return [
             this.createEntity({
                 name: "Apple",
@@ -197,58 +222,72 @@ export class EntityMockDataGenerator {
                         strength: 0.95,
                         evidenceSources: ["apple.com"],
                         firstObserved: "2024-01-10T10:00:00Z",
-                        lastObserved: now.toISOString()
-                    }
+                        lastObserved: now.toISOString(),
+                    },
                 ],
                 coOccurringEntities: [
-                    { entityName: "iPhone", coOccurrenceCount: 35, contexts: ["product launches"], confidence: 0.95 }
+                    {
+                        entityName: "iPhone",
+                        coOccurrenceCount: 35,
+                        contexts: ["product launches"],
+                        confidence: 0.95,
+                    },
                 ],
                 contextSnippets: [
-                    "Technology company known for innovative consumer electronics"
+                    "Technology company known for innovative consumer electronics",
                 ],
-                topicAffinity: ["consumer electronics", "mobile technology", "design"]
-            })
+                topicAffinity: [
+                    "consumer electronics",
+                    "mobile technology",
+                    "design",
+                ],
+            }),
         ];
     }
 
-    private createTeslaEcosystemEntities(): EnhancedEntity[] {
+    private createMicrosoftEcosystemEntities(): EnhancedEntity[] {
         const now = new Date();
-        
+
         return [
             this.createEntity({
-                name: "Tesla",
+                name: "Microsoft",
                 type: "organization",
                 confidence: 0.96,
-                aliases: ["Tesla Inc.", "TSLA"],
+                aliases: ["Microsoft Corp.", "MSFT"],
                 mentionCount: 78,
                 firstSeen: "2024-01-05T10:00:00Z",
                 lastSeen: now.toISOString(),
-                dominantDomains: ["tesla.com"],
+                dominantDomains: ["microsoft.com"],
                 relationships: [
                     {
-                        relatedEntity: "Elon Musk",
+                        relatedEntity: "Satya Nadella",
                         relationshipType: "led_by",
                         confidence: 0.95,
                         strength: 0.9,
-                        evidenceSources: ["tesla.com"],
+                        evidenceSources: ["microsoft.com"],
                         firstObserved: "2024-01-05T10:00:00Z",
-                        lastObserved: now.toISOString()
-                    }
+                        lastObserved: now.toISOString(),
+                    },
                 ],
                 coOccurringEntities: [
-                    { entityName: "Elon Musk", coOccurrenceCount: 45, contexts: ["earnings calls"], confidence: 0.95 }
+                    {
+                        entityName: "Satya Nadella",
+                        coOccurrenceCount: 45,
+                        contexts: ["earnings calls"],
+                        confidence: 0.95,
+                    },
                 ],
                 contextSnippets: [
-                    "Leading electric vehicle and clean energy company"
+                    "Leading technology company and cloud computing provider",
                 ],
-                topicAffinity: ["electric vehicles", "sustainable energy"]
-            })
+                topicAffinity: ["cloud computing", "enterprise software"],
+            }),
         ];
     }
 
     private createOpenAIEcosystemEntities(): EnhancedEntity[] {
         const now = new Date();
-        
+
         return [
             this.createEntity({
                 name: "OpenAI",
@@ -267,23 +306,28 @@ export class EntityMockDataGenerator {
                         strength: 0.95,
                         evidenceSources: ["openai.com"],
                         firstObserved: "2024-01-01T10:00:00Z",
-                        lastObserved: now.toISOString()
-                    }
+                        lastObserved: now.toISOString(),
+                    },
                 ],
                 coOccurringEntities: [
-                    { entityName: "ChatGPT", coOccurrenceCount: 67, contexts: ["product launches"], confidence: 0.95 }
+                    {
+                        entityName: "ChatGPT",
+                        coOccurrenceCount: 67,
+                        contexts: ["product launches"],
+                        confidence: 0.95,
+                    },
                 ],
                 contextSnippets: [
-                    "Leading artificial intelligence research company"
+                    "Leading artificial intelligence research company",
                 ],
-                topicAffinity: ["artificial intelligence", "machine learning"]
-            })
+                topicAffinity: ["artificial intelligence", "machine learning"],
+            }),
         ];
     }
 
     private createStartupEcosystemEntities(): EnhancedEntity[] {
         const now = new Date();
-        
+
         return [
             this.createEntity({
                 name: "Y Combinator",
@@ -297,16 +341,16 @@ export class EntityMockDataGenerator {
                 relationships: [],
                 coOccurringEntities: [],
                 contextSnippets: [
-                    "Leading startup accelerator and seed funding program"
+                    "Leading startup accelerator and seed funding program",
                 ],
-                topicAffinity: ["startup funding", "entrepreneurship"]
-            })
+                topicAffinity: ["startup funding", "entrepreneurship"],
+            }),
         ];
     }
 
     private createAcademicResearchEntities(): EnhancedEntity[] {
         const now = new Date();
-        
+
         return [
             this.createEntity({
                 name: "MIT",
@@ -320,10 +364,10 @@ export class EntityMockDataGenerator {
                 relationships: [],
                 coOccurringEntities: [],
                 contextSnippets: [
-                    "Leading research university in science and technology"
+                    "Leading research university in science and technology",
                 ],
-                topicAffinity: ["research", "education", "technology"]
-            })
+                topicAffinity: ["research", "education", "technology"],
+            }),
         ];
     }
 
@@ -349,15 +393,17 @@ export class EntityMockDataGenerator {
         contextSnippets: string[];
         topicAffinity: string[];
     }): EnhancedEntity {
-        const relationships: EntityRelationship[] = config.relationships.map(rel => ({
-            relatedEntity: rel.relatedEntity,
-            relationshipType: rel.relationshipType,
-            confidence: rel.confidence,
-            evidenceSources: rel.evidenceSources,
-            firstObserved: rel.firstObserved,
-            lastObserved: rel.lastObserved,
-            strength: rel.strength
-        }));
+        const relationships: EntityRelationship[] = config.relationships.map(
+            (rel) => ({
+                relatedEntity: rel.relatedEntity,
+                relationshipType: rel.relationshipType,
+                confidence: rel.confidence,
+                evidenceSources: rel.evidenceSources,
+                firstObserved: rel.firstObserved,
+                lastObserved: rel.lastObserved,
+                strength: rel.strength,
+            }),
+        );
 
         return {
             name: config.name,
@@ -373,16 +419,24 @@ export class EntityMockDataGenerator {
             contextSnippets: config.contextSnippets,
             topicAffinity: config.topicAffinity,
             centrality: Math.random() * 0.5 + 0.3,
-            importance: config.confidence * config.mentionCount / 100,
-            clusterGroup: this.determineClusterGroup(config.type, config.topicAffinity)
+            importance: (config.confidence * config.mentionCount) / 100,
+            clusterGroup: this.determineClusterGroup(
+                config.type,
+                config.topicAffinity,
+            ),
         };
     }
 
     private determineClusterGroup(type: EntityType, topics: string[]): string {
-        if (topics.some(t => t.includes("AI") || t.includes("artificial intelligence"))) {
+        if (
+            topics.some(
+                (t) =>
+                    t.includes("AI") || t.includes("artificial intelligence"),
+            )
+        ) {
             return "ai-cluster";
         }
-        if (topics.some(t => t.includes("web") || t.includes("frontend"))) {
+        if (topics.some((t) => t.includes("web") || t.includes("frontend"))) {
             return "web-tech-cluster";
         }
         if (type === "person") {
@@ -397,52 +451,63 @@ export class EntityMockDataGenerator {
     /**
      * Get all available mock scenarios
      */
-    getAvailableScenarios(): Array<{id: string, name: string, description: string}> {
+    getAvailableScenarios(): Array<{
+        id: string;
+        name: string;
+        description: string;
+    }> {
         return [
             {
                 id: "tech_ecosystem",
                 name: "Technology Ecosystem",
-                description: "React, Next.js, TypeScript, and web development technologies"
+                description:
+                    "React, Next.js, TypeScript, and web development technologies",
             },
             {
-                id: "business_ecosystem", 
+                id: "business_ecosystem",
                 name: "Business Ecosystem",
-                description: "Apple, iPhone, iOS, and mobile technology companies"
+                description:
+                    "Apple, iPhone, iOS, and mobile technology companies",
             },
             {
-                id: "tesla_ecosystem",
-                name: "Tesla Ecosystem", 
-                description: "Tesla, Elon Musk, SpaceX, and electric vehicle innovation"
+                id: "microsoft_ecosystem",
+                name: "Microsoft Ecosystem",
+                description:
+                    "Microsoft, Azure, Office 365, and enterprise software",
             },
             {
                 id: "openai_ecosystem",
                 name: "OpenAI Ecosystem",
-                description: "OpenAI, ChatGPT, GPT-4, and AI technologies"
+                description: "OpenAI, ChatGPT, GPT-4, and AI technologies",
             },
             {
                 id: "startup_ecosystem",
                 name: "Startup Ecosystem",
-                description: "Y Combinator, funded startups, and entrepreneurship"
+                description:
+                    "Y Combinator, funded startups, and entrepreneurship",
             },
             {
                 id: "academic_research",
                 name: "Academic Research",
-                description: "MIT, research institutions, and academic publications"
-            }
+                description:
+                    "MIT, research institutions, and academic publications",
+            },
         ];
     }
 
     /**
      * Generate a scenario by ID
      */
-    async generateScenario(scenarioId: string): Promise<EntityKnowledgeGraph | null> {
+    async generateScenario(
+        scenarioId: string,
+    ): Promise<EntityKnowledgeGraph | null> {
         switch (scenarioId) {
             case "tech_ecosystem":
                 return this.generateTechEcosystemGraph();
             case "business_ecosystem":
                 return this.generateBusinessEcosystemGraph();
-            case "tesla_ecosystem":
-                return this.generateTeslaEcosystem();
+            case "microsoft_ecosystem":
+                return this.generateMicrosoftEcosystem();
             case "openai_ecosystem":
                 return this.generateOpenAIEcosystem();
             case "startup_ecosystem":
@@ -459,10 +524,10 @@ export class EntityMockDataGenerator {
  * Pre-defined mock scenarios for quick access
  */
 export const MOCK_SCENARIOS = {
-    TESLA_ECOSYSTEM: "tesla_ecosystem",
-    OPENAI_ECOSYSTEM: "openai_ecosystem", 
+    MICROSOFT_ECOSYSTEM: "microsoft_ecosystem",
+    OPENAI_ECOSYSTEM: "openai_ecosystem",
     TECH_ECOSYSTEM: "tech_ecosystem",
     BUSINESS_ECOSYSTEM: "business_ecosystem",
     STARTUP_ECOSYSTEM: "startup_ecosystem",
-    ACADEMIC_RESEARCH: "academic_research"
+    ACADEMIC_RESEARCH: "academic_research",
 } as const;

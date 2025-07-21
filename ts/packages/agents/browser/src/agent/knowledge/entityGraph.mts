@@ -3,17 +3,17 @@
 
 /**
  * Entity Graph Data Structures for Phase 1 Implementation
- * 
+ *
  * This module defines the enhanced entity graph data structures
  * that support rich visualization and relationship discovery.
  */
 
-export type EntityType = 
-    | "person" 
-    | "organization" 
-    | "product" 
-    | "concept" 
-    | "location" 
+export type EntityType =
+    | "person"
+    | "organization"
+    | "product"
+    | "concept"
+    | "location"
     | "technology"
     | "event"
     | "document";
@@ -39,22 +39,22 @@ export interface EnhancedEntity {
     name: string;
     type: EntityType;
     confidence: number;
-    
+
     // Graph properties
     aliases: string[];
     mentionCount: number;
     firstSeen: string;
     lastSeen: string;
     dominantDomains: string[];
-    
+
     // Relationship properties
     strongRelationships: EntityRelationship[];
     coOccurringEntities: EntityCoOccurrence[];
-    
+
     // Content properties
     contextSnippets: string[];
     topicAffinity: string[];
-    
+
     // Graph visualization properties
     centrality?: number;
     clusterGroup?: string;
@@ -67,7 +67,7 @@ export interface EntityKnowledgeGraph {
     entityIndex: Map<EntityType, string[]>;
     lastUpdated: string;
     version: string;
-    
+
     // Graph metrics
     totalEntities: number;
     totalRelationships: number;
@@ -108,7 +108,11 @@ export interface EntityGraphData {
 export interface EntityTimelineEntry {
     timestamp: string;
     entityName: string;
-    eventType: "first_seen" | "relationship_formed" | "topic_association" | "high_activity";
+    eventType:
+        | "first_seen"
+        | "relationship_formed"
+        | "topic_association"
+        | "high_activity";
     description: string;
     confidence: number;
     sourceUrls: string[];
@@ -147,7 +151,7 @@ export class EntityGraphManager {
      */
     async initialize(): Promise<void> {
         if (this.initialized) return;
-        
+
         this.graph = this.createEmptyGraph();
         this.initialized = true;
     }
@@ -164,12 +168,12 @@ export class EntityGraphManager {
      */
     addEntity(entity: EnhancedEntity): void {
         this.graph.entities.set(entity.name, entity);
-        
+
         // Update entity index
         if (!this.graph.entityIndex.has(entity.type)) {
             this.graph.entityIndex.set(entity.type, []);
         }
-        
+
         const typeEntities = this.graph.entityIndex.get(entity.type)!;
         if (!typeEntities.includes(entity.name)) {
             typeEntities.push(entity.name);
@@ -177,7 +181,10 @@ export class EntityGraphManager {
 
         // Update relationships map
         if (entity.strongRelationships.length > 0) {
-            this.graph.relationships.set(entity.name, entity.strongRelationships);
+            this.graph.relationships.set(
+                entity.name,
+                entity.strongRelationships,
+            );
         }
 
         this.updateGraphMetrics();
@@ -196,37 +203,49 @@ export class EntityGraphManager {
     getEntitiesByType(type: EntityType): EnhancedEntity[] {
         const entityNames = this.graph.entityIndex.get(type) || [];
         return entityNames
-            .map(name => this.graph.entities.get(name))
+            .map((name) => this.graph.entities.get(name))
             .filter((entity): entity is EnhancedEntity => entity !== undefined);
     }
 
     /**
      * Search for entities with options
      */
-    searchEntities(query: string, options: EntitySearchOptions = {}): EnhancedEntity[] {
+    searchEntities(
+        query: string,
+        options: EntitySearchOptions = {},
+    ): EnhancedEntity[] {
         const {
             entityTypes,
             minConfidence = 0,
             maxResults = 50,
-            sortBy = "confidence"
+            sortBy = "confidence",
         } = options;
 
-        let results: EnhancedEntity[] = Array.from(this.graph.entities.values());
+        let results: EnhancedEntity[] = Array.from(
+            this.graph.entities.values(),
+        );
 
         // Filter by entity types
         if (entityTypes && entityTypes.length > 0) {
-            results = results.filter(entity => entityTypes.includes(entity.type));
+            results = results.filter((entity) =>
+                entityTypes.includes(entity.type),
+            );
         }
 
         // Filter by confidence
-        results = results.filter(entity => entity.confidence >= minConfidence);
+        results = results.filter(
+            (entity) => entity.confidence >= minConfidence,
+        );
 
         // Filter by query (name matching)
         if (query) {
             const queryLower = query.toLowerCase();
-            results = results.filter(entity => 
-                entity.name.toLowerCase().includes(queryLower) ||
-                entity.aliases.some(alias => alias.toLowerCase().includes(queryLower))
+            results = results.filter(
+                (entity) =>
+                    entity.name.toLowerCase().includes(queryLower) ||
+                    entity.aliases.some((alias) =>
+                        alias.toLowerCase().includes(queryLower),
+                    ),
             );
         }
 
@@ -240,7 +259,10 @@ export class EntityGraphManager {
                 case "centrality":
                     return (b.centrality || 0) - (a.centrality || 0);
                 case "lastSeen":
-                    return new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime();
+                    return (
+                        new Date(b.lastSeen).getTime() -
+                        new Date(a.lastSeen).getTime()
+                    );
                 default:
                     return b.confidence - a.confidence;
             }
@@ -257,19 +279,21 @@ export class EntityGraphManager {
         const entities: EnhancedEntity[] = [];
         const relationships: EntityRelationship[] = [];
         const visited = new Set<string>();
-        const queue: Array<{entity: string, depth: number}> = [{entity: query.centerEntity, depth: 0}];
+        const queue: Array<{ entity: string; depth: number }> = [
+            { entity: query.centerEntity, depth: 0 },
+        ];
 
         // Breadth-first search to build the graph
         while (queue.length > 0 && entities.length < (query.maxNodes || 100)) {
-            const {entity: currentEntity, depth} = queue.shift()!;
-            
+            const { entity: currentEntity, depth } = queue.shift()!;
+
             if (visited.has(currentEntity) || depth > query.depth) {
                 continue;
             }
 
             visited.add(currentEntity);
             const entityData = this.getEntity(currentEntity);
-            
+
             if (!entityData) continue;
 
             // Filter by entity type if specified
@@ -285,13 +309,21 @@ export class EntityGraphManager {
             const entityRelationships = entityData.strongRelationships || [];
             for (const rel of entityRelationships) {
                 // Filter by relationship type and strength
-                if (query.relationshipTypes && query.relationshipTypes.length > 0) {
-                    if (!query.relationshipTypes.includes(rel.relationshipType)) {
+                if (
+                    query.relationshipTypes &&
+                    query.relationshipTypes.length > 0
+                ) {
+                    if (
+                        !query.relationshipTypes.includes(rel.relationshipType)
+                    ) {
                         continue;
                     }
                 }
 
-                if (query.minRelationshipStrength && rel.strength < query.minRelationshipStrength) {
+                if (
+                    query.minRelationshipStrength &&
+                    rel.strength < query.minRelationshipStrength
+                ) {
                     continue;
                 }
 
@@ -299,18 +331,20 @@ export class EntityGraphManager {
 
                 // Add related entity to queue for next depth level
                 if (depth < query.depth) {
-                    queue.push({entity: rel.relatedEntity, depth: depth + 1});
+                    queue.push({ entity: rel.relatedEntity, depth: depth + 1 });
                 }
             }
         }
 
         const queryTime = Date.now() - startTime;
-        const maxDepthReached = Math.max(...entities.map(e => {
-            // Calculate depth from center entity
-            if (e.name === query.centerEntity) return 0;
-            // This is a simplified depth calculation
-            return 1;
-        }));
+        const maxDepthReached = Math.max(
+            ...entities.map((e) => {
+                // Calculate depth from center entity
+                if (e.name === query.centerEntity) return 0;
+                // This is a simplified depth calculation
+                return 1;
+            }),
+        );
 
         return {
             centerEntity: query.centerEntity,
@@ -321,21 +355,28 @@ export class EntityGraphManager {
                 totalNodes: entities.length,
                 totalEdges: relationships.length,
                 queryTime,
-                maxDepthReached
-            }
+                maxDepthReached,
+            },
         };
     }
 
     /**
      * Add a relationship between entities
      */
-    addRelationship(fromEntity: string, toEntity: string, relationship: EntityRelationship): void {
+    addRelationship(
+        fromEntity: string,
+        toEntity: string,
+        relationship: EntityRelationship,
+    ): void {
         const entity = this.getEntity(fromEntity);
         if (entity) {
             entity.strongRelationships.push(relationship);
-            this.graph.relationships.set(fromEntity, entity.strongRelationships);
+            this.graph.relationships.set(
+                fromEntity,
+                entity.strongRelationships,
+            );
         }
-        
+
         this.updateGraphMetrics();
     }
 
@@ -362,7 +403,7 @@ export class EntityGraphManager {
             totalRelationships: this.graph.totalRelationships,
             averageConnectivity: this.graph.averageConnectivity,
             entitiesByType: Object.fromEntries(this.graph.entityIndex),
-            lastUpdated: this.graph.lastUpdated
+            lastUpdated: this.graph.lastUpdated,
         };
     }
 
@@ -376,17 +417,19 @@ export class EntityGraphManager {
             totalEntities: 0,
             totalRelationships: 0,
             averageConnectivity: 0,
-            strongestConnections: []
+            strongestConnections: [],
         };
     }
 
     private updateGraphMetrics(): void {
         this.graph.totalEntities = this.graph.entities.size;
-        this.graph.totalRelationships = Array.from(this.graph.relationships.values())
-            .reduce((sum, rels) => sum + rels.length, 0);
-        
+        this.graph.totalRelationships = Array.from(
+            this.graph.relationships.values(),
+        ).reduce((sum, rels) => sum + rels.length, 0);
+
         if (this.graph.totalEntities > 0) {
-            this.graph.averageConnectivity = this.graph.totalRelationships / this.graph.totalEntities;
+            this.graph.averageConnectivity =
+                this.graph.totalRelationships / this.graph.totalEntities;
         }
 
         // Update strongest connections
@@ -394,7 +437,7 @@ export class EntityGraphManager {
         for (const relationships of this.graph.relationships.values()) {
             allRelationships.push(...relationships);
         }
-        
+
         this.graph.strongestConnections = allRelationships
             .sort((a, b) => b.strength - a.strength)
             .slice(0, 10);

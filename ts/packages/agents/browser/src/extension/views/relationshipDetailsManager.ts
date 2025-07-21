@@ -1,4 +1,4 @@
-// Relationship Details Implementation  
+// Relationship Details Implementation
 // Detailed relationship information and analysis for entity graphs
 
 export interface RelationshipDetails {
@@ -12,8 +12,8 @@ export interface RelationshipDetails {
     firstObserved: string;
     lastObserved: string;
     frequency: number;
-    direction: 'bidirectional' | 'unidirectional';
-    temporalPattern?: 'increasing' | 'decreasing' | 'stable' | 'periodic';
+    direction: "bidirectional" | "unidirectional";
+    temporalPattern?: "increasing" | "decreasing" | "stable" | "periodic";
 }
 
 export interface RelationshipMetrics {
@@ -64,12 +64,12 @@ export class RelationshipDetailsManager {
      */
     private createDetailsPanel(): void {
         // Check if panel already exists
-        this.detailsPanel = document.getElementById('relationshipDetailsPanel');
-        
+        this.detailsPanel = document.getElementById("relationshipDetailsPanel");
+
         if (!this.detailsPanel) {
-            this.detailsPanel = document.createElement('div');
-            this.detailsPanel.id = 'relationshipDetailsPanel';
-            this.detailsPanel.className = 'relationship-details-panel';
+            this.detailsPanel = document.createElement("div");
+            this.detailsPanel.id = "relationshipDetailsPanel";
+            this.detailsPanel.className = "relationship-details-panel";
             this.detailsPanel.innerHTML = `
                 <div class="panel-header">
                     <h3>Relationship Details</h3>
@@ -92,7 +92,7 @@ export class RelationshipDetailsManager {
             `;
 
             // Insert into content panel or create floating panel
-            const contentPanel = document.getElementById('contentPanel');
+            const contentPanel = document.getElementById("contentPanel");
             if (contentPanel) {
                 contentPanel.appendChild(this.detailsPanel);
             } else {
@@ -119,9 +119,9 @@ export class RelationshipDetailsManager {
      * Create relationship comparison panel
      */
     private createComparisonPanel(): void {
-        this.comparisonPanel = document.createElement('div');
-        this.comparisonPanel.id = 'relationshipComparisonPanel';
-        this.comparisonPanel.className = 'relationship-comparison-panel';
+        this.comparisonPanel = document.createElement("div");
+        this.comparisonPanel.id = "relationshipComparisonPanel";
+        this.comparisonPanel.className = "relationship-comparison-panel";
         this.comparisonPanel.innerHTML = `
             <div class="panel-header">
                 <h3>Relationship Comparison</h3>
@@ -168,27 +168,37 @@ export class RelationshipDetailsManager {
      */
     private setupPanelControls(): void {
         // Details panel controls
-        const closeDetailsBtn = document.getElementById('closeDetailsBtn');
-        const addToCompareBtn = document.getElementById('addToCompareBtn');
+        const closeDetailsBtn = document.getElementById("closeDetailsBtn");
+        const addToCompareBtn = document.getElementById("addToCompareBtn");
 
         if (closeDetailsBtn) {
-            closeDetailsBtn.addEventListener('click', () => this.hideDetailsPanel());
+            closeDetailsBtn.addEventListener("click", () =>
+                this.hideDetailsPanel(),
+            );
         }
 
         if (addToCompareBtn) {
-            addToCompareBtn.addEventListener('click', () => this.addCurrentRelationshipToComparison());
+            addToCompareBtn.addEventListener("click", () =>
+                this.addCurrentRelationshipToComparison(),
+            );
         }
 
         // Comparison panel controls
-        const closeComparisonBtn = document.getElementById('closeComparisonBtn');
-        const clearComparisonBtn = document.getElementById('clearComparisonBtn');
+        const closeComparisonBtn =
+            document.getElementById("closeComparisonBtn");
+        const clearComparisonBtn =
+            document.getElementById("clearComparisonBtn");
 
         if (closeComparisonBtn) {
-            closeComparisonBtn.addEventListener('click', () => this.hideComparisonPanel());
+            closeComparisonBtn.addEventListener("click", () =>
+                this.hideComparisonPanel(),
+            );
         }
 
         if (clearComparisonBtn) {
-            clearComparisonBtn.addEventListener('click', () => this.clearComparison());
+            clearComparisonBtn.addEventListener("click", () =>
+                this.clearComparison(),
+            );
         }
     }
 
@@ -197,19 +207,19 @@ export class RelationshipDetailsManager {
      */
     private setupRelationshipEventHandlers(): void {
         // Listen for edge clicks in the graph
-        document.addEventListener('edgeClick', (e: any) => {
+        document.addEventListener("edgeClick", (e: any) => {
             const edgeData = e.detail;
             this.showRelationshipDetails(edgeData);
         });
 
         // Listen for edge hover events
-        document.addEventListener('edgeHover', (e: any) => {
+        document.addEventListener("edgeHover", (e: any) => {
             const edgeData = e.detail;
             this.showRelationshipPreview(edgeData);
         });
 
         // Listen for edge hover end
-        document.addEventListener('edgeHoverEnd', () => {
+        document.addEventListener("edgeHoverEnd", () => {
             this.hideRelationshipPreview();
         });
     }
@@ -220,27 +230,29 @@ export class RelationshipDetailsManager {
     async showRelationshipDetails(edgeData: any): Promise<void> {
         try {
             // Generate detailed relationship data
-            const relationshipDetails = await this.generateRelationshipDetails(edgeData);
+            const relationshipDetails =
+                await this.generateRelationshipDetails(edgeData);
             this.currentRelationship = relationshipDetails;
 
             // Render details
             this.renderRelationshipDetails(relationshipDetails);
-            
+
             // Show panel
             this.showDetailsPanel();
 
             // Update controls
             this.updateDetailsPanelControls();
-
         } catch (error) {
-            console.error('Failed to show relationship details:', error);
+            console.error("Failed to show relationship details:", error);
         }
     }
 
     /**
      * Generate detailed relationship data
      */
-    private async generateRelationshipDetails(edgeData: any): Promise<RelationshipDetails> {
+    private async generateRelationshipDetails(
+        edgeData: any,
+    ): Promise<RelationshipDetails> {
         if (this.mockMode) {
             return this.generateMockRelationshipDetails(edgeData);
         } else {
@@ -251,45 +263,68 @@ export class RelationshipDetailsManager {
     /**
      * Generate mock relationship details
      */
-    private generateMockRelationshipDetails(edgeData: any): RelationshipDetails {
+    private generateMockRelationshipDetails(
+        edgeData: any,
+    ): RelationshipDetails {
         const relationshipTypes = {
-            'CEO_of': {
-                evidenceSources: ['Company website', 'SEC filings', 'News articles'],
+            CEO_of: {
+                evidenceSources: [
+                    "Company website",
+                    "SEC filings",
+                    "News articles",
+                ],
                 contextSnippets: [
-                    'Appointed as CEO in 2008',
-                    'Leading the company\'s strategic vision',
-                    'Reported quarterly earnings calls'
-                ]
+                    "Appointed as CEO in 2008",
+                    "Leading the company's strategic vision",
+                    "Reported quarterly earnings calls",
+                ],
             },
-            'founder_of': {
-                evidenceSources: ['Company registration', 'Founder interviews', 'Press releases'],
+            founder_of: {
+                evidenceSources: [
+                    "Company registration",
+                    "Founder interviews",
+                    "Press releases",
+                ],
                 contextSnippets: [
-                    'Co-founded the company in 2002',
-                    'Initial seed funding of $6.5M',
-                    'Vision for sustainable transportation'
-                ]
+                    "Co-founded the company in 2002",
+                    "Initial seed funding of $6.5M",
+                    "Vision for sustainable transportation",
+                ],
             },
-            'developed': {
-                evidenceSources: ['Technical documentation', 'Patent filings', 'Developer blogs'],
+            developed: {
+                evidenceSources: [
+                    "Technical documentation",
+                    "Patent filings",
+                    "Developer blogs",
+                ],
                 contextSnippets: [
-                    'Led development team for 3 years',
-                    'Implemented key features and architecture',
-                    'Open-sourced components in 2021'
-                ]
+                    "Led development team for 3 years",
+                    "Implemented key features and architecture",
+                    "Open-sourced components in 2021",
+                ],
             },
-            'created': {
-                evidenceSources: ['Product announcements', 'Blog posts', 'Technical papers'],
+            created: {
+                evidenceSources: [
+                    "Product announcements",
+                    "Blog posts",
+                    "Technical papers",
+                ],
                 contextSnippets: [
-                    'Launched as beta in 2022',
-                    'Built using transformer architecture',
-                    'Trained on diverse text corpus'
-                ]
-            }
+                    "Launched as beta in 2022",
+                    "Built using transformer architecture",
+                    "Trained on diverse text corpus",
+                ],
+            },
         };
 
-        const typeData = relationshipTypes[edgeData.type as keyof typeof relationshipTypes] || {
-            evidenceSources: ['Web search', 'Database records'],
-            contextSnippets: ['General relationship observed', 'Multiple occurrences found']
+        const typeData = relationshipTypes[
+            edgeData.type as keyof typeof relationshipTypes
+        ] || {
+            evidenceSources: ["Web search", "Database records"],
+            contextSnippets: [
+                "General relationship observed",
+                "Multiple occurrences found",
+            ],
         };
 
         return {
@@ -303,17 +338,21 @@ export class RelationshipDetailsManager {
             firstObserved: this.generateRandomDate(-365), // Up to 1 year ago
             lastObserved: this.generateRandomDate(-7), // Up to 1 week ago
             frequency: Math.floor(Math.random() * 50) + 5, // 5-55 occurrences
-            direction: Math.random() > 0.3 ? 'unidirectional' : 'bidirectional',
-            temporalPattern: ['increasing', 'stable', 'decreasing'][Math.floor(Math.random() * 3)] as any
+            direction: Math.random() > 0.3 ? "unidirectional" : "bidirectional",
+            temporalPattern: ["increasing", "stable", "decreasing"][
+                Math.floor(Math.random() * 3)
+            ] as any,
         };
     }
 
     /**
      * Generate real relationship details (placeholder)
      */
-    private async generateRealRelationshipDetails(edgeData: any): Promise<RelationshipDetails> {
+    private async generateRealRelationshipDetails(
+        edgeData: any,
+    ): Promise<RelationshipDetails> {
         // This would integrate with real relationship data
-        console.log('Real relationship details for:', edgeData);
+        console.log("Real relationship details for:", edgeData);
         return this.generateMockRelationshipDetails(edgeData);
     }
 
@@ -321,7 +360,7 @@ export class RelationshipDetailsManager {
      * Render relationship details
      */
     private renderRelationshipDetails(details: RelationshipDetails): void {
-        const content = document.getElementById('relationshipDetailsContent');
+        const content = document.getElementById("relationshipDetailsContent");
         if (!content) return;
 
         content.innerHTML = `
@@ -331,7 +370,7 @@ export class RelationshipDetailsManager {
                     <div class="relationship-entities">
                         <span class="entity-name from-entity">${this.escapeHtml(details.fromEntity)}</span>
                         <div class="relationship-arrow">
-                            ${details.direction === 'bidirectional' ? '↔' : '→'}
+                            ${details.direction === "bidirectional" ? "↔" : "→"}
                             <span class="relationship-type">${this.formatRelationshipType(details.relationshipType)}</span>
                         </div>
                         <span class="entity-name to-entity">${this.escapeHtml(details.toEntity)}</span>
@@ -396,12 +435,16 @@ export class RelationshipDetailsManager {
                 <div class="evidence-sources">
                     <h4>Evidence Sources</h4>
                     <div class="sources-list">
-                        ${details.evidenceSources.map(source => `
+                        ${details.evidenceSources
+                            .map(
+                                (source) => `
                             <div class="source-item">
                                 <i class="bi bi-link-45deg"></i>
                                 <span class="source-text">${this.escapeHtml(source)}</span>
                             </div>
-                        `).join('')}
+                        `,
+                            )
+                            .join("")}
                     </div>
                 </div>
 
@@ -409,12 +452,16 @@ export class RelationshipDetailsManager {
                 <div class="context-snippets">
                     <h4>Context</h4>
                     <div class="snippets-list">
-                        ${details.contextSnippets.map(snippet => `
+                        ${details.contextSnippets
+                            .map(
+                                (snippet) => `
                             <div class="snippet-item">
                                 <i class="bi bi-quote"></i>
                                 <span class="snippet-text">${this.escapeHtml(snippet)}</span>
                             </div>
-                        `).join('')}
+                        `,
+                            )
+                            .join("")}
                     </div>
                 </div>
 
@@ -439,7 +486,7 @@ export class RelationshipDetailsManager {
      */
     private showRelationshipPreview(edgeData: any): void {
         const preview = this.getOrCreatePreviewTooltip();
-        
+
         preview.innerHTML = `
             <div class="relationship-preview">
                 <div class="preview-header">
@@ -455,16 +502,16 @@ export class RelationshipDetailsManager {
         `;
 
         // Position tooltip (this would be positioned based on mouse/edge position)
-        preview.style.display = 'block';
+        preview.style.display = "block";
     }
 
     /**
      * Hide relationship preview
      */
     private hideRelationshipPreview(): void {
-        const preview = document.getElementById('relationship-preview-tooltip');
+        const preview = document.getElementById("relationship-preview-tooltip");
         if (preview) {
-            preview.style.display = 'none';
+            preview.style.display = "none";
         }
     }
 
@@ -472,11 +519,11 @@ export class RelationshipDetailsManager {
      * Get or create preview tooltip
      */
     private getOrCreatePreviewTooltip(): HTMLElement {
-        let tooltip = document.getElementById('relationship-preview-tooltip');
+        let tooltip = document.getElementById("relationship-preview-tooltip");
         if (!tooltip) {
-            tooltip = document.createElement('div');
-            tooltip.id = 'relationship-preview-tooltip';
-            tooltip.className = 'relationship-preview-tooltip';
+            tooltip = document.createElement("div");
+            tooltip.id = "relationship-preview-tooltip";
+            tooltip.className = "relationship-preview-tooltip";
             tooltip.style.cssText = `
                 position: absolute;
                 background: rgba(0, 0, 0, 0.9);
@@ -501,10 +548,12 @@ export class RelationshipDetailsManager {
         if (!this.currentRelationship) return;
 
         // Check if already in comparison
-        const exists = this.selectedRelationships.some(rel => 
-            rel.fromEntity === this.currentRelationship!.fromEntity &&
-            rel.toEntity === this.currentRelationship!.toEntity &&
-            rel.relationshipType === this.currentRelationship!.relationshipType
+        const exists = this.selectedRelationships.some(
+            (rel) =>
+                rel.fromEntity === this.currentRelationship!.fromEntity &&
+                rel.toEntity === this.currentRelationship!.toEntity &&
+                rel.relationshipType ===
+                    this.currentRelationship!.relationshipType,
         );
 
         if (!exists) {
@@ -518,8 +567,8 @@ export class RelationshipDetailsManager {
      * Update comparison panel
      */
     private updateComparisonPanel(): void {
-        const content = document.getElementById('comparisonContent');
-        const countElement = document.getElementById('comparisonCount');
+        const content = document.getElementById("comparisonContent");
+        const countElement = document.getElementById("comparisonCount");
 
         if (countElement) {
             countElement.textContent = `${this.selectedRelationships.length} relationships`;
@@ -550,7 +599,7 @@ export class RelationshipDetailsManager {
         // Generate comparison
         const comparison = this.generateRelationshipComparison(
             this.selectedRelationships[0],
-            this.selectedRelationships[1]
+            this.selectedRelationships[1],
         );
 
         content.innerHTML = this.renderRelationshipComparison(comparison);
@@ -559,7 +608,10 @@ export class RelationshipDetailsManager {
     /**
      * Render single relationship item for comparison
      */
-    private renderComparisonRelationshipItem(relationship: RelationshipDetails, index: number): string {
+    private renderComparisonRelationshipItem(
+        relationship: RelationshipDetails,
+        index: number,
+    ): string {
         return `
             <div class="comparison-relationship-item">
                 <div class="relationship-summary">
@@ -581,33 +633,44 @@ export class RelationshipDetailsManager {
     /**
      * Generate relationship comparison
      */
-    private generateRelationshipComparison(rel1: RelationshipDetails, rel2: RelationshipDetails): RelationshipComparison {
+    private generateRelationshipComparison(
+        rel1: RelationshipDetails,
+        rel2: RelationshipDetails,
+    ): RelationshipComparison {
         const similarities: string[] = [];
         const differences: string[] = [];
 
         // Check for similarities
         if (rel1.relationshipType === rel2.relationshipType) {
-            similarities.push('Same relationship type');
+            similarities.push("Same relationship type");
         } else {
-            differences.push(`Different types: ${rel1.relationshipType} vs ${rel2.relationshipType}`);
+            differences.push(
+                `Different types: ${rel1.relationshipType} vs ${rel2.relationshipType}`,
+            );
         }
 
         if (rel1.direction === rel2.direction) {
-            similarities.push('Same direction');
+            similarities.push("Same direction");
         } else {
-            differences.push(`Different directions: ${rel1.direction} vs ${rel2.direction}`);
+            differences.push(
+                `Different directions: ${rel1.direction} vs ${rel2.direction}`,
+            );
         }
 
         if (Math.abs(rel1.strength - rel2.strength) < 0.1) {
-            similarities.push('Similar strength');
+            similarities.push("Similar strength");
         } else {
-            differences.push(`Different strengths: ${Math.round(rel1.strength * 100)}% vs ${Math.round(rel2.strength * 100)}%`);
+            differences.push(
+                `Different strengths: ${Math.round(rel1.strength * 100)}% vs ${Math.round(rel2.strength * 100)}%`,
+            );
         }
 
         if (rel1.temporalPattern === rel2.temporalPattern) {
-            similarities.push('Same temporal pattern');
+            similarities.push("Same temporal pattern");
         } else {
-            differences.push(`Different patterns: ${rel1.temporalPattern} vs ${rel2.temporalPattern}`);
+            differences.push(
+                `Different patterns: ${rel1.temporalPattern} vs ${rel2.temporalPattern}`,
+            );
         }
 
         return {
@@ -616,14 +679,16 @@ export class RelationshipDetailsManager {
             similarities,
             differences,
             strengthDifference: rel2.strength - rel1.strength,
-            confidenceDifference: rel2.confidence - rel1.confidence
+            confidenceDifference: rel2.confidence - rel1.confidence,
         };
     }
 
     /**
      * Render relationship comparison
      */
-    private renderRelationshipComparison(comparison: RelationshipComparison): string {
+    private renderRelationshipComparison(
+        comparison: RelationshipComparison,
+    ): string {
         return `
             <div class="relationship-comparison">
                 <!-- Compared Relationships -->
@@ -643,28 +708,28 @@ export class RelationshipDetailsManager {
                     <div class="comparison-section">
                         <h6>Similarities</h6>
                         <ul class="similarity-list">
-                            ${comparison.similarities.map(sim => `<li class="similarity-item">${sim}</li>`).join('')}
+                            ${comparison.similarities.map((sim) => `<li class="similarity-item">${sim}</li>`).join("")}
                         </ul>
                     </div>
 
                     <div class="comparison-section">
                         <h6>Differences</h6>
                         <ul class="difference-list">
-                            ${comparison.differences.map(diff => `<li class="difference-item">${diff}</li>`).join('')}
+                            ${comparison.differences.map((diff) => `<li class="difference-item">${diff}</li>`).join("")}
                         </ul>
                     </div>
 
                     <div class="comparison-metrics">
                         <div class="metric-comparison">
                             <span class="metric-label">Strength Difference:</span>
-                            <span class="metric-value ${comparison.strengthDifference >= 0 ? 'positive' : 'negative'}">
-                                ${comparison.strengthDifference >= 0 ? '+' : ''}${Math.round(comparison.strengthDifference * 100)}%
+                            <span class="metric-value ${comparison.strengthDifference >= 0 ? "positive" : "negative"}">
+                                ${comparison.strengthDifference >= 0 ? "+" : ""}${Math.round(comparison.strengthDifference * 100)}%
                             </span>
                         </div>
                         <div class="metric-comparison">
                             <span class="metric-label">Confidence Difference:</span>
-                            <span class="metric-value ${comparison.confidenceDifference >= 0 ? 'positive' : 'negative'}">
-                                ${comparison.confidenceDifference >= 0 ? '+' : ''}${Math.round(comparison.confidenceDifference * 100)}%
+                            <span class="metric-value ${comparison.confidenceDifference >= 0 ? "positive" : "negative"}">
+                                ${comparison.confidenceDifference >= 0 ? "+" : ""}${Math.round(comparison.confidenceDifference * 100)}%
                             </span>
                         </div>
                     </div>
@@ -678,7 +743,7 @@ export class RelationshipDetailsManager {
      */
     private showDetailsPanel(): void {
         if (this.detailsPanel) {
-            this.detailsPanel.style.display = 'block';
+            this.detailsPanel.style.display = "block";
         }
     }
 
@@ -687,7 +752,7 @@ export class RelationshipDetailsManager {
      */
     private hideDetailsPanel(): void {
         if (this.detailsPanel) {
-            this.detailsPanel.style.display = 'none';
+            this.detailsPanel.style.display = "none";
         }
         this.currentRelationship = null;
     }
@@ -697,7 +762,7 @@ export class RelationshipDetailsManager {
      */
     private showComparisonPanel(): void {
         if (this.comparisonPanel) {
-            this.comparisonPanel.style.display = 'block';
+            this.comparisonPanel.style.display = "block";
         }
     }
 
@@ -706,7 +771,7 @@ export class RelationshipDetailsManager {
      */
     private hideComparisonPanel(): void {
         if (this.comparisonPanel) {
-            this.comparisonPanel.style.display = 'none';
+            this.comparisonPanel.style.display = "none";
         }
     }
 
@@ -722,7 +787,9 @@ export class RelationshipDetailsManager {
      * Update details panel controls
      */
     private updateDetailsPanelControls(): void {
-        const addToCompareBtn = document.getElementById('addToCompareBtn') as HTMLButtonElement;
+        const addToCompareBtn = document.getElementById(
+            "addToCompareBtn",
+        ) as HTMLButtonElement;
         if (addToCompareBtn) {
             addToCompareBtn.disabled = !this.currentRelationship;
         }
@@ -737,10 +804,10 @@ export class RelationshipDetailsManager {
 
     private formatDate(dateString: string): string {
         const date = new Date(dateString);
-        return date.toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric'
+        return date.toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
         });
     }
 
@@ -749,7 +816,7 @@ export class RelationshipDetailsManager {
         const end = new Date(endDate);
         const diffTime = Math.abs(end.getTime() - start.getTime());
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        
+
         if (diffDays < 30) {
             return `${diffDays} days`;
         } else if (diffDays < 365) {
@@ -760,30 +827,30 @@ export class RelationshipDetailsManager {
     }
 
     private formatRelationshipType(type: string): string {
-        return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        return type.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
     }
 
     private formatTemporalPattern(pattern?: string): string {
-        if (!pattern) return 'Unknown';
-        
+        if (!pattern) return "Unknown";
+
         const patterns: { [key: string]: string } = {
-            'increasing': '📈 Increasing',
-            'decreasing': '📉 Decreasing',
-            'stable': '➡️ Stable',
-            'periodic': '🔄 Periodic'
+            increasing: "📈 Increasing",
+            decreasing: "📉 Decreasing",
+            stable: "➡️ Stable",
+            periodic: "🔄 Periodic",
         };
-        
+
         return patterns[pattern] || pattern;
     }
 
     private getConfidenceLevel(confidence: number): string {
-        if (confidence >= 0.8) return 'high';
-        if (confidence >= 0.6) return 'medium';
-        return 'low';
+        if (confidence >= 0.8) return "high";
+        if (confidence >= 0.6) return "medium";
+        return "low";
     }
 
     private escapeHtml(text: string): string {
-        const div = document.createElement('div');
+        const div = document.createElement("div");
         div.textContent = text;
         return div.innerHTML;
     }
@@ -815,7 +882,7 @@ export class RelationshipDetailsManager {
     removeFromComparison(index: number): void {
         this.selectedRelationships.splice(index, 1);
         this.updateComparisonPanel();
-        
+
         if (this.selectedRelationships.length === 0) {
             this.hideComparisonPanel();
         }

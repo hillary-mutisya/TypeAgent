@@ -944,27 +944,32 @@ export class DefaultDiscoveryServices implements DiscoveryServices {
 export class DefaultEntityGraphServices implements EntityGraphServices {
     async searchByEntity(entityName: string, options: any = {}): Promise<any> {
         // This would integrate with the real enhanced search
-        console.log('Searching for entity:', entityName, 'with options:', options);
+        console.log(
+            "Searching for entity:",
+            entityName,
+            "with options:",
+            options,
+        );
         return {
             entities: [],
             centerEntity: entityName,
-            relationships: []
+            relationships: [],
         };
     }
 
     async getEntityGraph(centerEntity: string, depth: number): Promise<any> {
         // This would integrate with the real entity graph
-        console.log('Getting entity graph for:', centerEntity, 'depth:', depth);
+        console.log("Getting entity graph for:", centerEntity, "depth:", depth);
         return {
             centerEntity,
             entities: [],
-            relationships: []
+            relationships: [],
         };
     }
 
     async refreshEntityData(entityName: string): Promise<any> {
         // This would refresh real entity data
-        console.log('Refreshing entity data for:', entityName);
+        console.log("Refreshing entity data for:", entityName);
         return null;
     }
 }
@@ -972,7 +977,7 @@ export class DefaultEntityGraphServices implements EntityGraphServices {
 export class DefaultEntityCacheServices implements EntityCacheServices {
     async getEntity(entityName: string): Promise<any> {
         // This would get from real entity cache
-        console.log('Getting cached entity:', entityName);
+        console.log("Getting cached entity:", entityName);
         return null;
     }
 
@@ -982,12 +987,12 @@ export class DefaultEntityCacheServices implements EntityCacheServices {
             entityCount: 0,
             relationshipCount: 0,
             cacheSize: 0,
-            hitRate: 0
+            hitRate: 0,
         };
     }
 
     async clearAll(): Promise<void> {
         // This would clear real cache
-        console.log('Clearing entity cache');
+        console.log("Clearing entity cache");
     }
 }

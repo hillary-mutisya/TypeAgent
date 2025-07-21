@@ -1,19 +1,22 @@
 // Multi-hop Entity Exploration Implementation
 // Advanced entity network expansion and multi-hop exploration
 
-import { EntityGraphServices, DefaultEntityGraphServices } from './knowledgeUtilities';
+import {
+    EntityGraphServices,
+    DefaultEntityGraphServices,
+} from "./knowledgeUtilities";
 
 export interface EntityExpansionData {
     centerEntity: string;
     entities: any[];
     relationships: any[];
     depth: number;
-    expansionType: 'breadth_first' | 'depth_first' | 'importance_based';
+    expansionType: "breadth_first" | "depth_first" | "importance_based";
 }
 
 export interface ExpansionHistory {
     step: number;
-    action: 'expand' | 'collapse' | 'focus';
+    action: "expand" | "collapse" | "focus";
     entity: string;
     timestamp: number;
     resultingEntityCount: number;
@@ -45,7 +48,8 @@ export class MultiHopExplorer {
 
     constructor(visualizer: any, entityGraphService?: EntityGraphServices) {
         this.visualizer = visualizer;
-        this.entityGraphService = entityGraphService || new DefaultEntityGraphServices();
+        this.entityGraphService =
+            entityGraphService || new DefaultEntityGraphServices();
         this.setupExpansionControls();
         this.setupExpansionEventHandlers();
     }
@@ -64,27 +68,34 @@ export class MultiHopExplorer {
      * Set up expansion buttons
      */
     private setupExpansionButtons(): void {
-        const expandBtn = document.getElementById('expandBtn');
-        const collapseBtn = document.getElementById('collapseBtn');
-        const resetBtn = document.getElementById('resetBtn');
+        const expandBtn = document.getElementById("expandBtn");
+        const collapseBtn = document.getElementById("collapseBtn");
+        const resetBtn = document.getElementById("resetBtn");
 
         if (expandBtn) {
-            expandBtn.addEventListener('click', () => this.expandSelectedEntities());
+            expandBtn.addEventListener("click", () =>
+                this.expandSelectedEntities(),
+            );
         }
 
         if (collapseBtn) {
-            collapseBtn.addEventListener('click', () => this.collapseSelectedEntities());
+            collapseBtn.addEventListener("click", () =>
+                this.collapseSelectedEntities(),
+            );
         }
 
         if (resetBtn) {
-            resetBtn.addEventListener('click', () => this.resetGraph());
+            resetBtn.addEventListener("click", () => this.resetGraph());
         }
     }
 
     /**
      * Expand entity network
      */
-    async expandEntityNetwork(entityName: string, depth: number = 1): Promise<void> {
+    async expandEntityNetwork(
+        entityName: string,
+        depth: number = 1,
+    ): Promise<void> {
         try {
             // Check cache first
             const cacheKey = `${entityName}-${depth}`;
@@ -92,7 +103,10 @@ export class MultiHopExplorer {
 
             if (!expansionData) {
                 // Generate expansion data
-                expansionData = await this.generateExpansionData(entityName, depth);
+                expansionData = await this.generateExpansionData(
+                    entityName,
+                    depth,
+                );
                 this.networkCache.set(cacheKey, expansionData);
             }
 
@@ -100,16 +114,17 @@ export class MultiHopExplorer {
             await this.addEntitiesAndRelationships(expansionData);
 
             // Apply layout if auto-layout is enabled
-            const autoLayout = document.getElementById('autoLayout') as HTMLInputElement;
+            const autoLayout = document.getElementById(
+                "autoLayout",
+            ) as HTMLInputElement;
             if (autoLayout?.checked) {
                 this.visualizer.applyCurrentLayout();
             }
 
             // Update metrics
             this.updateNetworkMetrics();
-
         } catch (error) {
-            console.error('Failed to expand entity network:', error);
+            console.error("Failed to expand entity network:", error);
             throw error;
         }
     }
@@ -122,24 +137,28 @@ export class MultiHopExplorer {
 
         const selectedEntities = this.visualizer.getSelectedEntities();
         if (selectedEntities.length === 0) {
-            this.showMessage('Please select entities to expand', 'warning');
+            this.showMessage("Please select entities to expand", "warning");
             return;
         }
 
         this.isExpanding = true;
-        this.showExpansionProgress(`Expanding ${selectedEntities.length} entities...`);
+        this.showExpansionProgress(
+            `Expanding ${selectedEntities.length} entities...`,
+        );
 
         try {
             for (const entityName of selectedEntities) {
                 await this.expandEntityNetwork(entityName, this.currentDepth);
             }
-            
-            this.addToHistory('expand', selectedEntities.join(', '));
-            this.showMessage(`Expanded ${selectedEntities.length} entities successfully`, 'success');
-            
+
+            this.addToHistory("expand", selectedEntities.join(", "));
+            this.showMessage(
+                `Expanded ${selectedEntities.length} entities successfully`,
+                "success",
+            );
         } catch (error) {
-            console.error('Expansion failed:', error);
-            this.showMessage('Expansion failed. Please try again.', 'error');
+            console.error("Expansion failed:", error);
+            this.showMessage("Expansion failed. Please try again.", "error");
         } finally {
             this.isExpanding = false;
             this.hideExpansionProgress();
@@ -148,22 +167,25 @@ export class MultiHopExplorer {
 
     // Additional simplified methods for basic functionality
     private setupDepthControls(): void {
-        console.log('Setting up depth controls');
+        console.log("Setting up depth controls");
     }
 
     private setupExpansionSettings(): void {
-        console.log('Setting up expansion settings');
+        console.log("Setting up expansion settings");
     }
 
     private setupHistoryControls(): void {
-        console.log('Setting up history controls');
+        console.log("Setting up history controls");
     }
 
     private setupExpansionEventHandlers(): void {
-        console.log('Setting up expansion event handlers');
+        console.log("Setting up expansion event handlers");
     }
 
-    private async generateExpansionData(entityName: string, depth: number): Promise<EntityExpansionData> {
+    private async generateExpansionData(
+        entityName: string,
+        depth: number,
+    ): Promise<EntityExpansionData> {
         if (this.mockMode) {
             return this.generateMockExpansionData(entityName, depth);
         } else {
@@ -174,31 +196,36 @@ export class MultiHopExplorer {
     /**
      * Generate real expansion data using enhanced search
      */
-    private async generateRealExpansionData(entityName: string, depth: number): Promise<EntityExpansionData> {
+    private async generateRealExpansionData(
+        entityName: string,
+        depth: number,
+    ): Promise<EntityExpansionData> {
         try {
             // Get entity graph from enhanced search
-            const graphData = await this.entityGraphService.getEntityGraph(entityName, depth);
-            
+            const graphData = await this.entityGraphService.getEntityGraph(
+                entityName,
+                depth,
+            );
+
             // Convert to expansion data format
             return {
                 centerEntity: entityName,
                 entities: graphData.entities.map((e: any) => ({
                     name: e.name,
                     type: e.type,
-                    confidence: e.confidence
+                    confidence: e.confidence,
                 })),
                 relationships: graphData.relationships.map((r: any) => ({
                     from: r.relatedEntity,
                     to: entityName, // Assuming relationships point to center entity
                     type: r.relationshipType,
-                    strength: r.strength
+                    strength: r.strength,
                 })),
                 depth: depth,
-                expansionType: 'importance_based'
+                expansionType: "importance_based",
             };
-            
         } catch (error) {
-            console.error('Failed to generate real expansion data:', error);
+            console.error("Failed to generate real expansion data:", error);
             // Fallback to mock data
             return this.generateMockExpansionData(entityName, depth);
         }
@@ -207,57 +234,86 @@ export class MultiHopExplorer {
     /**
      * Generate mock expansion data
      */
-    private generateMockExpansionData(entityName: string, depth: number): EntityExpansionData {
+    private generateMockExpansionData(
+        entityName: string,
+        depth: number,
+    ): EntityExpansionData {
         // Mock data generation
         return {
             centerEntity: entityName,
             entities: [
-                { name: `${entityName} Related 1`, type: 'organization', confidence: 0.8 },
-                { name: `${entityName} Related 2`, type: 'person', confidence: 0.7 }
+                {
+                    name: `${entityName} Related 1`,
+                    type: "organization",
+                    confidence: 0.8,
+                },
+                {
+                    name: `${entityName} Related 2`,
+                    type: "person",
+                    confidence: 0.7,
+                },
             ],
             relationships: [
-                { from: entityName, to: `${entityName} Related 1`, type: 'related_to', strength: 0.8 },
-                { from: entityName, to: `${entityName} Related 2`, type: 'connected_to', strength: 0.7 }
+                {
+                    from: entityName,
+                    to: `${entityName} Related 1`,
+                    type: "related_to",
+                    strength: 0.8,
+                },
+                {
+                    from: entityName,
+                    to: `${entityName} Related 2`,
+                    type: "connected_to",
+                    strength: 0.7,
+                },
             ],
             depth: depth,
-            expansionType: 'importance_based'
+            expansionType: "importance_based",
         };
     }
 
-    private async addEntitiesAndRelationships(expansionData: EntityExpansionData): Promise<void> {
+    private async addEntitiesAndRelationships(
+        expansionData: EntityExpansionData,
+    ): Promise<void> {
         if (this.visualizer && this.visualizer.addElements) {
             await this.visualizer.addElements({
                 entities: expansionData.entities,
-                relationships: expansionData.relationships
+                relationships: expansionData.relationships,
             });
         }
     }
 
     private async collapseSelectedEntities(): Promise<void> {
-        console.log('Collapsing selected entities');
+        console.log("Collapsing selected entities");
     }
 
     private async resetGraph(): Promise<void> {
-        console.log('Resetting graph');
+        console.log("Resetting graph");
     }
 
     private updateNetworkMetrics(): void {
-        console.log('Updating network metrics');
+        console.log("Updating network metrics");
     }
 
-    private addToHistory(action: 'expand' | 'collapse' | 'focus', entity: string): void {
+    private addToHistory(
+        action: "expand" | "collapse" | "focus",
+        entity: string,
+    ): void {
         console.log(`Adding to history: ${action} ${entity}`);
     }
 
     private showExpansionProgress(message: string): void {
-        console.log('Expansion progress:', message);
+        console.log("Expansion progress:", message);
     }
 
     private hideExpansionProgress(): void {
-        console.log('Expansion complete');
+        console.log("Expansion complete");
     }
 
-    private showMessage(message: string, type: 'success' | 'warning' | 'error'): void {
+    private showMessage(
+        message: string,
+        type: "success" | "warning" | "error",
+    ): void {
         console.log(`${type.toUpperCase()}: ${message}`);
     }
 

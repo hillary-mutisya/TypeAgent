@@ -1,7 +1,11 @@
 // Entity Graph Cache Implementation
 // High-performance caching system for entity graphs and relationships
 
-import type { EnhancedEntity, EntityRelationship, EntityKnowledgeGraph } from './entityExtractor.js';
+import type {
+    EnhancedEntity,
+    EntityRelationship,
+    EntityKnowledgeGraph,
+} from "./entityExtractor.js";
 
 export interface CacheEntry<T> {
     data: T;
@@ -35,16 +39,18 @@ export interface CacheOptions {
  */
 export class EntityGraphCache {
     private entityCache: Map<string, CacheEntry<EnhancedEntity>> = new Map();
-    private relationshipCache: Map<string, CacheEntry<EntityRelationship[]>> = new Map();
-    private graphCache: Map<string, CacheEntry<EntityKnowledgeGraph>> = new Map();
+    private relationshipCache: Map<string, CacheEntry<EntityRelationship[]>> =
+        new Map();
+    private graphCache: Map<string, CacheEntry<EntityKnowledgeGraph>> =
+        new Map();
     private searchCache: Map<string, CacheEntry<any>> = new Map();
-    
+
     private stats = {
         totalRequests: 0,
         totalHits: 0,
-        totalMisses: 0
+        totalMisses: 0,
     };
-    
+
     private options: CacheOptions;
     private cleanupTimer: NodeJS.Timeout | null = null;
 
@@ -55,7 +61,7 @@ export class EntityGraphCache {
             cleanupInterval: 300000, // 5 minutes
             enableCompression: false,
             enableMetrics: true,
-            ...options
+            ...options,
         };
 
         this.startCleanupTimer();
@@ -66,7 +72,7 @@ export class EntityGraphCache {
      */
     async getEntity(entityName: string): Promise<EnhancedEntity | null> {
         this.stats.totalRequests++;
-        
+
         const entry = this.entityCache.get(entityName.toLowerCase());
         if (entry && this.isEntryValid(entry)) {
             entry.accessCount++;
@@ -74,7 +80,7 @@ export class EntityGraphCache {
             this.stats.totalHits++;
             return entry.data;
         }
-        
+
         this.stats.totalMisses++;
         return null;
     }
@@ -82,14 +88,17 @@ export class EntityGraphCache {
     /**
      * Cache entity with TTL
      */
-    async cacheEntity(entity: EnhancedEntity, ttl: number = this.options.defaultTtl): Promise<void> {
+    async cacheEntity(
+        entity: EnhancedEntity,
+        ttl: number = this.options.defaultTtl,
+    ): Promise<void> {
         const key = entity.name.toLowerCase();
         const entry: CacheEntry<EnhancedEntity> = {
             data: entity,
             timestamp: Date.now(),
             ttl,
             accessCount: 0,
-            lastAccessed: Date.now()
+            lastAccessed: Date.now(),
         };
 
         this.entityCache.set(key, entry);
@@ -99,9 +108,11 @@ export class EntityGraphCache {
     /**
      * Get relationships for entity
      */
-    async getRelationships(entityName: string): Promise<EntityRelationship[] | null> {
+    async getRelationships(
+        entityName: string,
+    ): Promise<EntityRelationship[] | null> {
         this.stats.totalRequests++;
-        
+
         const entry = this.relationshipCache.get(entityName.toLowerCase());
         if (entry && this.isEntryValid(entry)) {
             entry.accessCount++;
@@ -109,7 +120,7 @@ export class EntityGraphCache {
             this.stats.totalHits++;
             return entry.data;
         }
-        
+
         this.stats.totalMisses++;
         return null;
     }
@@ -117,14 +128,18 @@ export class EntityGraphCache {
     /**
      * Cache relationships for entity
      */
-    async cacheRelationships(entityName: string, relationships: EntityRelationship[], ttl: number = this.options.defaultTtl): Promise<void> {
+    async cacheRelationships(
+        entityName: string,
+        relationships: EntityRelationship[],
+        ttl: number = this.options.defaultTtl,
+    ): Promise<void> {
         const key = entityName.toLowerCase();
         const entry: CacheEntry<EntityRelationship[]> = {
             data: relationships,
             timestamp: Date.now(),
             ttl,
             accessCount: 0,
-            lastAccessed: Date.now()
+            lastAccessed: Date.now(),
         };
 
         this.relationshipCache.set(key, entry);
@@ -134,9 +149,11 @@ export class EntityGraphCache {
     /**
      * Get cached entity graph
      */
-    async getEntityGraph(graphId: string): Promise<EntityKnowledgeGraph | null> {
+    async getEntityGraph(
+        graphId: string,
+    ): Promise<EntityKnowledgeGraph | null> {
         this.stats.totalRequests++;
-        
+
         const entry = this.graphCache.get(graphId);
         if (entry && this.isEntryValid(entry)) {
             entry.accessCount++;
@@ -144,7 +161,7 @@ export class EntityGraphCache {
             this.stats.totalHits++;
             return entry.data;
         }
-        
+
         this.stats.totalMisses++;
         return null;
     }
@@ -152,13 +169,17 @@ export class EntityGraphCache {
     /**
      * Cache entity graph
      */
-    async cacheEntityGraph(graphId: string, graph: EntityKnowledgeGraph, ttl: number = this.options.defaultTtl): Promise<void> {
+    async cacheEntityGraph(
+        graphId: string,
+        graph: EntityKnowledgeGraph,
+        ttl: number = this.options.defaultTtl,
+    ): Promise<void> {
         const entry: CacheEntry<EntityKnowledgeGraph> = {
             data: graph,
             timestamp: Date.now(),
             ttl,
             accessCount: 0,
-            lastAccessed: Date.now()
+            lastAccessed: Date.now(),
         };
 
         this.graphCache.set(graphId, entry);
@@ -170,17 +191,17 @@ export class EntityGraphCache {
      */
     async getSearchResults(query: string, filters?: any): Promise<any | null> {
         this.stats.totalRequests++;
-        
+
         const key = this.generateSearchKey(query, filters);
         const entry = this.searchCache.get(key);
-        
+
         if (entry && this.isEntryValid(entry)) {
             entry.accessCount++;
             entry.lastAccessed = Date.now();
             this.stats.totalHits++;
             return entry.data;
         }
-        
+
         this.stats.totalMisses++;
         return null;
     }
@@ -188,14 +209,19 @@ export class EntityGraphCache {
     /**
      * Cache search results
      */
-    async cacheSearchResults(query: string, results: any, filters?: any, ttl: number = this.options.defaultTtl / 2): Promise<void> {
+    async cacheSearchResults(
+        query: string,
+        results: any,
+        filters?: any,
+        ttl: number = this.options.defaultTtl / 2,
+    ): Promise<void> {
         const key = this.generateSearchKey(query, filters);
         const entry: CacheEntry<any> = {
             data: results,
             timestamp: Date.now(),
             ttl,
             accessCount: 0,
-            lastAccessed: Date.now()
+            lastAccessed: Date.now(),
         };
 
         this.searchCache.set(key, entry);
@@ -207,14 +233,14 @@ export class EntityGraphCache {
      */
     async invalidateEntity(entityName: string): Promise<void> {
         const key = entityName.toLowerCase();
-        
+
         // Remove entity from cache
         this.entityCache.delete(key);
         this.relationshipCache.delete(key);
-        
+
         // Remove from search cache (clear all search results)
         this.searchCache.clear();
-        
+
         // Remove from any graphs that contain this entity
         const graphsToRemove: string[] = [];
         for (const [graphId, entry] of this.graphCache) {
@@ -222,7 +248,7 @@ export class EntityGraphCache {
                 graphsToRemove.push(graphId);
             }
         }
-        
+
         for (const graphId of graphsToRemove) {
             this.graphCache.delete(graphId);
         }
@@ -233,7 +259,7 @@ export class EntityGraphCache {
      */
     async warmCache(entities: string[]): Promise<void> {
         console.log(`Warming cache with ${entities.length} entities...`);
-        
+
         // This would typically load entities from the database/API
         // For now, we'll mark them as "requested" in cache metrics
         for (const _entityName of entities) {
@@ -241,7 +267,7 @@ export class EntityGraphCache {
             // 1. Load the entity from the database
             // 2. Load its relationships
             // 3. Cache both
-            
+
             // For demonstration, we'll just increment request count
             this.stats.totalRequests++;
         }
@@ -250,7 +276,10 @@ export class EntityGraphCache {
     /**
      * Preload related entities based on usage patterns
      */
-    async preloadRelatedEntities(centerEntity: string, depth: number = 1): Promise<void> {
+    async preloadRelatedEntities(
+        centerEntity: string,
+        depth: number = 1,
+    ): Promise<void> {
         const relationships = await this.getRelationships(centerEntity);
         if (!relationships) return;
 
@@ -269,17 +298,27 @@ export class EntityGraphCache {
      * Get cache statistics
      */
     getCacheStats(): CacheStats {
-        const hitRate = this.stats.totalRequests > 0 ? this.stats.totalHits / this.stats.totalRequests : 0;
-        const missRate = this.stats.totalRequests > 0 ? this.stats.totalMisses / this.stats.totalRequests : 0;
-        
+        const hitRate =
+            this.stats.totalRequests > 0
+                ? this.stats.totalHits / this.stats.totalRequests
+                : 0;
+        const missRate =
+            this.stats.totalRequests > 0
+                ? this.stats.totalMisses / this.stats.totalRequests
+                : 0;
+
         return {
             hitRate,
             missRate,
             totalRequests: this.stats.totalRequests,
             totalHits: this.stats.totalHits,
             totalMisses: this.stats.totalMisses,
-            cacheSize: this.entityCache.size + this.relationshipCache.size + this.graphCache.size + this.searchCache.size,
-            memoryUsage: this.estimateMemoryUsage()
+            cacheSize:
+                this.entityCache.size +
+                this.relationshipCache.size +
+                this.graphCache.size +
+                this.searchCache.size,
+            memoryUsage: this.estimateMemoryUsage(),
         };
     }
 
@@ -291,11 +330,11 @@ export class EntityGraphCache {
         this.relationshipCache.clear();
         this.graphCache.clear();
         this.searchCache.clear();
-        
+
         this.stats = {
             totalRequests: 0,
             totalHits: 0,
-            totalMisses: 0
+            totalMisses: 0,
         };
     }
 
@@ -343,31 +382,40 @@ export class EntityGraphCache {
     /**
      * Get cache key for entity graph
      */
-    getGraphCacheKey(centerEntity: string, depth: number, filters?: any): string {
-        const filterStr = filters ? JSON.stringify(filters) : '';
+    getGraphCacheKey(
+        centerEntity: string,
+        depth: number,
+        filters?: any,
+    ): string {
+        const filterStr = filters ? JSON.stringify(filters) : "";
         return `graph_${centerEntity}_${depth}_${this.hashString(filterStr)}`;
     }
 
     /**
      * Batch get entities
      */
-    async getEntitiesBatch(entityNames: string[]): Promise<Map<string, EnhancedEntity>> {
+    async getEntitiesBatch(
+        entityNames: string[],
+    ): Promise<Map<string, EnhancedEntity>> {
         const results = new Map<string, EnhancedEntity>();
-        
+
         for (const name of entityNames) {
             const entity = await this.getEntity(name);
             if (entity) {
                 results.set(name, entity);
             }
         }
-        
+
         return results;
     }
 
     /**
      * Batch cache entities
      */
-    async cacheEntitiesBatch(entities: EnhancedEntity[], ttl: number = this.options.defaultTtl): Promise<void> {
+    async cacheEntitiesBatch(
+        entities: EnhancedEntity[],
+        ttl: number = this.options.defaultTtl,
+    ): Promise<void> {
         for (const entity of entities) {
             await this.cacheEntity(entity, ttl);
         }
@@ -382,7 +430,7 @@ export class EntityGraphCache {
             relationships: Array.from(this.relationshipCache.entries()),
             graphs: Array.from(this.graphCache.entries()),
             stats: this.stats,
-            timestamp: Date.now()
+            timestamp: Date.now(),
         };
     }
 
@@ -412,23 +460,25 @@ export class EntityGraphCache {
             clearInterval(this.cleanupTimer);
             this.cleanupTimer = null;
         }
-        
+
         this.clearAll();
     }
 
     // Private helper methods
 
     private isEntryValid<T>(entry: CacheEntry<T>): boolean {
-        return (Date.now() - entry.timestamp) < entry.ttl;
+        return Date.now() - entry.timestamp < entry.ttl;
     }
 
-    private async enforceMaxSize<T>(cache: Map<string, CacheEntry<T>>): Promise<void> {
+    private async enforceMaxSize<T>(
+        cache: Map<string, CacheEntry<T>>,
+    ): Promise<void> {
         if (cache.size <= this.options.maxSize) return;
 
         // Sort by least recently used and lowest access count
         const entries = Array.from(cache.entries()).sort((a, b) => {
-            const aScore = a[1].accessCount + (a[1].lastAccessed / 1000000);
-            const bScore = b[1].accessCount + (b[1].lastAccessed / 1000000);
+            const aScore = a[1].accessCount + a[1].lastAccessed / 1000000;
+            const bScore = b[1].accessCount + b[1].lastAccessed / 1000000;
             return aScore - bScore;
         });
 
@@ -440,7 +490,7 @@ export class EntityGraphCache {
     }
 
     private generateSearchKey(query: string, filters?: any): string {
-        const filterStr = filters ? JSON.stringify(filters) : '';
+        const filterStr = filters ? JSON.stringify(filters) : "";
         return `search_${query.toLowerCase()}_${this.hashString(filterStr)}`;
     }
 
@@ -448,7 +498,7 @@ export class EntityGraphCache {
         let hash = 0;
         for (let i = 0; i < str.length; i++) {
             const char = str.charCodeAt(i);
-            hash = ((hash << 5) - hash) + char;
+            hash = (hash << 5) - hash + char;
             hash = hash & hash; // Convert to 32-bit integer
         }
         return hash.toString(36);
@@ -457,22 +507,22 @@ export class EntityGraphCache {
     private estimateMemoryUsage(): number {
         // Rough estimation of memory usage in bytes
         let size = 0;
-        
+
         // Estimate entity cache size
         for (const _entry of this.entityCache.values()) {
             size += 1000; // Rough estimate per entity
         }
-        
+
         // Estimate relationship cache size
         for (const entry of this.relationshipCache.values()) {
             size += JSON.stringify(entry.data).length * 2;
         }
-        
+
         // Estimate graph cache size
         for (const _entry of this.graphCache.values()) {
             size += 1000; // Rough estimate for graph metadata
         }
-        
+
         return size;
     }
 
@@ -480,7 +530,9 @@ export class EntityGraphCache {
         this.cleanupTimer = setInterval(async () => {
             const removed = await this.clearExpired();
             if (this.options.enableMetrics && removed > 0) {
-                console.log(`Cache cleanup: removed ${removed} expired entries`);
+                console.log(
+                    `Cache cleanup: removed ${removed} expired entries`,
+                );
             }
         }, this.options.cleanupInterval);
     }
@@ -494,5 +546,5 @@ export const globalEntityCache = new EntityGraphCache({
     defaultTtl: 3600000, // 1 hour
     cleanupInterval: 300000, // 5 minutes
     enableCompression: false,
-    enableMetrics: true
+    enableMetrics: true,
 });

@@ -26,7 +26,7 @@ interface GraphData {
 export class EntityGraphVisualizer {
     protected cy: any = null;
     private container: HTMLElement;
-    protected currentLayout: string = 'force';
+    protected currentLayout: string = "force";
     private entityClickCallback: ((entity: EntityData) => void) | null = null;
 
     constructor(container: HTMLElement) {
@@ -38,7 +38,7 @@ export class EntityGraphVisualizer {
      */
     async initialize(): Promise<void> {
         // Load Cytoscape if not already loaded
-        if (typeof cytoscape === 'undefined') {
+        if (typeof cytoscape === "undefined") {
             await this.loadCytoscape();
         }
 
@@ -47,14 +47,14 @@ export class EntityGraphVisualizer {
             container: this.container,
             elements: [],
             style: this.getDefaultStyles(),
-            layout: { name: 'grid' },
+            layout: { name: "grid" },
             zoomingEnabled: true,
             userZoomingEnabled: true,
             panningEnabled: true,
             userPanningEnabled: true,
             boxSelectionEnabled: false,
-            selectionType: 'single',
-            autoungrabify: false
+            selectionType: "single",
+            autoungrabify: false,
         });
 
         this.setupInteractions();
@@ -65,10 +65,12 @@ export class EntityGraphVisualizer {
      */
     private async loadCytoscape(): Promise<void> {
         return new Promise((resolve, reject) => {
-            const script = document.createElement('script');
-            script.src = 'https://unpkg.com/cytoscape@3.23.0/dist/cytoscape.min.js';
+            const script = document.createElement("script");
+            script.src =
+                "https://unpkg.com/cytoscape@3.23.0/dist/cytoscape.min.js";
             script.onload = () => resolve();
-            script.onerror = () => reject(new Error('Failed to load Cytoscape.js'));
+            script.onerror = () =>
+                reject(new Error("Failed to load Cytoscape.js"));
             document.head.appendChild(script);
         });
     }
@@ -82,127 +84,127 @@ export class EntityGraphVisualizer {
             {
                 selector: 'node[type="person"]',
                 style: {
-                    'background-color': '#4A90E2',
-                    'shape': 'ellipse',
-                    'width': 60,
-                    'height': 60,
-                    'label': 'data(name)',
-                    'text-valign': 'bottom',
-                    'text-margin-y': 5,
-                    'font-size': 12,
-                    'font-weight': 'bold',
-                    'color': '#333'
-                }
+                    "background-color": "#4A90E2",
+                    shape: "ellipse",
+                    width: 60,
+                    height: 60,
+                    label: "data(name)",
+                    "text-valign": "bottom",
+                    "text-margin-y": 5,
+                    "font-size": 12,
+                    "font-weight": "bold",
+                    color: "#333",
+                },
             },
             {
                 selector: 'node[type="organization"]',
                 style: {
-                    'background-color': '#7ED321',
-                    'shape': 'rectangle',
-                    'width': 80,
-                    'height': 50,
-                    'label': 'data(name)',
-                    'text-valign': 'center',
-                    'text-halign': 'center',
-                    'font-size': 12,
-                    'font-weight': 'bold',
-                    'color': '#333'
-                }
+                    "background-color": "#7ED321",
+                    shape: "rectangle",
+                    width: 80,
+                    height: 50,
+                    label: "data(name)",
+                    "text-valign": "center",
+                    "text-halign": "center",
+                    "font-size": 12,
+                    "font-weight": "bold",
+                    color: "#333",
+                },
             },
             {
                 selector: 'node[type="product"]',
                 style: {
-                    'background-color': '#BD10E0',
-                    'shape': 'roundrectangle',
-                    'width': 70,
-                    'height': 40,
-                    'label': 'data(name)',
-                    'text-valign': 'bottom',
-                    'text-margin-y': 5,
-                    'font-size': 11,
-                    'font-weight': 'bold',
-                    'color': '#333'
-                }
+                    "background-color": "#BD10E0",
+                    shape: "roundrectangle",
+                    width: 70,
+                    height: 40,
+                    label: "data(name)",
+                    "text-valign": "bottom",
+                    "text-margin-y": 5,
+                    "font-size": 11,
+                    "font-weight": "bold",
+                    color: "#333",
+                },
             },
             {
                 selector: 'node[type="concept"]',
                 style: {
-                    'background-color': '#F5A623',
-                    'shape': 'diamond',
-                    'width': 50,
-                    'height': 50,
-                    'label': 'data(name)',
-                    'text-valign': 'bottom',
-                    'text-margin-y': 5,
-                    'font-size': 11,
-                    'font-weight': 'bold',
-                    'color': '#333'
-                }
+                    "background-color": "#F5A623",
+                    shape: "diamond",
+                    width: 50,
+                    height: 50,
+                    label: "data(name)",
+                    "text-valign": "bottom",
+                    "text-margin-y": 5,
+                    "font-size": 11,
+                    "font-weight": "bold",
+                    color: "#333",
+                },
             },
 
             // Edge styles by strength
             {
-                selector: 'edge[strength >= 0.7]',
+                selector: "edge[strength >= 0.7]",
                 style: {
-                    'line-color': '#4A90E2',
-                    'width': 4,
-                    'line-opacity': 1,
-                    'target-arrow-color': '#4A90E2',
-                    'target-arrow-shape': 'triangle',
-                    'curve-style': 'bezier'
-                }
+                    "line-color": "#4A90E2",
+                    width: 4,
+                    "line-opacity": 1,
+                    "target-arrow-color": "#4A90E2",
+                    "target-arrow-shape": "triangle",
+                    "curve-style": "bezier",
+                },
             },
             {
-                selector: 'edge[strength >= 0.3][strength < 0.7]',
+                selector: "edge[strength >= 0.3][strength < 0.7]",
                 style: {
-                    'line-color': '#667eea',
-                    'width': 2,
-                    'line-opacity': 0.8,
-                    'target-arrow-color': '#667eea',
-                    'target-arrow-shape': 'triangle',
-                    'curve-style': 'bezier'
-                }
+                    "line-color": "#667eea",
+                    width: 2,
+                    "line-opacity": 0.8,
+                    "target-arrow-color": "#667eea",
+                    "target-arrow-shape": "triangle",
+                    "curve-style": "bezier",
+                },
             },
             {
-                selector: 'edge[strength < 0.3]',
+                selector: "edge[strength < 0.3]",
                 style: {
-                    'line-color': '#999',
-                    'width': 1,
-                    'line-style': 'dashed',
-                    'line-opacity': 0.6,
-                    'target-arrow-color': '#999',
-                    'target-arrow-shape': 'triangle',
-                    'curve-style': 'bezier'
-                }
+                    "line-color": "#999",
+                    width: 1,
+                    "line-style": "dashed",
+                    "line-opacity": 0.6,
+                    "target-arrow-color": "#999",
+                    "target-arrow-shape": "triangle",
+                    "curve-style": "bezier",
+                },
             },
 
             // Selected elements
             {
-                selector: ':selected',
+                selector: ":selected",
                 style: {
-                    'border-color': '#FF6B35',
-                    'border-width': 3,
-                    'border-opacity': 1
-                }
+                    "border-color": "#FF6B35",
+                    "border-width": 3,
+                    "border-opacity": 1,
+                },
             },
 
             // Highlighted elements
             {
-                selector: '.highlighted',
+                selector: ".highlighted",
                 style: {
-                    'opacity': 1,
-                    'z-index': 15
-                }
+                    opacity: 1,
+                    "z-index": 15,
+                },
             },
 
             // Dimmed elements
             {
-                selector: '.dimmed',
+                selector: ".dimmed",
                 style: {
-                    'opacity': 0.3,
-                    'z-index': 5
-                }
-            }
+                    opacity: 0.3,
+                    "z-index": 5,
+                },
+            },
         ];
     }
 
@@ -213,12 +215,12 @@ export class EntityGraphVisualizer {
         if (!this.cy) return;
 
         // Node click
-        this.cy.on('tap', 'node', (evt: any) => {
+        this.cy.on("tap", "node", (evt: any) => {
             const node = evt.target;
             const entityData: EntityData = {
-                name: node.data('name'),
-                type: node.data('type'),
-                confidence: node.data('confidence')
+                name: node.data("name"),
+                type: node.data("type"),
+                confidence: node.data("confidence"),
             };
 
             if (this.entityClickCallback) {
@@ -229,19 +231,19 @@ export class EntityGraphVisualizer {
         });
 
         // Background click
-        this.cy.on('tap', (evt: any) => {
+        this.cy.on("tap", (evt: any) => {
             if (evt.target === this.cy) {
                 this.clearHighlights();
             }
         });
 
         // Node hover
-        this.cy.on('mouseover', 'node', (evt: any) => {
+        this.cy.on("mouseover", "node", (evt: any) => {
             const node = evt.target;
             this.showNodeTooltip(node, evt.renderedPosition);
         });
 
-        this.cy.on('mouseout', 'node', () => {
+        this.cy.on("mouseout", "node", () => {
             this.hideNodeTooltip();
         });
     }
@@ -275,29 +277,29 @@ export class EntityGraphVisualizer {
         const elements: any[] = [];
 
         // Add nodes
-        graphData.entities.forEach(entity => {
+        graphData.entities.forEach((entity) => {
             elements.push({
-                group: 'nodes',
+                group: "nodes",
                 data: {
                     id: entity.name,
                     name: entity.name,
                     type: entity.type,
-                    confidence: entity.confidence
-                }
+                    confidence: entity.confidence,
+                },
             });
         });
 
         // Add edges
-        graphData.relationships.forEach(rel => {
+        graphData.relationships.forEach((rel) => {
             elements.push({
-                group: 'edges',
+                group: "edges",
                 data: {
                     id: `${rel.from}-${rel.to}`,
                     source: rel.from,
                     target: rel.to,
                     type: rel.type,
-                    strength: rel.strength
-                }
+                    strength: rel.strength,
+                },
             });
         });
 
@@ -312,7 +314,7 @@ export class EntityGraphVisualizer {
 
         const layoutConfigs: { [key: string]: any } = {
             force: {
-                name: 'cose',
+                name: "cose",
                 idealEdgeLength: 100,
                 nodeOverlap: 20,
                 refresh: 20,
@@ -327,25 +329,25 @@ export class EntityGraphVisualizer {
                 numIter: 1000,
                 initialTemp: 200,
                 coolingFactor: 0.95,
-                minTemp: 1.0
+                minTemp: 1.0,
             },
             hierarchical: {
-                name: 'breadthfirst',
+                name: "breadthfirst",
                 directed: true,
-                roots: this.cy.nodes().filter('[?centerEntity]'),
+                roots: this.cy.nodes().filter("[?centerEntity]"),
                 padding: 30,
-                spacingFactor: 1.25
+                spacingFactor: 1.25,
             },
             radial: {
-                name: 'concentric',
+                name: "concentric",
                 concentric: (node: any) => node.degree(),
                 levelWidth: () => 1,
                 padding: 30,
-                startAngle: 3 * Math.PI / 2,
-                clockwise: true
+                startAngle: (3 * Math.PI) / 2,
+                clockwise: true,
             },
             grid: {
-                name: 'grid',
+                name: "grid",
                 fit: true,
                 padding: 30,
                 avoidOverlap: true,
@@ -355,13 +357,17 @@ export class EntityGraphVisualizer {
                 condense: false,
                 rows: undefined,
                 cols: undefined,
-                position: (node: any) => { return {}; },
+                position: (node: any) => {
+                    return {};
+                },
                 sort: undefined,
-                animate: false
-            }
+                animate: false,
+            },
         };
 
-        const layout = this.cy.layout(layoutConfigs[layoutName] || layoutConfigs.force);
+        const layout = this.cy.layout(
+            layoutConfigs[layoutName] || layoutConfigs.force,
+        );
         layout.run();
     }
 
@@ -387,8 +393,8 @@ export class EntityGraphVisualizer {
         const others = this.cy.elements().not(connected);
 
         // Apply highlights
-        connected.addClass('highlighted');
-        others.addClass('dimmed');
+        connected.addClass("highlighted");
+        others.addClass("dimmed");
     }
 
     /**
@@ -396,8 +402,8 @@ export class EntityGraphVisualizer {
      */
     private clearHighlights(): void {
         if (!this.cy) return;
-        
-        this.cy.elements().removeClass('highlighted dimmed');
+
+        this.cy.elements().removeClass("highlighted dimmed");
     }
 
     /**
@@ -406,25 +412,25 @@ export class EntityGraphVisualizer {
     private showNodeTooltip(node: any, position: any): void {
         const tooltip = this.getOrCreateTooltip();
         const data = node.data();
-        
+
         tooltip.innerHTML = `
             <div class="tooltip-header">${data.name}</div>
             <div class="tooltip-type">${data.type}</div>
             <div class="tooltip-confidence">Confidence: ${(data.confidence * 100).toFixed(0)}%</div>
         `;
-        
+
         tooltip.style.left = `${position.x + 10}px`;
         tooltip.style.top = `${position.y - 10}px`;
-        tooltip.style.display = 'block';
+        tooltip.style.display = "block";
     }
 
     /**
      * Hide node tooltip
      */
     private hideNodeTooltip(): void {
-        const tooltip = document.getElementById('graph-tooltip');
+        const tooltip = document.getElementById("graph-tooltip");
         if (tooltip) {
-            tooltip.style.display = 'none';
+            tooltip.style.display = "none";
         }
     }
 
@@ -432,11 +438,11 @@ export class EntityGraphVisualizer {
      * Get or create tooltip element
      */
     private getOrCreateTooltip(): HTMLElement {
-        let tooltip = document.getElementById('graph-tooltip');
+        let tooltip = document.getElementById("graph-tooltip");
         if (!tooltip) {
-            tooltip = document.createElement('div');
-            tooltip.id = 'graph-tooltip';
-            tooltip.className = 'graph-tooltip';
+            tooltip = document.createElement("div");
+            tooltip.id = "graph-tooltip";
+            tooltip.className = "graph-tooltip";
             tooltip.style.cssText = `
                 position: absolute;
                 background: rgba(0, 0, 0, 0.8);
@@ -484,7 +490,7 @@ export class EntityGraphVisualizer {
             elements: this.cy.elements().jsons(),
             layout: this.currentLayout,
             zoom: this.cy.zoom(),
-            center: this.cy.center()
+            center: this.cy.center(),
         };
     }
 
@@ -515,7 +521,7 @@ export class EntityGraphVisualizer {
         }
 
         // Remove tooltip
-        const tooltip = document.getElementById('graph-tooltip');
+        const tooltip = document.getElementById("graph-tooltip");
         if (tooltip) {
             tooltip.remove();
         }

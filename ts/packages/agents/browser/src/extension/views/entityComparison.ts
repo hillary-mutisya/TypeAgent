@@ -40,7 +40,7 @@ export interface EntityCluster {
     clusterId: string;
     entities: string[];
     centerEntity: string;
-    clusterType: 'functional' | 'temporal' | 'topical' | 'organizational';
+    clusterType: "functional" | "temporal" | "topical" | "organizational";
     coherenceScore: number;
     description: string;
 }
@@ -81,7 +81,7 @@ export class EntityComparisonManager {
      */
     showComparisonPanel(): void {
         if (this.comparisonPanel) {
-            this.comparisonPanel.style.display = 'block';
+            this.comparisonPanel.style.display = "block";
         }
     }
 
@@ -90,7 +90,7 @@ export class EntityComparisonManager {
      */
     hideComparisonPanel(): void {
         if (this.comparisonPanel) {
-            this.comparisonPanel.style.display = 'none';
+            this.comparisonPanel.style.display = "none";
         }
     }
 
@@ -100,7 +100,7 @@ export class EntityComparisonManager {
     startComparison(entities: any[]): void {
         this.selectedEntities = entities.slice(0, this.maxComparisonEntities);
         this.showComparisonPanel();
-        
+
         if (this.selectedEntities.length >= 2) {
             this.performComparison();
         }
@@ -110,7 +110,7 @@ export class EntityComparisonManager {
      * Perform entity comparison (simplified for now)
      */
     private async performComparison(): Promise<void> {
-        console.log('Performing comparison for:', this.selectedEntities);
+        console.log("Performing comparison for:", this.selectedEntities);
         // Implementation would go here
     }
 
@@ -118,9 +118,9 @@ export class EntityComparisonManager {
      * Create comparison panel (simplified)
      */
     private createComparisonPanel(): void {
-        this.comparisonPanel = document.createElement('div');
-        this.comparisonPanel.id = 'entityComparisonPanel';
-        this.comparisonPanel.className = 'entity-comparison-panel';
+        this.comparisonPanel = document.createElement("div");
+        this.comparisonPanel.id = "entityComparisonPanel";
+        this.comparisonPanel.className = "entity-comparison-panel";
         this.comparisonPanel.innerHTML = `
             <div class="panel-header">
                 <h3>Entity Comparison</h3>
@@ -157,9 +157,11 @@ export class EntityComparisonManager {
      * Set up comparison controls
      */
     private setupComparisonControls(): void {
-        const closeBtn = document.getElementById('closeComparisonBtn');
+        const closeBtn = document.getElementById("closeComparisonBtn");
         if (closeBtn) {
-            closeBtn.addEventListener('click', () => this.hideComparisonPanel());
+            closeBtn.addEventListener("click", () =>
+                this.hideComparisonPanel(),
+            );
         }
     }
 
@@ -168,7 +170,7 @@ export class EntityComparisonManager {
      */
     private setupComparisonEventHandlers(): void {
         // Listen for comparison requests
-        document.addEventListener('requestEntityComparison', (e: any) => {
+        document.addEventListener("requestEntityComparison", (e: any) => {
             const entities = e.detail.entities;
             this.startComparison(entities);
         });

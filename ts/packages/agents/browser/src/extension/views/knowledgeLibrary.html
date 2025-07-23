@@ -418,6 +418,12 @@
               <h2 class="section-title">
                 <i class="bi bi-lightbulb"></i>Advanced Knowledge Insights
               </h2>
+              <div class="section-description">
+                <p class="text-muted mb-0">
+                  <i class="bi bi-info-circle"></i>
+                  Click on any entity below to explore it in the new Enhanced Graph View with real-time network analysis and multi-hop exploration.
+                </p>
+              </div>
             </div>
 
             <div class="discovery-grid" id="knowledgeInsights">
@@ -446,8 +452,12 @@
                     </div>
                     <div class="knowledge-label">Total Entities Extracted</div>
                     <div class="knowledge-breakdown">
-                      <div class="recent-items-header">Recent Entities</div>
-                      <div id="recentEntitiesList" class="recent-items-list">
+                      <div class="recent-items-header">
+                        <i class="bi bi-diagram-2"></i>
+                        Recent Entities
+                        <small class="text-muted ms-2">(Click to explore in Enhanced Graph View)</small>
+                      </div>
+                      <div id="recentEntitiesList" class="recent-items-list enhanced-entity-list">
                         <div class="empty-message">No recent entities</div>
                       </div>
                     </div>
@@ -1163,6 +1173,9 @@
     </div>
 
     <script src="../vendor/bootstrap/bootstrap.bundle.min.js"></script>
+    <script src="../vendor/cytoscape/cytoscape.min.js"></script>
+    <script src="../vendor/dagre/dagre.min.js"></script>
+    <script src="../vendor/cytoscape-dagre/cytoscape-dagre.min.js"></script>
     <script src="knowledgeLibrary.js"></script>
   </body>
 </html>

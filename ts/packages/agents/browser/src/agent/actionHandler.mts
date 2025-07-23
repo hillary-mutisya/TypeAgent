@@ -68,6 +68,8 @@ import {
     importHtmlFolderFromSession,
     getWebsiteStats,
 } from "./websiteMemory.mjs";
+import { EntityRelationshipInference } from "./knowledge/entityRelationshipInference.js";
+import { EntityStatisticsCalculator } from "./knowledge/entityStatistics.js";
 import { CrosswordActions } from "./crossword/schema/userActions.mjs";
 import { InstacartActions } from "./instacart/schema/userActions.mjs";
 import { ShoppingActions } from "./commerce/schema/userActions.mjs";
@@ -1581,6 +1583,15 @@ async function handleWebsiteAction(
         case "searchWebMemories":
             return await searchWebMemories(parameters, context);
 
+        case "searchByEntities":
+            return await handleSearchByEntities(parameters, context);
+
+        case "getEntityRelationships":
+            return await handleGetEntityRelationships(parameters, context);
+
+        case "getEntityStats":
+            return await handleGetEntityStats(parameters, context);
+
         case "getWebsiteStats":
             // Convert to ActionContext format for existing function
             const statsAction = {
@@ -1698,6 +1709,219 @@ async function handleMacroStoreAction(
             success: false,
             error: error instanceof Error ? error.message : "Unknown error",
         };
+    }
+}
+
+// Entity operations handlers for Phase 1 implementation
+async function handleSearchByEntities(
+    parameters: { entities: string[]; url?: string; maxResults?: number },
+    context: SessionContext<BrowserActionContext>,
+): Promise<any> {
+    try {
+        const websiteCollection = context.agentContext.websiteCollection;
+        if (!websiteCollection) {
+            return { results: [], error: "Website collection not available" };
+        }
+
+        // Use existing searchByEntities method from website collection
+        const results = await websiteCollection.searchByEntities(parameters.entities);
+        
+        return {
+            results: results.slice(0, parameters.maxResults || 20).map(docPart => ({
+                url: docPart.metadata.url,
+                title: docPart.metadata.title || docPart.metadata.url,
+                domain: docPart.metadata.domain || "unknown",
+                relevance: 0.8, // Could be enhanced with actual scoring
+                snippet: docPart.textChunks?.join(" ").substring(0, 200) || "",
+            }))
+        };
+    } catch (error) {
+        console.error("Error in handleSearchByEntities:", error);
+        return { 
+            results: [], 
+            error: error instanceof Error ? error.message : "Unknown error" 
+        };
+    }
+}
+
+async function handleGetEntityRelationships(
+    parameters: { 
+        entityName: string;
+        options?: {
+            includeCoOccurrence?: boolean;
+            includeDomainBased?: boolean;
+            includeFrequentTogether?: boolean;
+            maxTotal?: number;
+            minStrength?: number;
+        };
+    },
+    context: SessionContext<BrowserActionContext>,
+): Promise<any> {
+    try {
+        const websiteCollection = context.agentContext.websiteCollection;
+        if (!websiteCollection || !websiteCollection.knowledgeEntities) {
+            return { relationships: [], error: "Knowledge entities table not available" };
+        }
+
+        // Use Phase 2 advanced relationship inference engine
+        const relationshipEngine = new EntityRelationshipInference(websiteCollection);
+        const relationships = await relationshipEngine.inferAllRelationships(
+            parameters.entityName,
+            parameters.options || {}
+        );
+
+        return { relationships };
+    } catch (error) {
+        console.error("Error in handleGetEntityRelationships:", error);
+        return { 
+            relationships: [], 
+            error: error instanceof Error ? error.message : "Unknown error" 
+        };
+    }
+}
+
+async function handleGetEntityStats(
+    parameters: { 
+        entityName: string;
+        includeAdvanced?: boolean;
+    },
+    context: SessionContext<BrowserActionContext>,
+): Promise<any> {
+    try {
+        const websiteCollection = context.agentContext.websiteCollection;
+        if (!websiteCollection || !websiteCollection.knowledgeEntities) {
+            return { stats: null, error: "Knowledge entities table not available" };
+        }
+
+        if (parameters.includeAdvanced) {
+            // Use Phase 2 advanced statistics calculator
+            const statsCalculator = new EntityStatisticsCalculator(websiteCollection);
+            const stats = await statsCalculator.calculateComprehensiveStats(parameters.entityName);
+            return { stats };
+        } else {
+            // Use basic Phase 1 statistics
+            const stats = await calculateEntityStats(
+                parameters.entityName,
+                websiteCollection
+            );
+            return { stats };
+        }
+    } catch (error) {
+        console.error("Error in handleGetEntityStats:", error);
+        return { 
+            stats: null, 
+            error: error instanceof Error ? error.message : "Unknown error" 
+        };
+    }
+}
+
+// Entity relationship inference using co-occurrence patterns
+async function inferEntityRelationships(
+    entityName: string,
+    websiteCollection: website.WebsiteCollection,
+): Promise<any[]> {
+    if (!websiteCollection.knowledgeEntities) {
+        return [];
+    }
+
+    try {
+        // Find entities that appear on same URLs with target entity
+        const coOccurrenceQuery = `
+            SELECT 
+                e2.entityName,
+                e2.entityType,
+                COUNT(*) as coOccurrenceCount,
+                AVG(e2.confidence) as avgConfidence,
+                GROUP_CONCAT(e2.url) as evidenceUrls
+            FROM knowledgeEntities e1
+            JOIN knowledgeEntities e2 ON e1.url = e2.url
+            WHERE e1.entityName = ? AND e2.entityName != ?
+            GROUP BY e2.entityName, e2.entityType
+            ORDER BY coOccurrenceCount DESC, avgConfidence DESC
+            LIMIT 20
+        `;
+
+        // Cast to KnowledgeEntityTable to access the db property
+        const knowledgeTable = websiteCollection.knowledgeEntities as any;
+        const results = knowledgeTable.db
+            .prepare(coOccurrenceQuery)
+            .all(entityName, entityName);
+
+        return results.map((row: any) => ({
+            relatedEntity: row.entityName,
+            entityType: row.entityType,
+            relationshipType: "co_occurs_with",
+            strength: Math.min(0.9, (row.coOccurrenceCount * row.avgConfidence) / 10),
+            evidenceSources: row.evidenceUrls?.split(',') || [],
+            coOccurrenceCount: row.coOccurrenceCount,
+            confidence: row.avgConfidence,
+        }));
+    } catch (error) {
+        console.error("Error in inferEntityRelationships:", error);
+        return [];
+    }
+}
+
+// Entity statistics calculation
+async function calculateEntityStats(
+    entityName: string,
+    websiteCollection: website.WebsiteCollection,
+): Promise<any> {
+    if (!websiteCollection.knowledgeEntities) {
+        return null;
+    }
+
+    try {
+        // Basic statistics query
+        const basicStatsQuery = `
+            SELECT 
+                COUNT(*) as totalMentions,
+                COUNT(DISTINCT url) as uniqueUrls,
+                COUNT(DISTINCT domain) as uniqueDomains,
+                AVG(confidence) as avgConfidence,
+                MIN(extractionDate) as firstSeen,
+                MAX(extractionDate) as lastSeen
+            FROM knowledgeEntities 
+            WHERE entityName = ?
+        `;
+
+        // Cast to KnowledgeEntityTable to access the db property
+        const knowledgeTable = websiteCollection.knowledgeEntities as any;
+        const basicStats = knowledgeTable.db
+            .prepare(basicStatsQuery)
+            .get(entityName);
+
+        // Top domains query
+        const topDomainsQuery = `
+            SELECT domain, COUNT(*) as count
+            FROM knowledgeEntities 
+            WHERE entityName = ?
+            GROUP BY domain
+            ORDER BY count DESC
+            LIMIT 5
+        `;
+
+        const topDomains = knowledgeTable.db
+            .prepare(topDomainsQuery)
+            .all(entityName);
+
+        // Get relationship count
+        const relationships = await inferEntityRelationships(entityName, websiteCollection);
+
+        return {
+            totalMentions: basicStats?.totalMentions || 0,
+            uniqueUrls: basicStats?.uniqueUrls || 0,
+            uniqueDomains: basicStats?.uniqueDomains || 0,
+            topDomains: topDomains.map((d: any) => d.domain),
+            avgConfidence: basicStats?.avgConfidence || 0,
+            firstSeen: basicStats?.firstSeen || new Date().toISOString(),
+            lastSeen: basicStats?.lastSeen || new Date().toISOString(),
+            entityTypes: [], // Could be enhanced with entity type query
+            relationshipCount: relationships.length,
+        };
+    } catch (error) {
+        console.error("Error in calculateEntityStats:", error);
+        return null;
     }
 }
 

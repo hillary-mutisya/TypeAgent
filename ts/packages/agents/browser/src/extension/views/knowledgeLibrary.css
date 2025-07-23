@@ -4254,6 +4254,185 @@ body {
   background: #dc3545;
 }
 
+/* Enhanced Entity List Styles */
+.enhanced-entity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.enhanced-entity-list .entity-pill {
+  background: linear-gradient(135deg, #f8f9ff 0%, #e8ebff 100%);
+  border: 1px solid #e9ecef;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.enhanced-entity-list .entity-pill::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 100%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  transition: width 0.3s ease;
+  z-index: 0;
+}
+
+.enhanced-entity-list .entity-pill:hover::before {
+  width: 100%;
+}
+
+.enhanced-entity-list .entity-pill:hover {
+  border-color: #667eea;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+  transform: translateY(-1px);
+}
+
+.enhanced-entity-list .entity-pill:hover .pill-content,
+.enhanced-entity-list .entity-pill:hover .pill-icon {
+  color: white;
+  z-index: 1;
+  position: relative;
+}
+
+.enhanced-entity-list .entity-pill:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(102, 126, 234, 0.2);
+}
+
+.enhanced-entity-list .pill-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: rgba(102, 126, 234, 0.1);
+  border-radius: 0.25rem;
+  color: #667eea;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+  position: relative;
+  z-index: 1;
+}
+
+.enhanced-entity-list .pill-content {
+  position: relative;
+  z-index: 1;
+}
+
+.enhanced-entity-list .pill-name {
+  font-weight: 600;
+  font-size: 0.875rem;
+  margin-bottom: 0.125rem;
+  color: var(--text-primary);
+  transition: color 0.2s ease;
+}
+
+.enhanced-entity-list .pill-type {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: capitalize;
+  transition: color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.enhanced-entity-list .pill-type i {
+  margin-right: 0.25rem;
+}
+
+.enhanced-entity-list .pill-action-hint {
+  opacity: 0;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  transition: opacity 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.enhanced-entity-list .entity-pill:hover .pill-action-hint {
+  opacity: 1;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.enhanced-entity-list .entity-pill[title]:hover::after {
+  content: '\f1c1';
+  font-family: 'bootstrap-icons';
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.75rem;
+  z-index: 2;
+}
+
+.recent-items-header {
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.recent-items-header i {
+  margin-right: 0.5rem;
+  color: #667eea;
+}
+
+.recent-items-header small {
+  font-weight: 400;
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+/* Section descriptions */
+.section-description {
+  margin-top: 0.5rem;
+}
+
+.section-description p {
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.section-description i {
+  color: #667eea;
+}
+
+/* Enhanced Graph View Overlay Styles */
+.enhanced-graph-view-overlay {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.enhanced-graph-header {
+  backdrop-filter: blur(10px);
+}
+
+.enhanced-graph-header .btn {
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.enhanced-graph-header .btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.8);
+}
+
+#enhanced-graph-content {
+  background: linear-gradient(135deg, #f8f9ff 0%, #ffffff 100%);
+}
+
 /* Motion preferences */
 @media (prefers-reduced-motion: reduce) {
   .modal-entering .modal-dialog,
@@ -4264,8 +4443,11 @@ body {
   .status-updating,
   .file-item-enter,
   .file-item-exit,
-  .drop-success {
+  .drop-success,
+  .enhanced-entity-list .entity-pill,
+  .enhanced-entity-list .entity-pill::before {
     animation: none !important;
+    transition: none !important;
   }
 
   .file-drop-zone.drag-over {
@@ -4273,7 +4455,8 @@ body {
   }
 
   .import-option:hover,
-  .file-item:hover {
+  .file-item:hover,
+  .enhanced-entity-list .entity-pill:hover {
     transform: none !important;
   }
 }

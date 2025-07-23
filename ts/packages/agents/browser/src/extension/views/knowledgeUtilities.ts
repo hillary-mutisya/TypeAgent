@@ -267,7 +267,7 @@ export class ChromeExtensionService {
             type: "searchWebMemories",
             parameters: {
                 query,
-                generateAnswer: true,
+                generateAnswer: false, //TODO: re-enable after perf investigation
                 includeRelatedEntities: true,
                 enableAdvancedSearch: true,
                 limit: 50,
@@ -439,14 +439,42 @@ export class ChromeExtensionService {
 
     async searchByEntities(
         entities: string[],
-        url: string,
-        maxResults: number,
+        url?: string,
+        maxResults?: number,
     ): Promise<any> {
         return this.sendMessage({
             type: "searchByEntities",
             entities,
             url,
-            maxResults,
+            maxResults: maxResults || 20,
+        });
+    }
+
+    async getEntityRelationships(
+        entityName: string,
+        options?: {
+            includeCoOccurrence?: boolean;
+            includeDomainBased?: boolean;
+            includeFrequentTogether?: boolean;
+            maxTotal?: number;
+            minStrength?: number;
+        }
+    ): Promise<any> {
+        return this.sendMessage({
+            type: "getEntityRelationships",
+            entityName,
+            options,
+        });
+    }
+
+    async getEntityStats(
+        entityName: string,
+        includeAdvanced?: boolean
+    ): Promise<any> {
+        return this.sendMessage({
+            type: "getEntityStats",
+            entityName,
+            includeAdvanced,
         });
     }
 

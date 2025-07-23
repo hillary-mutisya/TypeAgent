@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 import { AnalyticsServices } from "./knowledgeUtilities";
+import { EnhancedEntityGraphView } from "./enhancedEntityGraphView";
 
 export class KnowledgeAnalyticsPanel {
     private container: HTMLElement;
@@ -538,13 +539,18 @@ export class KnowledgeAnalyticsPanel {
             .slice(0, 10)
             .map(
                 (entity) => `
-            <div class="entity-pill clickable" data-entity-name="${this.escapeHtml(entity.name || "Unknown Entity")}" title="Click to view in Entity Graph">
+            <div class="entity-pill clickable" data-entity-name="${this.escapeHtml(entity.name || "Unknown Entity")}" title="🚀 Click to explore '${this.escapeHtml(entity.name || "Unknown Entity")}' in Enhanced Graph View">
                 <div class="pill-icon">
-                    <i class="bi bi-diagram-2"></i>
+                    <i class="bi bi-diagram-3"></i>
                 </div>
                 <div class="pill-content">
                     <div class="pill-name">${this.escapeHtml(entity.name || "Unknown Entity")}</div>
-                    <div class="pill-type">${this.escapeHtml(entity.type || "Unknown")}</div>
+                    <div class="pill-type">
+                        <i class="bi bi-tag"></i> ${this.escapeHtml(entity.type || "Unknown")}
+                        <span class="pill-action-hint">
+                            <i class="bi bi-cursor-fill"></i> Click to explore
+                        </span>
+                    </div>
                 </div>
             </div>
         `,
@@ -553,15 +559,15 @@ export class KnowledgeAnalyticsPanel {
 
         container.innerHTML = entitiesHtml;
 
-        // Add click handlers for entity navigation
+        // Add click handlers for entity navigation to enhanced graph view
         container.querySelectorAll(".entity-pill.clickable").forEach((pill) => {
             pill.addEventListener("click", (e) => {
                 const entityName = (
                     e.currentTarget as HTMLElement
                 ).getAttribute("data-entity-name");
                 if (entityName) {
-                    // Navigate to entity graph view with the selected entity
-                    window.location.href = `entityGraphView.html?entity=${encodeURIComponent(entityName)}`;
+                    // Show enhanced graph view for the selected entity
+                    this.showEnhancedGraphView(entityName);
                 }
             });
         });
@@ -654,6 +660,292 @@ export class KnowledgeAnalyticsPanel {
             }
         } catch (error) {
             return "Unknown";
+        }
+    }
+
+    /**
+     * Show the enhanced graph view for a selected entity
+     */
+    private showEnhancedGraphView(entityName: string): void {
+        console.log(`🚀 Opening enhanced graph view for entity: ${entityName}`);
+        
+        // Show loading notification
+        this.showLoadingNotification(`Loading enhanced graph view for "${entityName}"...`);
+        
+        try {
+            // Create or get enhanced graph view container
+            let graphContainer = document.getElementById('enhanced-graph-view-container');
+            if (!graphContainer) {
+                graphContainer = this.createEnhancedGraphViewContainer();
+            }
+            
+            // Show the graph container
+            graphContainer.style.display = 'block';
+            
+            // Hide the main analytics page
+            const analyticsPage = document.getElementById('analytics-page');
+            if (analyticsPage) {
+                analyticsPage.style.display = 'none';
+            }
+            
+            // Initialize enhanced graph view with the entity
+            let enhancedGraphView: EnhancedEntityGraphView;
+            try {
+                enhancedGraphView = new EnhancedEntityGraphView({
+                    enableRealtimeExpansion: true,
+                    autoLayoutUpdate: true,
+                    performanceMode: "balanced",
+                    defaultExpansionDepth: 2,
+                    enableNetworkAnalysis: true,
+                    cacheSize: 100
+                });
+            } catch (initError) {
+                console.error('Failed to initialize enhanced graph view:', initError);
+                this.hideLoadingNotification();
+                this.showErrorNotification('Enhanced graph view unavailable, redirecting to standard view...');
+                setTimeout(() => {
+                    window.location.href = `entityGraphView.html?entity=${encodeURIComponent(entityName)}`;
+                }, 1500);
+                return;
+            }
+            
+            // Set a timeout for the loading process
+            const loadingTimeout = setTimeout(() => {
+                this.hideLoadingNotification();
+                this.showErrorNotification('Loading timed out. Redirecting to standard entity view...');
+                this.hideEnhancedGraphView();
+                window.location.href = `entityGraphView.html?entity=${encodeURIComponent(entityName)}`;
+            }, 15000); // 15 second timeout
+
+            // Search and visualize the entity with error handling
+            enhancedGraphView.searchAndVisualizeEntity(entityName, {
+                expansionDepth: 2,
+                enableNetworkAnalysis: true
+            }).then(() => {
+                // Success - clear the timeout
+                clearTimeout(loadingTimeout);
+            }).catch((error) => {
+                console.error('Failed to load entity in enhanced graph view:', error);
+                clearTimeout(loadingTimeout);
+                this.hideLoadingNotification();
+                this.showErrorNotification(`Failed to load enhanced graph view: ${error instanceof Error ? error.message : String(error)}`);
+                
+                // Hide the graph view and return to analytics
+                this.hideEnhancedGraphView();
+                
+                // Fallback to traditional entity graph view
+                setTimeout(() => {
+                    window.location.href = `entityGraphView.html?entity=${encodeURIComponent(entityName)}`;
+                }, 2000);
+            });
+            
+            // Make it globally accessible for debugging
+            (window as any).currentEnhancedGraphView = enhancedGraphView;
+            
+            // Hide loading notification
+            this.hideLoadingNotification();
+            
+            // Show success notification
+            this.showSuccessNotification(`Enhanced graph view loaded for "${entityName}"`);
+            
+        } catch (error) {
+            console.error('❌ Failed to show enhanced graph view:', error);
+            
+            // Hide loading notification
+            this.hideLoadingNotification();
+            
+            // Show error notification
+            this.showErrorNotification(`Failed to load enhanced graph view: ${error instanceof Error ? error.message : String(error)}`);
+            
+            // Fallback to traditional navigation
+            window.location.href = `entityGraphView.html?entity=${encodeURIComponent(entityName)}`;
+        }
+    }
+    
+    /**
+     * Create the enhanced graph view container
+     */
+    private createEnhancedGraphViewContainer(): HTMLElement {
+        const container = document.createElement('div');
+        container.id = 'enhanced-graph-view-container';
+        container.className = 'enhanced-graph-view-overlay';
+        container.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: white;
+            z-index: 9999;
+            display: none;
+            overflow: auto;
+        `;
+        
+        // Add header with back button
+        const header = document.createElement('div');
+        header.className = 'enhanced-graph-header';
+        header.style.cssText = `
+            position: sticky;
+            top: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 10000;
+        `;
+        
+        const backButton = document.createElement('button');
+        backButton.innerHTML = '<i class="bi bi-arrow-left"></i> Back to Analytics';
+        backButton.className = 'btn btn-outline-light btn-sm';
+        backButton.addEventListener('click', () => {
+            this.hideEnhancedGraphView();
+        });
+        
+        const title = document.createElement('h5');
+        title.innerHTML = '<i class="bi bi-diagram-3"></i> Enhanced Entity Graph View';
+        title.style.margin = '0';
+        
+        header.appendChild(backButton);
+        header.appendChild(title);
+        
+        // Add main content area
+        const content = document.createElement('div');
+        content.id = 'enhanced-graph-content';
+        content.style.cssText = `
+            padding: 2rem;
+            height: calc(100vh - 80px);
+            display: flex;
+            flex-direction: column;
+        `;
+        
+        container.appendChild(header);
+        container.appendChild(content);
+        
+        // Add to body
+        document.body.appendChild(container);
+        
+        return container;
+    }
+    
+    /**
+     * Hide the enhanced graph view and return to analytics
+     */
+    private hideEnhancedGraphView(): void {
+        const graphContainer = document.getElementById('enhanced-graph-view-container');
+        if (graphContainer) {
+            graphContainer.style.display = 'none';
+        }
+        
+        const analyticsPage = document.getElementById('analytics-page');
+        if (analyticsPage) {
+            analyticsPage.style.display = 'block';
+        }
+        
+        // Clean up the enhanced graph view instance
+        if ((window as any).currentEnhancedGraphView) {
+            delete (window as any).currentEnhancedGraphView;
+        }
+    }
+
+    /**
+     * Show loading notification
+     */
+    private showLoadingNotification(message: string): void {
+        this.createNotification(message, 'loading');
+    }
+    
+    /**
+     * Show success notification
+     */
+    private showSuccessNotification(message: string): void {
+        this.createNotification(message, 'success');
+    }
+    
+    /**
+     * Show error notification
+     */
+    private showErrorNotification(message: string): void {
+        this.createNotification(message, 'error');
+    }
+    
+    /**
+     * Hide loading notification
+     */
+    private hideLoadingNotification(): void {
+        const notification = document.querySelector('.graph-view-notification.loading');
+        if (notification) {
+            notification.remove();
+        }
+    }
+    
+    /**
+     * Create a notification element
+     */
+    private createNotification(message: string, type: 'loading' | 'success' | 'error'): void {
+        // Remove existing notifications of the same type
+        document.querySelectorAll(`.graph-view-notification.${type}`).forEach(n => n.remove());
+        
+        const notification = document.createElement('div');
+        notification.className = `graph-view-notification ${type}`;
+        
+        const icon = type === 'loading' ? 'bi-hourglass-split' : 
+                    type === 'success' ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill';
+        
+        const bgColor = type === 'loading' ? '#667eea' :
+                       type === 'success' ? '#28a745' : '#dc3545';
+        
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: ${bgColor};
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10001;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 0.875rem;
+            max-width: 350px;
+            animation: slideInRight 0.3s ease;
+        `;
+        
+        notification.innerHTML = `
+            <i class="bi ${icon}"></i>
+            <span>${this.escapeHtml(message)}</span>
+        `;
+        
+        // Add slide in animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideInRight {
+                from {
+                    transform: translateX(100%);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+        
+        document.body.appendChild(notification);
+        
+        // Auto-remove success and error notifications
+        if (type !== 'loading') {
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.style.animation = 'slideInRight 0.3s ease reverse';
+                    setTimeout(() => notification.remove(), 300);
+                }
+            }, 3000);
         }
     }
 

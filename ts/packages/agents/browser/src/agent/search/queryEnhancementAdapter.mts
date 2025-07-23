@@ -283,7 +283,7 @@ export class QueryEnhancementAdapter {
 
             case "summarize":
                 enhanced.limit = Math.max(enhanced.limit || 20, 30);
-                enhanced.generateAnswer = true;
+                enhanced.generateAnswer = false; // TODO: re-enable after perf investigation
                 debug(
                     `Configured for summarization: limit=${enhanced.limit}, generateAnswer=true`,
                 );

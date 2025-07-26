@@ -803,9 +803,6 @@ async function generateSmartSuggestedQuestions(
     const websiteCollection = context.agentContext.websiteCollection;
     if (websiteCollection && websiteCollection.visitFrequency) {
         try {
-            // Domain visit history - simplified approach for now
-            console.log("Checking domain visit data for enhanced questions");
-
             if (domain) {
                 questions.push(`When did I first visit ${domain}?`);
                 questions.push(`What's my learning journey on ${domain}?`);
@@ -2641,7 +2638,62 @@ export async function getAnalyticsData(
     context: SessionContext<BrowserActionContext>,
 ): Promise<AnalyticsDataResponse> {
     try {
-        // Single coordinated data collection using Promise.all for efficiency
+
+        // Time individual queries to identify bottlenecks
+
+        const knowledgeStatsPromise = getDetailedKnowledgeStats(
+            {
+                includeQuality: parameters.includeQuality !== false,
+                includeProgress: parameters.includeProgress !== false,
+                timeRange: 30,
+            },
+            context,
+        ).then(result => {
+            // console.timeEnd("📈 Knowledge Stats Query");
+            // console.log("✅ Knowledge Stats completed, entities:", result.totalEntities, "topics:", result.totalTopics);
+            return result;
+        });
+
+        const topDomainsPromise = getTopDomains(
+            {
+                limit: parameters.topDomainsLimit || 10,
+            },
+            context,
+        ).then(result => {
+            // console.timeEnd("🌐 Top Domains Query");
+            // console.log("✅ Top Domains completed, found:", result.domains?.length || 0, "domains");
+            return result;
+        });
+
+        const activityTrendsPromise = getActivityTrends(
+            {
+                timeRange: parameters.timeRange || "30d",
+                granularity: parameters.activityGranularity || "day",
+            },
+            context,
+        ).then(result => {
+            return result;
+        });
+
+        console.time("🔬 Extraction Analytics Query");
+        const extractionAnalyticsPromise = getExtractionAnalytics(
+            {
+                timeRange: parameters.timeRange || "30d",
+            },
+            context,
+        ).then(result => {
+            return result;
+        });
+
+        console.time("🕒 Recent Knowledge Items Query");
+        const recentKnowledgeItemsPromise = getRecentKnowledgeItems(
+            { limit: 10, type: "all" }, 
+            context
+        ).then(result => {
+            return result;
+        });
+
+        // Execute all data collection queries in parallel for performance
         const [
             knowledgeStats,
             topDomains,
@@ -2649,34 +2701,11 @@ export async function getAnalyticsData(
             extractionAnalytics,
             recentKnowledgeItems,
         ] = await Promise.all([
-            getDetailedKnowledgeStats(
-                {
-                    includeQuality: parameters.includeQuality !== false,
-                    includeProgress: parameters.includeProgress !== false,
-                    timeRange: 30,
-                },
-                context,
-            ),
-            getTopDomains(
-                {
-                    limit: parameters.topDomainsLimit || 10,
-                },
-                context,
-            ),
-            getActivityTrends(
-                {
-                    timeRange: parameters.timeRange || "30d",
-                    granularity: parameters.activityGranularity || "day",
-                },
-                context,
-            ),
-            getExtractionAnalytics(
-                {
-                    timeRange: parameters.timeRange || "30d",
-                },
-                context,
-            ),
-            getRecentKnowledgeItems({ limit: 10, type: "all" }, context),
+            knowledgeStatsPromise,
+            topDomainsPromise,
+            activityTrendsPromise,
+            extractionAnalyticsPromise,
+            recentKnowledgeItemsPromise,
         ]);
 
         // Get basic website statistics from websiteCollection

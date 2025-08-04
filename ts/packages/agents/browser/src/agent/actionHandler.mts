@@ -90,6 +90,7 @@ import { createExternalBrowserClient } from "./rpc/externalBrowserControlClient.
 import { deleteCachedSchema } from "./crossword/cachedSchema.mjs";
 import { getCrosswordCommandHandlerTable } from "./crossword/commandHandler.mjs";
 import { MacroStore } from "./storage/index.mjs";
+import { TrendActionHandler } from "./trends/trendActionHandler.mjs";
 
 const debug = registerDebug("typeagent:browser:action");
 const debugWebSocket = registerDebug("typeagent:browser:ws");
@@ -398,6 +399,25 @@ async function processBrowserAgentMessage(
                 JSON.stringify({
                     id: data.id,
                     result: websiteResult,
+                }),
+            );
+            break;
+        }
+        case "getTrends":
+        case "getTrendDetails":
+        case "getVisualization":
+        case "exportTrends":
+        case "getTrendAnalytics":
+        case "clearTrendCache": {
+            const trendResult = await handleTrendAction(
+                data.method,
+                data.params,
+                context,
+            );
+            webSocket.send(
+                JSON.stringify({
+                    id: data.id,
+                    result: trendResult,
                 }),
             );
             break;
@@ -1785,6 +1805,50 @@ async function handleWebsiteAction(
 
         default:
             throw new Error(`Unknown website action: ${actionName}`);
+    }
+}
+
+async function handleTrendAction(
+    actionName: string,
+    parameters: any,
+    context: SessionContext<BrowserActionContext>,
+): Promise<any> {
+    const macrosStore = context.agentContext.macrosStore;
+    
+    if (!macrosStore) {
+        return {
+            success: false,
+            error: "MacroStore not available",
+        };
+    }
+
+    // Access analytics manager from MacroStore
+    const analyticsManager = (macrosStore as any).analyticsManager;
+    
+    if (!analyticsManager) {
+        return {
+            success: false,
+            error: "Analytics manager not available",
+        };
+    }
+
+    const trendHandler = new TrendActionHandler(context, analyticsManager);
+    
+    switch (actionName) {
+        case "getTrends":
+            return await trendHandler.getTrends(parameters);
+        case "getTrendDetails":
+            return await trendHandler.getTrendDetails(parameters);
+        case "getVisualization":
+            return await trendHandler.getVisualization(parameters);
+        case "exportTrends":
+            return await trendHandler.exportTrends(parameters);
+        case "getTrendAnalytics":
+            return await trendHandler.getTrendAnalytics();
+        case "clearTrendCache":
+            return await trendHandler.clearTrendCache();
+        default:
+            throw new Error(`Unknown trend action: ${actionName}`);
     }
 }
 

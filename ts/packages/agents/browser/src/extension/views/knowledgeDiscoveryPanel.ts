@@ -2,16 +2,33 @@
 // Licensed under the MIT License.
 
 import { DiscoveryServices } from "./knowledgeUtilities";
+import { 
+    EnhancedDiscoveryServices, 
+    TrendingSectionData, 
+    ReadingPatternData, 
+    PopularContentData 
+} from "./enhancedDiscoveryServices";
 
 export class KnowledgeDiscoveryPanel {
     private container: HTMLElement;
     private services: DiscoveryServices;
+    private enhancedServices: EnhancedDiscoveryServices | null = null;
     private discoverData: any = null;
+    private trendData: {
+        trending?: TrendingSectionData;
+        patterns?: ReadingPatternData;
+        popular?: PopularContentData;
+    } = {};
     private isConnected: boolean = true;
 
     constructor(container: HTMLElement, services: DiscoveryServices) {
         this.container = container;
         this.services = services;
+        
+        // Initialize enhanced services if available
+        if (services && 'chromeService' in services) {
+            this.enhancedServices = new EnhancedDiscoveryServices((services as any).chromeService);
+        }
     }
 
     async initialize(): Promise<void> {
@@ -21,7 +38,12 @@ export class KnowledgeDiscoveryPanel {
             emptyState.style.display = "none";
         }
 
-        await this.loadDiscoverData();
+        // Load both legacy and trend data
+        await Promise.all([
+            this.loadDiscoverData(),
+            this.loadTrendData()
+        ]);
+        
         this.renderContent();
     }
 
@@ -53,15 +75,47 @@ export class KnowledgeDiscoveryPanel {
         }
     }
 
+    async loadTrendData(): Promise<void> {
+        if (!this.enhancedServices || !this.isConnected) {
+            return;
+        }
+
+        try {
+            // Load trend data in parallel
+            const [trending, patterns, popular] = await Promise.all([
+                this.enhancedServices.getTrendingContent(),
+                this.enhancedServices.getReadingPatterns(),
+                this.enhancedServices.getPopularContent()
+            ]);
+
+            this.trendData = {
+                trending,
+                patterns,
+                popular
+            };
+        } catch (error) {
+            console.error('Error loading trend data:', error);
+            // Don't fail completely, just proceed without trend data
+        }
+    }
+
     renderContent(): void {
         if (!this.discoverData) return;
 
-        const hasData =
+        // Check both legacy and trend data for content
+        const hasLegacyData =
             this.discoverData.trendingTopics?.length > 0 ||
             this.discoverData.readingPatterns?.some(
                 (p: any) => p.activity > 0,
             ) ||
             this.discoverData.popularPages?.length > 0;
+
+        const hasTrendData = 
+            (this.trendData.trending?.cards?.length ?? 0) > 0 ||
+            (this.trendData.patterns?.patterns?.length ?? 0) > 0 ||
+            (this.trendData.popular?.popularPages?.length ?? 0) > 0;
+
+        const hasData = hasLegacyData || hasTrendData;
 
         const emptyState = document.getElementById("discoverEmptyState");
         if (emptyState) {
@@ -76,7 +130,16 @@ export class KnowledgeDiscoveryPanel {
     }
 
     async refreshData(): Promise<void> {
-        await this.loadDiscoverData();
+        // Clear trend cache before refreshing
+        if (this.enhancedServices) {
+            await this.enhancedServices.clearTrendCache();
+        }
+        
+        await Promise.all([
+            this.loadDiscoverData(),
+            this.loadTrendData()
+        ]);
+        
         this.renderContent();
     }
 
@@ -135,9 +198,13 @@ export class KnowledgeDiscoveryPanel {
 
     private renderTrendingContent(): void {
         const container = document.getElementById("trendingContent");
-        if (!container || !this.discoverData) return;
+        if (!container) return;
 
-        if (this.discoverData.trendingTopics.length === 0) {
+        // Use trend data if available, otherwise fall back to legacy data
+        const trendCards = this.trendData.trending?.cards || [];
+        const legacyTopics = this.discoverData?.trendingTopics || [];
+
+        if (trendCards.length === 0 && legacyTopics.length === 0) {
             container.innerHTML = `
                 <div class="empty-state">
                     <i class="bi bi-graph-up-arrow"></i>
@@ -148,7 +215,16 @@ export class KnowledgeDiscoveryPanel {
             return;
         }
 
-        container.innerHTML = this.discoverData.trendingTopics
+        // Render trend cards if available
+        if (trendCards.length > 0) {
+            container.innerHTML = trendCards
+                .map(card => this.renderTrendCard(card))
+                .join("");
+            return;
+        }
+
+        // Fall back to legacy rendering
+        container.innerHTML = legacyTopics
             .map(
                 (topic: any) => `
                 <div class="card trending-topic-card trend-${topic.trend} discover-card mb-2">
@@ -171,16 +247,75 @@ export class KnowledgeDiscoveryPanel {
             .join("");
     }
 
+    private renderTrendCard(card: any): string {
+        const typeIcon = this.getTrendTypeIcon(card.trendType);
+        const confidencePercent = Math.round(card.confidence * 100);
+        
+        return `
+            <div class="card trend-card ${card.trendType} ${card.isActive ? 'active' : 'inactive'} discover-card mb-2" 
+                 data-trend-id="${card.id}">
+                <div class="card-body">
+                    <div class="d-flex align-items-start justify-content-between mb-2">
+                        <h6 class="card-title">
+                            <span class="trend-icon">${typeIcon}</span>
+                            ${this.escapeHtml(card.trendName)}
+                            ${card.isActive ? '<span class="badge bg-success ms-2">Active</span>' : ''}
+                        </h6>
+                        <span class="confidence-badge">${confidencePercent}%</span>
+                    </div>
+                    
+                    <div class="trend-stats mb-2">
+                        <span class="stat me-3">
+                            <i class="bi bi-globe"></i> ${card.websiteCount} sites
+                        </span>
+                        <span class="stat me-3">
+                            <i class="bi bi-collection"></i> ${card.domainCount} domains
+                        </span>
+                        <span class="stat">
+                            <i class="bi bi-clock"></i> ${card.duration}
+                        </span>
+                    </div>
+
+                    ${card.topTopics.length > 0 ? `
+                        <div class="trend-topics mb-2">
+                            ${card.topTopics.slice(0, 3).map((topic: string) => 
+                                `<span class="badge bg-light text-dark me-1">${this.escapeHtml(topic)}</span>`
+                            ).join('')}
+                        </div>
+                    ` : ''}
+
+                    ${card.insights.length > 0 ? `
+                        <div class="trend-insights">
+                            <small class="text-muted">
+                                <i class="bi bi-lightbulb"></i> ${this.escapeHtml(card.insights[0])}
+                            </small>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }
+
+    private getTrendTypeIcon(type: string): string {
+        switch (type) {
+            case 'ephemeral': return '⚡';
+            case 'persistent': return '🎯';
+            case 'recurring': return '🔄';
+            case 'seasonal': return '📅';
+            default: return '📊';
+        }
+    }
+
     private renderReadingPatterns(): void {
         const container = document.getElementById("readingPatterns");
-        if (!container || !this.discoverData) return;
+        if (!container) return;
 
-        if (
-            this.discoverData.readingPatterns.length === 0 ||
-            this.discoverData.readingPatterns.every(
-                (p: any) => p.activity === 0,
-            )
-        ) {
+        // Use trend-based patterns if available
+        const trendPatterns = this.trendData.patterns?.patterns || [];
+        const legacyPatterns = this.discoverData?.readingPatterns || [];
+
+        if (trendPatterns.length === 0 && (legacyPatterns.length === 0 || 
+            legacyPatterns.every((p: any) => p.activity === 0))) {
             container.innerHTML = `
                 <div class="empty-state">
                     <i class="bi bi-clock-history"></i>
@@ -191,16 +326,33 @@ export class KnowledgeDiscoveryPanel {
             return;
         }
 
-        const maxActivity = Math.max(
-            ...this.discoverData.readingPatterns.map((p: any) => p.activity),
-        );
+        // Render trend-based patterns if available
+        if (trendPatterns.length > 0) {
+            container.innerHTML = `
+                <div class="patterns-grid">
+                    ${trendPatterns.map(pattern => this.renderPatternCard(pattern)).join('')}
+                </div>
+                ${this.trendData.patterns?.insights ? `
+                    <div class="pattern-insights mt-3">
+                        <h6><i class="bi bi-lightbulb"></i> Insights</h6>
+                        ${this.trendData.patterns.insights.map(insight => 
+                            `<div class="insight-item"><small class="text-muted">${this.escapeHtml(insight)}</small></div>`
+                        ).join('')}
+                    </div>
+                ` : ''}
+            `;
+            return;
+        }
+
+        // Fall back to legacy rendering
+        const maxActivity = Math.max(...legacyPatterns.map((p: any) => p.activity));
 
         container.innerHTML = `
             <div class="card discover-card">
                 <div class="card-body">
                     <h6 class="card-title">Weekly Activity Pattern</h6>
                     <div class="reading-pattern-chart">
-                        ${this.discoverData.readingPatterns
+                        ${legacyPatterns
                             .map(
                                 (pattern: any) => `
                                 <div class="pattern-item ${pattern.peak ? "peak" : ""}">
@@ -212,21 +364,73 @@ export class KnowledgeDiscoveryPanel {
                             .join("")}
                     </div>
                     <div class="text-center mt-2">
-                        <small class="text-muted">Most active day: ${this.discoverData.readingPatterns.find((p: any) => p.peak)?.timeframe || "None"}</small>
+                        <small class="text-muted">Most active day: ${legacyPatterns.find((p: any) => p.peak)?.timeframe || "None"}</small>
                     </div>
                 </div>
             </div>
         `;
     }
 
+    private renderPatternCard(pattern: any): string {
+        const confidencePercent = Math.round(pattern.confidence * 100);
+        const frequencyIcon = this.getFrequencyIcon(pattern.frequency);
+        
+        return `
+            <div class="card pattern-card discover-card mb-2">
+                <div class="card-body">
+                    <div class="d-flex align-items-start justify-content-between mb-2">
+                        <h6 class="card-title">
+                            ${frequencyIcon} ${this.escapeHtml(pattern.patternName)}
+                        </h6>
+                        <span class="consistency-badge">${confidencePercent}%</span>
+                    </div>
+                    
+                    <div class="pattern-details mb-2">
+                        <span class="frequency-tag badge bg-primary">${pattern.frequency}</span>
+                        ${pattern.timeOfDay ? `<span class="time-tag badge bg-light text-dark ms-1">${pattern.timeOfDay}</span>` : ''}
+                        ${pattern.dayOfWeek ? `<span class="day-tag badge bg-light text-dark ms-1">${pattern.dayOfWeek}</span>` : ''}
+                    </div>
+
+                    ${pattern.domains.length > 0 ? `
+                        <div class="pattern-domains mb-2">
+                            <small class="text-muted">
+                                <i class="bi bi-globe"></i> 
+                                ${pattern.domains.slice(0, 2).map((domain: string) => this.escapeHtml(domain)).join(', ')}
+                                ${pattern.domains.length > 2 ? ` +${pattern.domains.length - 2} more` : ''}
+                            </small>
+                        </div>
+                    ` : ''}
+
+                    ${pattern.insights.length > 0 ? `
+                        <div class="pattern-insight">
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle"></i> ${this.escapeHtml(pattern.insights[0])}
+                            </small>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }
+
+    private getFrequencyIcon(frequency: string): string {
+        switch (frequency) {
+            case 'daily': return '📅';
+            case 'weekly': return '📆';
+            case 'monthly': return '🗓️';
+            default: return '🔄';
+        }
+    }
+
     private renderPopularPages(): void {
         const container = document.getElementById("popularPages");
         if (!container) return;
 
-        if (
-            !this.discoverData?.popularPages ||
-            this.discoverData.popularPages.length === 0
-        ) {
+        // Use trend-based popular content if available
+        const trendPopular = this.trendData.popular?.popularPages || [];
+        const legacyPopular = this.discoverData?.popularPages || [];
+
+        if (trendPopular.length === 0 && legacyPopular.length === 0) {
             container.innerHTML = `
                 <div class="empty-state">
                     <i class="bi bi-fire"></i>
@@ -237,8 +441,31 @@ export class KnowledgeDiscoveryPanel {
             return;
         }
 
-        // Convert popular pages to website format for rich rendering
-        const popularPagesAsWebsites = this.discoverData.popularPages.map(
+        // Use trend-based popular content if available
+        if (trendPopular.length > 0) {
+            const pagesHtml = trendPopular
+                .map(page => this.renderPopularPageCard(page))
+                .join("");
+
+            container.innerHTML = `
+                <div class="popular-pages-grid">
+                    ${pagesHtml}
+                </div>
+                ${this.trendData.popular?.analytics ? `
+                    <div class="popular-analytics mt-3">
+                        <small class="text-muted">
+                            <i class="bi bi-bar-chart"></i> 
+                            ${this.trendData.popular.analytics.totalTrends} active trends • 
+                            ${this.trendData.popular.analytics.totalWebsites} total pages
+                        </small>
+                    </div>
+                ` : ''}
+            `;
+            return;
+        }
+
+        // Fall back to legacy rendering
+        const popularPagesAsWebsites = legacyPopular.map(
             (page: any) => ({
                 url: page.url,
                 title: page.title,
@@ -254,7 +481,6 @@ export class KnowledgeDiscoveryPanel {
             }),
         );
 
-        // Use rich list view rendering similar to original
         const pagesHtml = popularPagesAsWebsites
             .map(
                 (website: any) => `
@@ -286,6 +512,50 @@ export class KnowledgeDiscoveryPanel {
             .join("");
 
         container.innerHTML = pagesHtml;
+    }
+
+    private renderPopularPageCard(page: any): string {
+        const trendScore = Math.round(page.trendScore * 100);
+        const categoryIcon = this.getCategoryIcon(page.category);
+
+        return `
+            <div class="card popular-page-card discover-card mb-2">
+                <div class="card-body">
+                    <div class="d-flex align-items-start justify-content-between mb-2">
+                        <h6 class="card-title">
+                            <a href="${page.url}" target="_blank" class="text-decoration-none">
+                                ${this.escapeHtml(page.title)}
+                            </a>
+                        </h6>
+                        <span class="trend-score-badge">${trendScore}%</span>
+                    </div>
+                    
+                    <p class="card-text small text-muted mb-2">
+                        ${this.escapeHtml(page.description)}
+                    </p>
+
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="page-meta">
+                            <span class="category-badge badge bg-light text-dark">
+                                ${categoryIcon} ${page.category}
+                            </span>
+                            <span class="visits-info ms-2 small text-muted">
+                                <i class="bi bi-eye"></i> ${page.visits} visits
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    private getCategoryIcon(category: string): string {
+        switch (category.toLowerCase()) {
+            case 'research topic': return '🔬';
+            case 'frequent domain': return '🌐';
+            case 'getting started': return '🚀';
+            default: return '📄';
+        }
     }
 
     private escapeHtml(text: string): string {

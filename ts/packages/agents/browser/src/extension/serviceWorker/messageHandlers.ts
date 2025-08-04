@@ -796,6 +796,278 @@ export async function handleMessage(
             }
         }
 
+        // Trend detection message handlers
+        case "getTrends": {
+            try {
+                const result = await sendActionToAgent({
+                    actionName: "getTrends",
+                    parameters: {
+                        minConfidence: message.minConfidence || 0.3,
+                        types: message.types || [],
+                        limit: message.limit || 20,
+                        includeHabits: message.includeHabits !== false,
+                        startDate: message.startDate,
+                        endDate: message.endDate,
+                    },
+                });
+
+                return {
+                    success: !result.error,
+                    trends: result.trends || [],
+                    totalCount: result.totalCount || 0,
+                    filters: result.filters || {},
+                    error: result.error,
+                };
+            } catch (error) {
+                console.error("Error getting trends:", error);
+                return {
+                    success: false,
+                    trends: [],
+                    totalCount: 0,
+                    error:
+                        error instanceof Error ? error.message : "Unknown error",
+                };
+            }
+        }
+
+        case "getTrendDetails": {
+            try {
+                const result = await sendActionToAgent({
+                    actionName: "getTrendDetails",
+                    parameters: {
+                        trendId: message.trendId,
+                    },
+                });
+
+                return {
+                    success: !result.error,
+                    details: result.details || null,
+                    error: result.error,
+                };
+            } catch (error) {
+                console.error("Error getting trend details:", error);
+                return {
+                    success: false,
+                    details: null,
+                    error:
+                        error instanceof Error ? error.message : "Unknown error",
+                };
+            }
+        }
+
+        case "getVisualization": {
+            try {
+                const result = await sendActionToAgent({
+                    actionName: "getVisualization",
+                    parameters: {
+                        type: message.type,
+                        minConfidence: message.minConfidence || 0.3,
+                        limit: message.limit || 10,
+                        startDate: message.startDate,
+                        endDate: message.endDate,
+                    },
+                });
+
+                return {
+                    success: !result.error,
+                    visualization: result.visualization || null,
+                    error: result.error,
+                };
+            } catch (error) {
+                console.error("Error getting visualization:", error);
+                return {
+                    success: false,
+                    visualization: null,
+                    error:
+                        error instanceof Error ? error.message : "Unknown error",
+                };
+            }
+        }
+
+        case "exportTrends": {
+            try {
+                const result = await sendActionToAgent({
+                    actionName: "exportTrends",
+                    parameters: {
+                        format: message.format || "json",
+                        minConfidence: message.minConfidence || 0.3,
+                        types: message.types || [],
+                    },
+                });
+
+                return {
+                    success: !result.error,
+                    report: result.report || null,
+                    format: result.format || message.format || "json",
+                    exportedAt: result.exportedAt || new Date().toISOString(),
+                    error: result.error,
+                };
+            } catch (error) {
+                console.error("Error exporting trends:", error);
+                return {
+                    success: false,
+                    report: null,
+                    format: message.format || "json",
+                    error:
+                        error instanceof Error ? error.message : "Unknown error",
+                };
+            }
+        }
+
+        case "getTrendAnalytics": {
+            try {
+                const result = await sendActionToAgent({
+                    actionName: "getTrendAnalytics",
+                    parameters: {},
+                });
+
+                return {
+                    success: !result.error,
+                    analytics: result.analytics || null,
+                    error: result.error,
+                };
+            } catch (error) {
+                console.error("Error getting trend analytics:", error);
+                return {
+                    success: false,
+                    analytics: null,
+                    error:
+                        error instanceof Error ? error.message : "Unknown error",
+                };
+            }
+        }
+
+        case "clearTrendCache": {
+            try {
+                const result = await sendActionToAgent({
+                    actionName: "clearTrendCache",
+                    parameters: {},
+                });
+
+                return {
+                    success: !result.error,
+                    message: result.message || "Trend cache cleared successfully",
+                    error: result.error,
+                };
+            } catch (error) {
+                console.error("Error clearing trend cache:", error);
+                return {
+                    success: false,
+                    error:
+                        error instanceof Error ? error.message : "Unknown error",
+                };
+            }
+        }
+
+        // Enhanced discovery handlers with trend integration
+        case "getTrendingContent": {
+            try {
+                // Get ephemeral and persistent trends for trending content
+                const result = await sendActionToAgent({
+                    actionName: "getTrends",
+                    parameters: {
+                        types: ["ephemeral", "persistent"],
+                        minConfidence: 0.4,
+                        limit: 6,
+                        includeHabits: false,
+                    },
+                });
+
+                return {
+                    success: !result.error,
+                    trends: result.trends || [],
+                    summary: {
+                        totalActive: (result.trends || []).filter((t: any) => t.isActive).length,
+                        totalFound: result.totalCount || 0,
+                        lastUpdated: new Date().toISOString(),
+                    },
+                    error: result.error,
+                };
+            } catch (error) {
+                console.error("Error getting trending content:", error);
+                return {
+                    success: false,
+                    trends: [],
+                    summary: {
+                        totalActive: 0,
+                        totalFound: 0,
+                        lastUpdated: new Date().toISOString(),
+                    },
+                    error:
+                        error instanceof Error ? error.message : "Unknown error",
+                };
+            }
+        }
+
+        case "getReadingPatterns": {
+            try {
+                // Get recurring trends for reading patterns
+                const result = await sendActionToAgent({
+                    actionName: "getTrends",
+                    parameters: {
+                        types: ["recurring"],
+                        minConfidence: 0.3,
+                        includeHabits: true,
+                        limit: 4,
+                    },
+                });
+
+                return {
+                    success: !result.error,
+                    patterns: result.trends || [],
+                    insights: await generatePatternInsights(result.trends || []),
+                    error: result.error,
+                };
+            } catch (error) {
+                console.error("Error getting reading patterns:", error);
+                return {
+                    success: false,
+                    patterns: [],
+                    insights: [],
+                    error:
+                        error instanceof Error ? error.message : "Unknown error",
+                };
+            }
+        }
+
+        case "getPopularContent": {
+            try {
+                // Get trend analytics and combine with website stats
+                const [trendsResult, statsResult] = await Promise.all([
+                    sendActionToAgent({
+                        actionName: "getTrendAnalytics",
+                        parameters: {},
+                    }),
+                    sendActionToAgent({
+                        actionName: "getLibraryStats",
+                        parameters: {},
+                    }),
+                ]);
+
+                return {
+                    success: !trendsResult.error && !statsResult.error,
+                    popularPages: await generatePopularContent(trendsResult.analytics, statsResult),
+                    analytics: {
+                        totalTrends: trendsResult.analytics?.activeTrends || 0,
+                        totalWebsites: statsResult.totalWebsites || 0,
+                    },
+                    error: trendsResult.error || statsResult.error,
+                };
+            } catch (error) {
+                console.error("Error getting popular content:", error);
+                return {
+                    success: false,
+                    popularPages: [],
+                    analytics: {
+                        totalTrends: 0,
+                        totalWebsites: 0,
+                    },
+                    error:
+                        error instanceof Error ? error.message : "Unknown error",
+                };
+            }
+        }
+
         default:
             return null;
     }
@@ -1336,6 +1608,87 @@ async function handleCheckIndexStatus() {
             error: error instanceof Error ? error.message : "Unknown error",
         };
     }
+}
+
+// Helper functions for trend integration
+async function generatePatternInsights(trends: any[]): Promise<string[]> {
+    const insights: string[] = [];
+    
+    if (trends.length === 0) {
+        return ["Start browsing regularly to discover your reading patterns"];
+    }
+    
+    const activeTrends = trends.filter(t => t.isActive);
+    if (activeTrends.length > 0) {
+        insights.push(`You have ${activeTrends.length} active reading habit${activeTrends.length > 1 ? 's' : ''}`);
+    }
+    
+    const topDomains = trends.flatMap(t => t.cluster?.domains || [])
+        .reduce((acc: Record<string, number>, domain) => {
+            acc[domain] = (acc[domain] || 0) + 1;
+            return acc;
+        }, {});
+    
+    const mostVisitedDomain = Object.entries(topDomains)
+        .sort(([,a], [,b]) => (b as number) - (a as number))[0];
+    
+    if (mostVisitedDomain) {
+        insights.push(`Most frequent pattern involves ${mostVisitedDomain[0]}`);
+    }
+    
+    const highConfidenceTrends = trends.filter(t => t.confidence > 0.7);
+    if (highConfidenceTrends.length > 0) {
+        insights.push(`${highConfidenceTrends.length} strong habit${highConfidenceTrends.length > 1 ? 's' : ''} detected`);
+    }
+    
+    return insights;
+}
+
+async function generatePopularContent(trendAnalytics: any, libraryStats: any): Promise<any[]> {
+    const popularPages: any[] = [];
+    
+    if (!trendAnalytics && !libraryStats) {
+        return [{
+            title: "Import your browsing data to see popular content",
+            url: "#",
+            description: "Popular pages will appear here once you have browsing data",
+            visits: 0,
+            trendScore: 0,
+        }];
+    }
+    
+    // Generate sample popular content based on available data
+    if (trendAnalytics?.topIntents) {
+        trendAnalytics.topIntents.slice(0, 8).forEach((intent: any, index: number) => {
+            popularPages.push({
+                title: `${intent.intent} Research`,
+                url: `#trend-${index}`,
+                description: `Pages related to your ${intent.intent.toLowerCase()} research`,
+                visits: Math.floor(Math.random() * 50) + 10,
+                trendScore: intent.confidence || 0.5,
+                category: "Research Topic",
+            });
+        });
+    }
+    
+    if (libraryStats?.topDomains) {
+        const domains = Array.isArray(libraryStats.topDomains) 
+            ? libraryStats.topDomains 
+            : Object.keys(libraryStats.topDomains || {}).slice(0, 3);
+            
+        domains.forEach((domain: any, index: number) => {
+            popularPages.push({
+                title: `Popular from ${typeof domain === 'string' ? domain : domain.domain}`,
+                url: `https://${typeof domain === 'string' ? domain : domain.domain}`,
+                description: `Frequently visited pages from this domain`,
+                visits: typeof domain === 'object' ? domain.count : Math.floor(Math.random() * 30) + 5,
+                trendScore: 0.6,
+                category: "Frequent Domain",
+            });
+        });
+    }
+    
+    return popularPages.slice(0, 8);
 }
 
 function generateSuggestionsFromStats(statsText: string): any {

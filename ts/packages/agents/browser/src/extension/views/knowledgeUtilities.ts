@@ -1236,7 +1236,7 @@ export class DefaultSearchServices implements SearchServices {
 }
 
 export class DefaultDiscoveryServices implements DiscoveryServices {
-    constructor(private chromeService: ExtensionServiceBase) {}
+    constructor(protected chromeService: ExtensionServiceBase) {}
 
     async loadDiscoverData(): Promise<any> {
         const response = await this.chromeService.getDiscoverInsights(

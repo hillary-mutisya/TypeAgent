@@ -22,6 +22,7 @@ import {
 import { KnowledgeSearchPanel } from "./knowledgeSearchPanel";
 import { KnowledgeDiscoveryPanel } from "./knowledgeDiscoveryPanel";
 import { KnowledgeAnalyticsPanel } from "./knowledgeAnalyticsPanel";
+import { EnhancedDiscoveryServices } from "./enhancedDiscoveryServices";
 
 // Import interfaces
 import {
@@ -101,7 +102,7 @@ class WebsiteLibraryPanelFullPage {
         );
         this.services = {
             search: new DefaultSearchServices(extensionService),
-            discovery: new DefaultDiscoveryServices(extensionService),
+            discovery: new EnhancedDiscoveryServices(extensionService),
             analytics: new CachedAnalyticsService(defaultAnalyticsService),
         };
     }

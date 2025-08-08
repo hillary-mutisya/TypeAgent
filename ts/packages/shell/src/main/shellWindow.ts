@@ -9,6 +9,7 @@ import {
     shell,
     WebContents,
     WebContentsView,
+    session,
 } from "electron";
 import path from "node:path";
 import { WebSocketMessageV2 } from "common-utils";
@@ -417,6 +418,84 @@ export class ShellWindow {
     // Inline browser
     // ================================================================
 
+    private createSecureWebContentsView(zoomFactor: number): WebContentsView {
+        const secureSession = session.fromPartition('persist:secure-browser', {
+            cache: true
+        });
+
+        secureSession.setPermissionRequestHandler((_, permission, callback) => {
+            const allowedPermissions = [
+                'notifications',
+                'geolocation', 
+                'media',
+                'mediaKeySystem',
+                'camera',
+                'microphone'
+            ];
+            
+            // Note: 'webauthn' permission is not a standard Electron permission type,
+            // but we check for it here for future compatibility
+            if (permission as any === 'webauthn') {
+                callback(true);
+                return;
+            }
+            
+            callback(allowedPermissions.includes(permission));
+        });
+
+        secureSession.setCertificateVerifyProc((_, callback) => {
+            callback(0);
+        });
+
+        const webContentsView = new WebContentsView({
+            webPreferences: {
+                preload: path.join(__dirname, "../preload-cjs/webview.cjs"),
+                sandbox: false,
+                zoomFactor: zoomFactor,
+                session: secureSession,
+                contextIsolation: true,
+                nodeIntegration: false,
+                webSecurity: true,
+                allowRunningInsecureContent: false,
+                experimentalFeatures: true,
+                enableBlinkFeatures: 'WebAuthentication'
+            }
+        });
+
+        const enhancedUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+        webContentsView.webContents.setUserAgent(enhancedUserAgent);
+
+        webContentsView.webContents.setWindowOpenHandler(({ url }) => {
+            if (this.isAuthenticationURL(url)) {
+                return { action: 'allow' };
+            }
+            
+            shell.openExternal(url);
+            return { action: 'deny' };
+        });
+
+        return webContentsView;
+    }
+
+    private isAuthenticationURL(url: string): boolean {
+        const authDomains = [
+            'accounts.google.com',
+            'myaccount.google.com', 
+            'googleapis.com',
+            'gstatic.com',
+            'microsoft.com',
+            'microsoftonline.com',
+            'live.com',
+            'login.live.com',
+            'facebook.com',
+            'twitter.com',
+            'github.com',
+            'oauth'
+        ];
+        
+        return authDomains.some(domain => url.includes(domain));
+    }
+
     public async openInlineBrowser(targetUrl: URL) {
         // Check for custom typeagent-browser protocol
         if (targetUrl.protocol === "typeagent-browser:") {
@@ -446,15 +525,9 @@ export class ShellWindow {
         if (!inlineWebContentView) {
             newWindow = true;
 
-            inlineWebContentView = new WebContentsView({
-                webPreferences: {
-                    preload: path.join(__dirname, "../preload-cjs/webview.cjs"),
-                    sandbox: false,
-                    zoomFactor: this.chatView.webContents.zoomFactor,
-                },
-            });
-
-            this.setupWebContents(inlineWebContentView.webContents);
+            inlineWebContentView = this.createSecureWebContentsView(
+                this.chatView.webContents.zoomFactor
+            );
 
             mainWindow.contentView.addChildView(inlineWebContentView);
             this.inlineWebContentView = inlineWebContentView;

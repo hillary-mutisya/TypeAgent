@@ -94,6 +94,11 @@ const instanceDir =
 
 debugShell("Instance Dir", instanceDir);
 
+// Set up custom user data path for enhanced browser support
+const userDataPath = path.join(app.getPath('home'), '.typeagent-browser');
+app.setPath('userData', userDataPath);
+debugShell('Enhanced browser user data path set to:', userDataPath);
+
 if (parsedArgs.clean) {
     // Delete all files in the instance dir.
     if (fs.existsSync(instanceDir)) {

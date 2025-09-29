@@ -4,6 +4,7 @@
 import { EventEmitter } from "events";
 import { ContentExtractor } from "./contentExtractor.js";
 import { WebsiteDocPart } from "../websiteDocPart.js";
+import * as tp from "textpro";
 import { WebsiteMeta, WebsiteVisitInfo } from "../websiteMeta.js";
 import {
     ExtractionInput,
@@ -361,12 +362,14 @@ export class BatchProcessor extends EventEmitter {
         if (item.textContent) {
             return item.textContent;
         }
-        if (item.htmlFragments) {
-            return item.htmlFragments.map((f) => f.text || "").join("\n");
+
+        // Convert HTML to markdown for better text estimation
+        const htmlSource = item.htmlContent || item.htmlFragments?.map((f) => f.text || "").join("\n");
+        if (htmlSource) {
+            const markdown = tp.htmlToMarkdown(htmlSource);
+            return markdown.replace(/\s+/g, " ").trim();
         }
-        if (item.htmlContent) {
-            return item.htmlContent.replace(/\s+/g, " ").trim();
-        }
+
         return item.title || "";
     }
 

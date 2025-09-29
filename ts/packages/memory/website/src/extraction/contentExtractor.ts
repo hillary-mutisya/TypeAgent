@@ -5,6 +5,7 @@ import {
     conversation as kpLib,
     splitLargeTextIntoChunks,
 } from "knowledge-processor";
+import * as tp from "textpro";
 import * as cheerio from "cheerio";
 import DOMPurify from "dompurify";
 import { JSDOM } from "jsdom";
@@ -458,6 +459,20 @@ export class ContentExtractor {
         content: ExtractionInput,
         extractedContent: any,
     ): string {
+        // Convert HTML to markdown first, then prepare for knowledge extraction
+        const htmlSource = this.prepareHtmlContent(content);
+
+        if (htmlSource) {
+            // Convert HTML to markdown using existing knowpro functionality
+            const markdown = tp.htmlToMarkdown(htmlSource);
+
+            // Add title if available
+            const titlePart = content.title ? `# ${content.title}\n\n` : "";
+
+            return titlePart + markdown;
+        }
+
+        // Fallback to text content if no HTML available
         const parts: string[] = [];
 
         // Add title
@@ -465,22 +480,9 @@ export class ContentExtractor {
             parts.push(`Title: ${content.title}`);
         }
 
-        // Add main content
-        if (extractedContent.pageContent?.mainContent) {
-            parts.push(extractedContent.pageContent.mainContent);
-        } else if (content.textContent) {
+        // Add text content
+        if (content.textContent) {
             parts.push(content.textContent);
-        }
-
-        // Add headings
-        if (extractedContent.pageContent?.headings) {
-            const headingText = extractedContent.pageContent.headings
-                .map((h: any) => h.text)
-                .filter((text: string) => text && text.length > 0)
-                .join(". ");
-            if (headingText) {
-                parts.push(`Headings: ${headingText}`);
-            }
         }
 
         return parts.join("\n\n");
@@ -765,16 +767,46 @@ export class ContentExtractor {
     }
 
     /**
-     * Intelligently chunk content using knowledge-processor's semantic-aware chunking
+     * Intelligently chunk content using markdown-aware chunking from textpro
      */
     private intelligentChunking(
         content: string,
         maxChunkSize: number,
         preserveStructure: boolean = true,
     ): string[] {
-        return Array.from(
-            splitLargeTextIntoChunks(content, maxChunkSize, preserveStructure),
-        );
+        // Check if content appears to be markdown (starts with # or contains markdown patterns)
+        const looksLikeMarkdown = content.includes('#') || content.includes('**') || content.includes('- ');
+
+        if (looksLikeMarkdown) {
+            try {
+                // Use markdown-aware chunking from textpro
+                const [textBlocks] = tp.markdownToTextAndKnowledgeBlocks(
+                    content,
+                    maxChunkSize
+                );
+
+                // Validate chunk sizes and merge if too many small chunks
+                if (textBlocks.length > 50 || textBlocks.some(chunk => chunk.length < maxChunkSize * 0.1)) {
+                    // Too many small chunks - fallback to traditional chunking for consistency
+                    return Array.from(
+                        splitLargeTextIntoChunks(content, maxChunkSize, preserveStructure),
+                    );
+                }
+
+                return textBlocks;
+            } catch (error) {
+                console.warn('Markdown chunking failed, falling back to traditional chunking:', error);
+                // Fallback to existing chunking if markdown processing fails
+                return Array.from(
+                    splitLargeTextIntoChunks(content, maxChunkSize, preserveStructure),
+                );
+            }
+        } else {
+            // Fallback to existing chunking for non-markdown content
+            return Array.from(
+                splitLargeTextIntoChunks(content, maxChunkSize, preserveStructure),
+            );
+        }
     }
 
     /**

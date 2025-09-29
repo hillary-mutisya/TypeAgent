@@ -779,21 +779,21 @@ export class ContentExtractor {
 
         if (looksLikeMarkdown) {
             try {
-                // Use markdown-aware chunking from textpro
+                // Use markdown-aware chunking from textpro to get semantic blocks
                 const [textBlocks] = tp.markdownToTextAndKnowledgeBlocks(
                     content,
                     maxChunkSize
                 );
 
-                // Validate chunk sizes and merge if too many small chunks
-                if (textBlocks.length > 50 || textBlocks.some(chunk => chunk.length < maxChunkSize * 0.1)) {
-                    // Too many small chunks - fallback to traditional chunking for consistency
-                    return Array.from(
-                        splitLargeTextIntoChunks(content, maxChunkSize, preserveStructure),
-                    );
-                }
+                // Aggregate small semantic chunks into larger chunks up to maxChunkSize
+                const aggregatedChunks = this.aggregateSemanticChunks(textBlocks, maxChunkSize);
 
-                return textBlocks;
+                // Log chunking statistics for debugging
+                debug(
+                    `Markdown chunking: ${textBlocks.length} semantic blocks -> ${aggregatedChunks.length} aggregated chunks (target size: ${maxChunkSize})`
+                );
+
+                return aggregatedChunks;
             } catch (error) {
                 console.warn('Markdown chunking failed, falling back to traditional chunking:', error);
                 // Fallback to existing chunking if markdown processing fails
@@ -807,6 +807,54 @@ export class ContentExtractor {
                 splitLargeTextIntoChunks(content, maxChunkSize, preserveStructure),
             );
         }
+    }
+
+    /**
+     * Aggregate small semantic chunks into larger chunks while preserving boundaries
+     * This combines the benefits of semantic chunking with reasonable chunk sizes
+     */
+    private aggregateSemanticChunks(
+        semanticChunks: string[],
+        maxChunkSize: number
+    ): string[] {
+        if (semanticChunks.length === 0) {
+            return [];
+        }
+
+        const aggregatedChunks: string[] = [];
+        let currentChunk = '';
+
+        for (const chunk of semanticChunks) {
+            // If adding this chunk would exceed the limit, save current and start new
+            if (currentChunk.length > 0 &&
+                currentChunk.length + chunk.length + 2 > maxChunkSize) {
+                aggregatedChunks.push(currentChunk);
+                currentChunk = chunk;
+            } else {
+                // Add chunk with proper separation
+                if (currentChunk.length > 0) {
+                    currentChunk += '\n\n';
+                }
+                currentChunk += chunk;
+            }
+
+            // If a single chunk exceeds maxChunkSize, split it
+            if (currentChunk.length > maxChunkSize) {
+                // This semantic chunk is too large on its own - split it
+                const subChunks = Array.from(
+                    splitLargeTextIntoChunks(currentChunk, maxChunkSize, true)
+                );
+                aggregatedChunks.push(...subChunks.slice(0, -1));
+                currentChunk = subChunks[subChunks.length - 1] || '';
+            }
+        }
+
+        // Add the last chunk if it has content
+        if (currentChunk.trim().length > 0) {
+            aggregatedChunks.push(currentChunk);
+        }
+
+        return aggregatedChunks;
     }
 
     /**

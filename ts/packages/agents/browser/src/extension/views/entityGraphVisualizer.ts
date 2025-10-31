@@ -113,6 +113,9 @@ export class EntityGraphVisualizer {
         "stable";
     private lastSpacingZoom = 1.0;
 
+    // Prototype mode flag for simplified WebGL rendering
+    private prototypeMode: boolean = false;
+
     constructor(container: HTMLElement) {
         this.container = container;
     }
@@ -224,14 +227,22 @@ export class EntityGraphVisualizer {
         // Get optimal renderer configuration (WebGL when available)
         const rendererConfig = this.getOptimalRendererConfig();
 
-        // Initialize dual instances - global and detail
-        console.time("[Perf] Triple instance initialization");
-        this.initializeTripleInstances(rendererConfig);
-        console.timeEnd("[Perf] Triple instance initialization");
+        // Use simplified single-instance initialization in prototype mode
+        if (this.prototypeMode) {
+            console.log("[Prototype] Using simplified single-instance initialization");
+            console.time("[Perf] Single instance initialization");
+            this.initializeSingleInstance(rendererConfig);
+            console.timeEnd("[Perf] Single instance initialization");
+        } else {
+            // Initialize dual instances - global and detail
+            console.time("[Perf] Triple instance initialization");
+            this.initializeTripleInstances(rendererConfig);
+            console.timeEnd("[Perf] Triple instance initialization");
 
-        // Set the active instance to global initially
-        this.cy = this.globalInstance;
-        this.currentActiveView = "global";
+            // Set the active instance to global initially
+            this.cy = this.globalInstance;
+            this.currentActiveView = "global";
+        }
 
         console.time("[Perf] Initial interaction setup");
         this.setupInteractions();
@@ -340,6 +351,35 @@ export class EntityGraphVisualizer {
         console.log(
             "[TripleInstance] All three instances initialized successfully",
         );
+    }
+
+    /**
+     * Initialize simplified single-instance system for prototype mode
+     */
+    private initializeSingleInstance(rendererConfig: any): void {
+        console.log("[Prototype] Initializing single Cytoscape instance with WebGL");
+        console.log(`[Prototype] Renderer configuration: ${JSON.stringify(rendererConfig)}`);
+
+        // Create single instance directly on the container
+        this.cy = cytoscape({
+            container: this.container,
+            elements: [],
+            style: this.getOptimizedStyles(),
+            layout: { name: "preset" }, // Use preset layout from graphology
+            renderer: rendererConfig,
+            minZoom: 0.1,
+            maxZoom: 5.0,
+            wheelSensitivity: 0.15,
+            zoomingEnabled: true,
+            userZoomingEnabled: true,
+            panningEnabled: true,
+            userPanningEnabled: true,
+            boxSelectionEnabled: false,
+            selectionType: "single",
+            autoungrabify: false,
+        });
+
+        console.log("[Prototype] Single instance created successfully");
     }
 
     /**
@@ -1723,7 +1763,21 @@ export class EntityGraphVisualizer {
         // Clear all neighborhood state when loading global data
         this.clearNeighborhoodState();
 
-        // Clear and load global instance
+        // In prototype mode, use preset layout elements directly (already consolidated)
+        if (this.prototypeMode && graphData.presetLayout?.elements) {
+            console.log("[Prototype] Loading graph using presetLayout.elements directly (server-consolidated)");
+            this.cy.elements().remove();
+            this.cy.add(graphData.presetLayout.elements);
+
+            // Store global data reference
+            this.globalGraphData = graphData;
+
+            // Skip rest of triple-instance logic
+            console.log(`[Prototype] Loaded ${graphData.presetLayout.elements.length} pre-consolidated elements`);
+            return;
+        }
+
+        // Clear and load global instance (triple-instance mode)
         this.globalInstance.elements().remove();
         const elements = this.convertToGraphElements(graphData);
 
@@ -2043,6 +2097,12 @@ export class EntityGraphVisualizer {
         layoutName: string,
         nodeCount: number,
     ): Promise<void> {
+        // In prototype mode, skip layout calculation - use preset positions
+        if (this.prototypeMode) {
+            console.log("[Prototype] Skipping instance layout, using preset positions");
+            return Promise.resolve();
+        }
+
         const layoutConfig = this.getLayoutConfigForInstance(
             layoutName,
             nodeCount,
@@ -2515,6 +2575,12 @@ export class EntityGraphVisualizer {
             // Smooth 60fps LOD updates
             clearTimeout(this.zoomTimer);
             this.zoomTimer = setTimeout(async () => {
+                // Use simplified LOD in prototype mode
+                if (this.prototypeMode) {
+                    this.updateSimplifiedLOD();
+                    return;
+                }
+
                 // Apply appropriate LoD based on current view and instance
                 if (
                     instanceName === "neighborhood" &&
@@ -4188,11 +4254,30 @@ export class EntityGraphVisualizer {
         const elements: any[] = [];
         const nodeIds = new Set<string>();
 
+        // Check if preset layout is available
+        const presetLayout = globalData.presetLayout?.elements;
+        const presetPositions = new Map<string, { x: number; y: number }>();
+
+        if (presetLayout) {
+            console.log(
+                `[Visualizer] Using preset layout with ${presetLayout.length} positioned elements`,
+            );
+            for (const element of presetLayout) {
+                if (element.position && element.data?.id) {
+                    presetPositions.set(element.data.id, element.position);
+                }
+                // Also try label-based lookup
+                if (element.position && element.data?.label) {
+                    presetPositions.set(element.data.label, element.position);
+                }
+            }
+        }
+
         console.time("[Perf] Process nodes");
         if (globalData.entities && globalData.entities.length > 0) {
             globalData.entities.forEach((entity: any) => {
                 if (!nodeIds.has(entity.id)) {
-                    elements.push({
+                    const nodeElement: any = {
                         group: "nodes",
                         data: {
                             id: entity.id,
@@ -4208,7 +4293,17 @@ export class EntityGraphVisualizer {
                             color: entity.color || "#999999",
                             borderColor: entity.borderColor || "#333333",
                         },
-                    });
+                    };
+
+                    // Add preset position if available
+                    const presetPos =
+                        presetPositions.get(entity.id) ||
+                        presetPositions.get(entity.name);
+                    if (presetPos) {
+                        nodeElement.position = { x: presetPos.x, y: presetPos.y };
+                    }
+
+                    elements.push(nodeElement);
                     nodeIds.add(entity.id);
                 }
             });
@@ -4221,6 +4316,8 @@ export class EntityGraphVisualizer {
             let validRelationships = 0;
             let invalidRelationships = 0;
 
+            // NOTE: This function is only used in triple-instance mode now.
+            // In prototype mode, we use presetLayout.elements directly which are already consolidated.
             // No artificial limit when data is already filtered
             globalData.relationships.forEach((rel: any) => {
                 // Support both transformed (from/to) and original (fromEntity/toEntity) field formats
@@ -4261,6 +4358,12 @@ export class EntityGraphVisualizer {
      */
     private applyLayout(layoutName: string): void {
         if (!this.cy) return;
+
+        // In prototype mode, skip layout calculation - use preset positions from graphology
+        if (this.prototypeMode) {
+            console.log("[Prototype] Skipping layout calculation, using preset positions from graphology");
+            return;
+        }
 
         const layoutConfigs: { [key: string]: any } = {
             force: this.getOptimalLayoutConfig(),
@@ -5261,12 +5364,15 @@ export class EntityGraphVisualizer {
             classes: edge.classes(),
         }));
 
+        // Get pan position instead of center() which returns element
+        const pan = this.cy.pan();
+
         return {
             nodes: nodes,
             edges: edges,
             layout: this.currentLayout,
             zoom: this.cy.zoom(),
-            center: this.cy.center(),
+            pan: { x: pan.x, y: pan.y },
             exportedAt: new Date().toISOString(),
             version: "1.0",
         };
@@ -5391,6 +5497,70 @@ export class EntityGraphVisualizer {
         }
         return "";
     }
+
+    /**
+     * Set prototype mode for simplified WebGL rendering
+     */
+    setPrototypeMode(enabled: boolean): void {
+        console.log(`[EntityGraphVisualizer] Prototype mode: ${enabled ? "ENABLED" : "DISABLED"}`);
+        this.prototypeMode = enabled;
+
+        if (enabled) {
+            console.log("[EntityGraphVisualizer] Simplified WebGL rendering enabled");
+            console.log("[EntityGraphVisualizer] - Single instance architecture");
+            console.log("[EntityGraphVisualizer] - Haystack edges for optimal WebGL performance");
+            console.log("[EntityGraphVisualizer] - Simplified LOD system");
+        } else {
+            console.log("[EntityGraphVisualizer] Standard multi-instance rendering");
+        }
+    }
+
+    /**
+     * Simplified LOD system for prototype mode - replaces complex multi-instance logic
+     */
+    private updateSimplifiedLOD(): void {
+        if (!this.cy || !this.prototypeMode) return;
+
+        const zoom = this.cy.zoom();
+
+        if (zoom < 0.5) {
+            // Very zoomed out - show only high importance nodes
+            this.cy.nodes().forEach((node: any) => {
+                const importance = node.data('importance') || 0;
+                node.style({
+                    'opacity': importance > 0.8 ? 1 : 0.3,
+                    'text-opacity': 0
+                });
+            });
+            this.cy.edges().style({
+                'opacity': 0.2
+            });
+        } else if (zoom < 1.5) {
+            // Medium zoom - show all nodes, labels for important ones
+            this.cy.nodes().forEach((node: any) => {
+                const importance = node.data('importance') || 0;
+                node.style({
+                    'opacity': 1,
+                    'text-opacity': importance > 0.6 ? 1 : 0
+                });
+            });
+            this.cy.edges().style({
+                'opacity': 0.6
+            });
+        } else {
+            // Zoomed in - show all labels
+            this.cy.nodes().style({
+                'opacity': 1,
+                'text-opacity': 1
+            });
+            this.cy.edges().style({
+                'opacity': 0.8
+            });
+        }
+
+        console.log(`[EntityGraphVisualizer] Simplified LOD updated for zoom: ${zoom.toFixed(2)}`);
+    }
+
 
     // Interactive feature implementations
     private focusOnNode(node: any): void {

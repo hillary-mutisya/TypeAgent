@@ -95,12 +95,18 @@ class TopicGraphView {
                 this.exportGraphologyJson();
             });
 
-        document
-            .getElementById("prototypeMode")
-            ?.addEventListener("change", (e) => {
+        const prototypeModeCheckbox = document.getElementById("prototypeMode") as HTMLInputElement;
+        if (prototypeModeCheckbox) {
+            prototypeModeCheckbox.addEventListener("change", (e) => {
                 const checkbox = e.target as HTMLInputElement;
                 this.togglePrototypeMode(checkbox.checked);
             });
+
+            // Enable prototype mode by default if checkbox is checked
+            if (prototypeModeCheckbox.checked) {
+                this.togglePrototypeMode(true);
+            }
+        }
 
         // Settings modal removed - using optimized defaults
 

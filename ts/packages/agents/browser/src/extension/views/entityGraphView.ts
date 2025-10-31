@@ -269,6 +269,20 @@ class EntityGraphView {
             });
         }
 
+        // Prototype mode toggle
+        const prototypeModeCheckbox = document.getElementById("prototypeMode") as HTMLInputElement;
+        if (prototypeModeCheckbox) {
+            prototypeModeCheckbox.addEventListener("change", (e) => {
+                const checkbox = e.target as HTMLInputElement;
+                this.togglePrototypeMode(checkbox.checked);
+            });
+
+            // Enable prototype mode by default if checkbox is checked
+            if (prototypeModeCheckbox.checked) {
+                this.togglePrototypeMode(true);
+            }
+        }
+
         // Refresh controls
         const refreshButton = document.getElementById("refreshGraph");
         if (refreshButton) {
@@ -586,6 +600,21 @@ class EntityGraphView {
             link.click();
         } catch (error) {
             console.error("Failed to export graph:", error);
+        }
+    }
+
+    /**
+     * Toggle prototype mode for experimental UI features
+     */
+    togglePrototypeMode(enabled: boolean): void {
+        console.log(`[EntityGraphView] Prototype mode: ${enabled ? "ENABLED" : "DISABLED"}`);
+
+        if (this.visualizer && typeof this.visualizer.setPrototypeMode === 'function') {
+            this.visualizer.setPrototypeMode(enabled);
+            console.log(`[EntityGraphView] ${enabled ? "Prototype mode enabled" : "Prototype mode disabled"}`);
+        } else {
+            console.warn("[EntityGraphView] Visualizer does not support prototype mode");
+            console.log("[EntityGraphView] Prototype mode not available for entity graph yet");
         }
     }
 

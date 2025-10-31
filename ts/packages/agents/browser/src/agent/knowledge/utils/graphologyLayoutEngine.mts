@@ -61,10 +61,10 @@ export interface GraphologyLayoutOptions {
 
 const DEFAULT_OPTIONS: Required<GraphologyLayoutOptions> = {
     nodeLimit: 2000,
-    minEdgeConfidence: 0.3,
+    minEdgeConfidence: 0.2,
     denseClusterThreshold: 100,
     forceAtlas2Iterations: 150,
-    noverlapIterations: 500,
+    noverlapIterations: 1000,
     targetViewportSize: 2000,
 };
 
@@ -118,10 +118,11 @@ export function buildGraphologyGraph(
         const edgeKey = [edge.from, edge.to].sort().join("|");
         if (edgeSet.has(edgeKey)) continue;
 
+        // Filter edges with confidence < 0.2 (except parent relationships)
         if (
             edge.type !== "parent" &&
             edge.type !== "parent-child" &&
-            (edge.confidence || 1) < opts.minEdgeConfidence
+            (edge.confidence || 1) < 0.2
         ) {
             continue;
         }
@@ -256,10 +257,10 @@ function applyMultiPhaseLayout(
     noverlap.assign(graph, {
         maxIterations: options.noverlapIterations,
         settings: {
-            margin: 20,
-            ratio: 1.3,
-            expansion: 1.2,
-            gridSize: 40,
+            margin: 60,
+            ratio: 2.5,
+            expansion: 1.8,
+            gridSize: 60,
         },
     });
     debug("  ✓ Global overlap prevention complete");
@@ -412,19 +413,25 @@ export function convertToCytoscapeElements(
         const x = (attr.x - minX) * scaleX + targetMin;
         const y = (attr.y - minY) * scaleY + targetMin;
 
+        const nodeData: any = {
+            id: node,
+            name: attr.name,
+            label: attr.name,
+            type: attr.type || "entity",
+            confidence: attr.confidence,
+            computedImportance: attr.importance,
+            nodeType: attr.type || "entity",
+            color: attr.color,
+            size: attr.size,
+        };
+
+        // Only include topic-specific fields if they exist
+        if (attr.level !== undefined) nodeData.level = attr.level;
+        if (attr.parentId !== undefined) nodeData.parentId = attr.parentId;
+        if (attr.childCount !== undefined) nodeData.childCount = attr.childCount;
+
         elements.push({
-            data: {
-                id: node,
-                label: attr.name,
-                level: attr.level || 0,
-                confidence: attr.confidence,
-                computedImportance: attr.importance,
-                parentId: attr.parentId,
-                childCount: attr.childCount || 0,
-                nodeType: "topic",
-                color: attr.color,
-                size: attr.size,
-            },
+            data: nodeData,
             position: { x, y },
         });
     }

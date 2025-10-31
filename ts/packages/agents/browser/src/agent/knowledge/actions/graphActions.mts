@@ -1492,7 +1492,7 @@ export async function getGlobalImportanceLayer(
 
             const graph = buildGraphologyGraph(graphNodes, graphEdges, {
                 nodeLimit: maxNodes * 2,
-                minEdgeConfidence: 0.3,
+                minEdgeConfidence: 0.2,
                 denseClusterThreshold: 100,
             });
 
@@ -1535,6 +1535,33 @@ export async function getGlobalImportanceLayer(
             }
             return entity;
         });
+
+        // Debug logging to verify entity vs topic data
+        console.log("[getGlobalImportanceLayer] DEBUG - First 10 entities:",
+            enrichedEntities.slice(0, 10).map((e: any) => ({
+                name: e.name,
+                type: e.type,
+                hasLevel: 'level' in e,
+                hasChildCount: 'childCount' in e,
+                hasParentId: 'parentId' in e,
+                hasDegree: 'degree' in e,
+                hasCommunityId: 'communityId' in e
+            }))
+        );
+
+        console.log("[getGlobalImportanceLayer] DEBUG - First 10 graphology nodes:",
+            cachedGraph.cytoscapeElements.filter((el: any) => el.data && !el.data.source).slice(0, 10).map((el: any) => ({
+                id: el.data.id,
+                name: el.data.name,
+                type: el.data.type,
+                nodeType: el.data.nodeType,
+                hasLevel: 'level' in el.data,
+                hasChildCount: 'childCount' in el.data,
+                hasParentId: 'parentId' in el.data
+            }))
+        );
+
+        console.log("[getGlobalImportanceLayer] Cache key used:", cacheKey);
 
         return {
             entities: enrichedEntities,
@@ -2178,12 +2205,71 @@ async function ensureGraphCache(websiteCollection: any): Promise<void> {
             entityMetrics.length,
         );
 
+        // Build graphology layout with overlap prevention
+        tracker.startOperation("ensureGraphCache.buildGraphologyLayout");
+        let presetLayout:
+            | { elements: any[]; layoutDuration?: number; communityCount?: number }
+            | undefined;
+
+        try {
+            const layoutStart = Date.now();
+
+            // Convert entities to graph nodes
+            const graphNodes: GraphNode[] = entityMetrics.map((entity: any) => ({
+                id: entity.name,
+                name: entity.name,
+                label: entity.name,
+                community: entity.community || 0,
+                importance: entity.importance || 0,
+            }));
+
+            // Convert relationships to graph edges
+            const graphEdges: GraphEdge[] = relationships.map((rel: any) => ({
+                from: rel.fromEntity,
+                to: rel.toEntity,
+                weight: rel.count || 1,
+            }));
+
+            debug(
+                `[Graphology] Building layout for ${graphNodes.length} nodes, ${graphEdges.length} edges`,
+            );
+
+            // Build graphology graph with ForceAtlas2 + noverlap
+            const graph = buildGraphologyGraph(graphNodes, graphEdges);
+            const cytoscapeElements = convertToCytoscapeElements(graph);
+
+            const layoutDuration = Date.now() - layoutStart;
+            const communityCount = new Set(
+                graphNodes.map((n: any) => n.community),
+            ).size;
+
+            presetLayout = {
+                elements: cytoscapeElements,
+                layoutDuration,
+                communityCount,
+            };
+
+            debug(
+                `[Graphology] Layout computed in ${layoutDuration}ms with ${communityCount} communities`,
+            );
+        } catch (error) {
+            console.error("[Graphology] Failed to build layout:", error);
+            // Continue without preset layout - visualizer will fall back to client-side layout
+        }
+
+        tracker.endOperation(
+            "ensureGraphCache.buildGraphologyLayout",
+            entityMetrics.length,
+            presetLayout?.elements?.length || 0,
+        );
+
         // Store in cache
         const newCache: GraphCache = {
             entities: entities,
             relationships: relationships,
             communities: communities,
             entityMetrics: entityMetrics,
+            presetLayout: presetLayout,
             lastUpdated: Date.now(),
             isValid: true,
         };
@@ -2921,7 +3007,7 @@ export async function getTopicImportanceLayer(
 
             const graph = buildGraphologyGraph(graphNodes, graphEdges, {
                 nodeLimit: maxNodes * 2,
-                minEdgeConfidence: 0.3,
+                minEdgeConfidence: 0.2,
                 denseClusterThreshold: 100,
             });
 

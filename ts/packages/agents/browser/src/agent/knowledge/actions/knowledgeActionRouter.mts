@@ -35,10 +35,8 @@ import {
     getAllEntitiesWithMetrics,
     getEntityNeighborhood,
     getGlobalImportanceLayer,
-    getViewportBasedNeighborhood,
-    getImportanceStatistics,
     getTopicImportanceLayer,
-    getTopicViewportNeighborhood,
+    getImportanceStatistics,
     getTopicMetrics,
     getUrlContentBreakdown,
     getTopicTimelines,
@@ -109,14 +107,10 @@ export async function handleKnowledgeAction(
             return await getEntityNeighborhood(parameters, context);
         case "getGlobalImportanceLayer":
             return await getGlobalImportanceLayer(parameters, context);
-        case "getViewportBasedNeighborhood":
-            return await getViewportBasedNeighborhood(parameters, context);
         case "getImportanceStatistics":
             return await getImportanceStatistics(parameters, context);
         case "getTopicImportanceLayer":
             return await getTopicImportanceLayer(parameters, context);
-        case "getTopicViewportNeighborhood":
-            return await getTopicViewportNeighborhood(parameters, context);
         case "getTopicMetrics":
             return await getTopicMetrics(parameters, context);
         case "getUrlContentBreakdown":

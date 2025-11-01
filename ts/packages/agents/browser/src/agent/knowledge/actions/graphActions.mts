@@ -5,7 +5,6 @@ import { SessionContext } from "@typeagent/agent-sdk";
 import { BrowserActionContext } from "../../browserActions.mjs";
 import { searchByEntities } from "../../searchWebMemories.mjs";
 import { GraphCache, TopicGraphCache } from "../types/knowledgeTypes.mjs";
-import { calculateTopicImportance } from "../utils/topicMetricsCalculator.mjs";
 import { getPerformanceTracker } from "../utils/performanceInstrumentation.mjs";
 import {
     buildGraphologyGraph,
@@ -1589,294 +1588,199 @@ export async function getGlobalImportanceLayer(
     }
 }
 
-export async function getViewportBasedNeighborhood(
+/**
+ * Get topic graph data with graphology layout
+ * Simplified version that returns topics with pre-computed graphology positions
+ */
+export async function getTopicImportanceLayer(
     parameters: {
-        centerEntity: string;
-        viewportNodeNames: string[];
         maxNodes?: number;
-        importanceWeighting?: boolean;
-        includeGlobalContext?: boolean;
-        exploreFromAllViewportNodes?: boolean;
-        minDepthFromViewport?: number;
+        minImportanceThreshold?: number;
     },
     context: SessionContext<BrowserActionContext>,
 ): Promise<{
-    entities: any[];
+    topics: any[];
     relationships: any[];
     metadata: any;
 }> {
     try {
         const websiteCollection = context.agentContext.websiteCollection;
 
-        if (!websiteCollection) {
+        if (!websiteCollection || !websiteCollection.hierarchicalTopics) {
             return {
-                entities: [],
+                topics: [],
                 relationships: [],
                 metadata: {
-                    error: "Website collection not available",
-                    layer: "viewport_neighborhood",
+                    error: "Hierarchical topics not available",
+                    layer: "topic_importance",
                 },
             };
         }
 
-        // Ensure cache is populated
-        await ensureGraphCache(websiteCollection);
-
-        // Get cached data
-        const cache = getGraphCache(websiteCollection);
-        if (!cache || !cache.isValid) {
-            return {
-                entities: [],
-                relationships: [],
-                metadata: {
-                    error: "Graph cache not available",
-                    layer: "viewport_neighborhood",
-                },
-            };
-        }
-
-        const allEntities = cache.entityMetrics || [];
-        const allRelationships = cache.relationships || [];
-        const communities = cache.communities || [];
-
-        const entitiesWithMetrics = calculateEntityMetrics(
-            allEntities,
-            allRelationships,
-            communities,
-        );
         const maxNodes = parameters.maxNodes || 500;
-        const minDepthFromViewport = parameters.minDepthFromViewport || 1;
-        const exploreFromAll = parameters.exploreFromAllViewportNodes !== false;
 
-        // Find center entity
-        const centerEntity = entitiesWithMetrics.find(
-            (e) =>
-                e.name?.toLowerCase() ===
-                    parameters.centerEntity.toLowerCase() ||
-                e.id?.toLowerCase() === parameters.centerEntity.toLowerCase(),
-        );
+        // Get all topics from hierarchical topics table
+        const allTopics = websiteCollection.hierarchicalTopics.getTopicHierarchy() || [];
 
-        if (!centerEntity) {
+        if (allTopics.length === 0) {
             return {
-                entities: [],
+                topics: [],
                 relationships: [],
                 metadata: {
-                    error: "Center entity not found",
-                    layer: "viewport_neighborhood",
+                    totalTopicsInSystem: 0,
+                    selectedTopicCount: 0,
+                    layer: "topic_importance",
                 },
             };
         }
 
-        // Find viewport entities
-        const viewportEntities: any[] = [];
-        const viewportNodeNamesLower = (parameters.viewportNodeNames || []).map(
-            (name) => name.toLowerCase(),
-        );
-
-        for (const nodeName of viewportNodeNamesLower) {
-            const entity = entitiesWithMetrics.find(
-                (e) =>
-                    e.name?.toLowerCase() === nodeName ||
-                    e.id?.toLowerCase() === nodeName,
-            );
-            if (entity) {
-                viewportEntities.push(entity);
+        // Build child count map
+        const childCountMap = new Map<string, number>();
+        for (const topic of allTopics) {
+            childCountMap.set(topic.topicId, 0);
+        }
+        for (const topic of allTopics) {
+            if (topic.parentTopicId) {
+                const currentCount = childCountMap.get(topic.parentTopicId) || 0;
+                childCountMap.set(topic.parentTopicId, currentCount + 1);
             }
         }
 
-        if (
-            viewportEntities.length === 0 &&
-            parameters.viewportNodeNames &&
-            parameters.viewportNodeNames.length > 0
-        ) {
-            console.warn(
-                `No viewport entities found from ${parameters.viewportNodeNames.length} names`,
+        // Select top topics by importance (using existing importance scores from DB)
+        // Sort by descendantCount as a proxy for importance if no explicit score
+        const topicsWithCounts = allTopics.map((topic: any) => ({
+            ...topic,
+            childCount: childCountMap.get(topic.topicId) || 0,
+        }));
+
+        // Simple selection: get top N topics by descendant count or importance
+        const selectedTopics = topicsWithCounts
+            .sort((a: any, b: any) => (b.descendantCount || 0) - (a.descendantCount || 0))
+            .slice(0, maxNodes * 2);
+
+        const selectedTopicIds = new Set(selectedTopics.map((t: any) => t.topicId));
+
+        // Build hierarchical relationships
+        const hierarchicalRelationships = selectedTopics
+            .filter((t: any) => t.parentTopicId && selectedTopicIds.has(t.parentTopicId))
+            .map((t: any) => ({
+                from: t.parentTopicId,
+                to: t.topicId,
+                type: "parent-child",
+                strength: t.confidence || 0.8,
+            }));
+
+        // Get lateral relationships if available
+        let lateralRelationships: any[] = [];
+        if (websiteCollection.topicRelationships) {
+            const selectedTopicIdsArray = Array.from(selectedTopicIds);
+            const lateralRels = websiteCollection.topicRelationships.getRelationshipsForTopicsOptimized(
+                selectedTopicIdsArray,
+                0.3,
             );
+
+            // Filter out sibling relationships
+            const parentMap = new Map<string, string>();
+            for (const topic of selectedTopics) {
+                if (topic.parentTopicId) {
+                    parentMap.set(topic.topicId, topic.parentTopicId);
+                }
+            }
+
+            lateralRelationships = lateralRels
+                .filter((rel: any) => {
+                    const parentA = parentMap.get(rel.fromTopic);
+                    const parentB = parentMap.get(rel.toTopic);
+                    return !(parentA && parentB && parentA === parentB);
+                })
+                .map((rel: any) => ({
+                    from: rel.fromTopic,
+                    to: rel.toTopic,
+                    type: rel.relationshipType,
+                    strength: rel.strength,
+                }));
         }
 
-        // Build adjacency map with importance weighting
-        const adjacencyMap = buildImportanceWeightedAdjacency(
-            entitiesWithMetrics,
-            allRelationships,
-        );
+        const selectedRelationships = [
+            ...hierarchicalRelationships,
+            ...lateralRelationships,
+        ];
 
-        // Start with center entity and viewport entities as initial set
-        const initialEntities = [centerEntity, ...viewportEntities];
-        const visited = new Set<string>();
-        const result: any[] = [];
+        // Build graphology layout
+        const cacheKey = `topic_importance_${maxNodes}`;
+        let cachedGraph = getGraphologyCache(cacheKey);
 
-        // Add all initial entities to result and visited set
-        initialEntities.forEach((entity) => {
-            if (!visited.has(entity.name.toLowerCase())) {
-                visited.add(entity.name.toLowerCase());
-                result.push(entity);
-            }
-        });
+        if (!cachedGraph) {
+            debug("[Graphology] Building layout for topic importance layer...");
+            const layoutStart = performance.now();
 
-        // BFS queue: [entity, depth from nearest viewport node, source]
-        type QueueItem = {
-            entity: any;
-            depth: number;
-            importance: number;
-            source: string;
-        };
-        const queue: QueueItem[] = [];
+            const graphNodes: GraphNode[] = selectedTopics.map((topic: any) => ({
+                id: topic.topicId,
+                name: topic.topicName,
+                type: "topic",
+                confidence: topic.confidence || 0.5,
+                count: topic.descendantCount || 1,
+                importance: (topic.descendantCount || 0) / 100, // Normalize
+                level: topic.level || 0,
+                parentId: topic.parentTopicId,
+                childCount: topic.childCount || 0,
+            }));
 
-        // Initialize queue with neighbors of all initial entities
-        if (exploreFromAll) {
-            // Explore from all viewport nodes simultaneously
-            initialEntities.forEach((startEntity) => {
-                const neighbors =
-                    adjacencyMap.get(startEntity.name.toLowerCase()) || [];
-                neighbors.forEach((neighbor) => {
-                    if (!visited.has(neighbor.entity.name.toLowerCase())) {
-                        queue.push({
-                            entity: neighbor.entity,
-                            depth: 1,
-                            importance: neighbor.importance,
-                            source: startEntity.name,
-                        });
-                    }
-                });
+            const graphEdges: GraphEdge[] = selectedRelationships.map((rel: any) => ({
+                from: rel.from,
+                to: rel.to,
+                type: rel.type,
+                confidence: rel.strength || rel.confidence || 0.5,
+                strength: rel.strength || 0.5,
+            }));
+
+            const graph = buildGraphologyGraph(graphNodes, graphEdges, {
+                nodeLimit: maxNodes * 2,
+                minEdgeConfidence: 0.2,
+                denseClusterThreshold: 100,
             });
+
+            const cytoscapeElements = convertToCytoscapeElements(graph, 2000);
+            const layoutMetrics = calculateLayoutQualityMetrics(graph);
+            const layoutDuration = performance.now() - layoutStart;
+
+            cachedGraph = createGraphologyCache(
+                graph,
+                cytoscapeElements,
+                layoutDuration,
+                layoutMetrics.avgSpacing,
+            );
+
+            setGraphologyCache(cacheKey, cachedGraph);
+
+            debug(`[Graphology] Layout complete in ${layoutDuration.toFixed(2)}ms`);
         } else {
-            // Only explore from center entity
-            const centerNeighbors =
-                adjacencyMap.get(centerEntity.name.toLowerCase()) || [];
-            centerNeighbors.forEach((neighbor) => {
-                if (!visited.has(neighbor.entity.name.toLowerCase())) {
-                    queue.push({
-                        entity: neighbor.entity,
-                        depth: 1,
-                        importance: neighbor.importance,
-                        source: centerEntity.name,
-                    });
-                }
-            });
+            debug("[Graphology] Using cached layout");
         }
-
-        // Sort queue by importance if weighting is enabled
-        if (parameters.importanceWeighting !== false) {
-            queue.sort((a, b) => b.importance - a.importance);
-        }
-
-        // Expand neighborhood using BFS
-        let actualMaxDepth = 0;
-        while (queue.length > 0 && result.length < maxNodes) {
-            const current = queue.shift()!;
-
-            // Skip if already visited or depth exceeds minimum
-            if (visited.has(current.entity.name.toLowerCase())) continue;
-            if (current.depth < minDepthFromViewport) {
-                // Still need to explore neighbors even if not adding this node yet
-                const neighbors =
-                    adjacencyMap.get(current.entity.name.toLowerCase()) || [];
-                neighbors.forEach((neighbor) => {
-                    if (!visited.has(neighbor.entity.name.toLowerCase())) {
-                        queue.push({
-                            entity: neighbor.entity,
-                            depth: current.depth + 1,
-                            importance: neighbor.importance,
-                            source: current.source,
-                        });
-                    }
-                });
-
-                // Re-sort if importance weighting is enabled
-                if (parameters.importanceWeighting !== false) {
-                    queue.sort((a, b) => b.importance - a.importance);
-                }
-                continue;
-            }
-
-            // Add to result
-            visited.add(current.entity.name.toLowerCase());
-            result.push(current.entity);
-            actualMaxDepth = Math.max(actualMaxDepth, current.depth);
-
-            // Add neighbors to queue
-            const neighbors =
-                adjacencyMap.get(current.entity.name.toLowerCase()) || [];
-            neighbors.forEach((neighbor) => {
-                if (!visited.has(neighbor.entity.name.toLowerCase())) {
-                    queue.push({
-                        entity: neighbor.entity,
-                        depth: current.depth + 1,
-                        importance: neighbor.importance,
-                        source: current.source,
-                    });
-                }
-            });
-
-            // Re-sort queue by importance after adding new neighbors
-            if (parameters.importanceWeighting !== false) {
-                queue.sort((a, b) => b.importance - a.importance);
-            }
-        }
-
-        // Optionally include global context nodes
-        if (parameters.includeGlobalContext) {
-            const availableSlots = maxNodes - result.length;
-            if (availableSlots > 0) {
-                const resultNames = new Set(result.map((e) => e.name));
-                const globalNodes = entitiesWithMetrics
-                    .filter((e) => !resultNames.has(e.name))
-                    .sort((a, b) => (b.importance || 0) - (a.importance || 0))
-                    .slice(
-                        0,
-                        Math.min(
-                            availableSlots,
-                            Math.floor(availableSlots * 0.1),
-                        ),
-                    ); // Add up to 10% global context
-                result.push(...globalNodes);
-            }
-        }
-
-        // Get relationships between all included entities
-        const entityNames = new Set(result.map((e) => e.name));
-        const neighborhoodRelationships = allRelationships.filter(
-            (rel: any) =>
-                entityNames.has(rel.fromEntity) &&
-                entityNames.has(rel.toEntity),
-        );
 
         return {
-            entities: result,
-            relationships: neighborhoodRelationships,
+            topics: selectedTopics,
+            relationships: selectedRelationships,
             metadata: {
-                centerEntity: centerEntity.name,
-                viewportEntities: viewportEntities.map((e) => e.name),
-                viewportNodesFound: viewportEntities.length,
-                viewportNodesRequested:
-                    parameters.viewportNodeNames?.length || 0,
-                actualDepth: actualMaxDepth,
-                entityCount: result.length,
-                relationshipCount: neighborhoodRelationships.length,
-                importanceRange:
-                    result.length > 0
-                        ? {
-                              min: Math.min(
-                                  ...result.map((e) => e.importance || 0),
-                              ),
-                              max: Math.max(
-                                  ...result.map((e) => e.importance || 0),
-                              ),
-                          }
-                        : { min: 0, max: 0 },
-                exploreFromAllViewportNodes: exploreFromAll,
-                minDepthFromViewport: minDepthFromViewport,
-                layer: "viewport_neighborhood",
+                totalTopicsInSystem: allTopics.length,
+                selectedTopicCount: selectedTopics.length,
+                layer: "topic_importance",
+                graphologyLayout: {
+                    elements: cachedGraph.cytoscapeElements,
+                    layoutDuration: cachedGraph.metadata.layoutDuration,
+                    avgSpacing: cachedGraph.metadata.avgSpacing,
+                    communityCount: cachedGraph.metadata.communityCount,
+                },
             },
         };
     } catch (error) {
-        console.error("Error getting viewport-based neighborhood:", error);
+        console.error("Error getting topic importance layer:", error);
         return {
-            entities: [],
+            topics: [],
             relationships: [],
             metadata: {
                 error: error instanceof Error ? error.message : "Unknown error",
-                layer: "viewport_neighborhood",
+                layer: "topic_importance",
             },
         };
     }
@@ -1968,10 +1872,6 @@ function setGraphCache(websiteCollection: any, cache: GraphCache): void {
 }
 
 // Topic graph cache storage attached to websiteCollection
-function getTopicGraphCache(websiteCollection: any): TopicGraphCache | null {
-    return (websiteCollection as any).__topicGraphCache || null;
-}
-
 function setTopicGraphCache(
     websiteCollection: any,
     cache: TopicGraphCache,
@@ -1990,153 +1890,6 @@ export function invalidateTopicCache(websiteCollection: any): void {
     });
     // Also clear the graphology layout cache
     invalidateAllGraphologyCaches();
-}
-
-// Ensure topic graph data is cached for fast access
-async function ensureTopicGraphCache(websiteCollection: any): Promise<void> {
-    const cache = getTopicGraphCache(websiteCollection);
-
-    // Cache never expires - only invalidated on graph rebuild or knowledge import
-    if (cache && cache.isValid) {
-        return;
-    }
-
-    const tracker = getPerformanceTracker();
-    tracker.startOperation("ensureTopicGraphCache");
-
-    try {
-        // Fetch all topics from database
-        tracker.startOperation("ensureTopicGraphCache.getTopicHierarchy");
-        const topics =
-            websiteCollection.hierarchicalTopics?.getTopicHierarchy() || [];
-        tracker.endOperation(
-            "ensureTopicGraphCache.getTopicHierarchy",
-            topics.length,
-            topics.length,
-        );
-
-        // Enrich topics with entity references if available - OPTIMIZED
-        if (websiteCollection.topicEntityRelations) {
-            tracker.startOperation(
-                "ensureTopicGraphCache.enrichTopicsWithEntities",
-            );
-            const topicIds = topics.map((t: any) => t.topicId);
-
-            // Single batch query instead of N individual queries
-            const allEntityRelations =
-                websiteCollection.topicEntityRelations.getEntitiesForTopics(
-                    topicIds,
-                );
-
-            // Group entity relations by topic ID for efficient lookup
-            const entityRelationsByTopic = new Map<string, any[]>();
-            for (const relation of allEntityRelations) {
-                if (!entityRelationsByTopic.has(relation.topicId)) {
-                    entityRelationsByTopic.set(relation.topicId, []);
-                }
-                entityRelationsByTopic.get(relation.topicId)!.push(relation);
-            }
-
-            // Assign top entities to each topic (limit to 10 for performance)
-            for (const topic of topics) {
-                const entityRelations =
-                    entityRelationsByTopic.get(topic.topicId) || [];
-                topic.entityReferences = entityRelations
-                    .sort((a: any, b: any) => b.relevance - a.relevance)
-                    .slice(0, 10)
-                    .map((rel: any) => rel.entityName);
-            }
-
-            tracker.endOperation(
-                "ensureTopicGraphCache.enrichTopicsWithEntities",
-                allEntityRelations.length,
-                topics.length,
-            );
-        }
-
-        // Calculate childCount for each topic
-        tracker.startOperation("ensureTopicGraphCache.calculateChildCounts");
-        const childCountMap = new Map<string, number>();
-        for (const topic of topics) {
-            childCountMap.set(topic.topicId, 0);
-        }
-        for (const topic of topics) {
-            if (topic.parentTopicId) {
-                const currentCount =
-                    childCountMap.get(topic.parentTopicId) || 0;
-                childCountMap.set(topic.parentTopicId, currentCount + 1);
-            }
-        }
-        for (const topic of topics) {
-            topic.childCount = childCountMap.get(topic.topicId) || 0;
-        }
-        tracker.endOperation(
-            "ensureTopicGraphCache.calculateChildCounts",
-            topics.length,
-            topics.length,
-        );
-
-        // Build relationships from parent-child structure
-        tracker.startOperation("ensureTopicGraphCache.buildTopicRelationships");
-        let relationships = buildTopicRelationships(topics);
-        tracker.endOperation(
-            "ensureTopicGraphCache.buildTopicRelationships",
-            topics.length,
-            relationships.length,
-        );
-
-        debug(
-            `[ensureTopicGraphCache] Built ${relationships.length} hierarchical relationships (lateral relationships fetched on-demand)`,
-        );
-
-        // Get entity counts for topics from topic-entity relations
-        const topicMetricsInput = topics.map((topic: any) => ({
-            topicId: topic.topicId,
-            entityCount: topic.entityReferences?.length || 0,
-        }));
-
-        // Calculate topic importance metrics
-        tracker.startOperation(
-            "ensureTopicGraphCache.calculateTopicImportance",
-        );
-        const topicMetrics = calculateTopicImportance(
-            topics,
-            relationships,
-            topicMetricsInput,
-        );
-        tracker.endOperation(
-            "ensureTopicGraphCache.calculateTopicImportance",
-            topics.length,
-            topicMetrics.length,
-        );
-
-        // Store in cache
-        const newCache: TopicGraphCache = {
-            topics: topics,
-            relationships: relationships,
-            topicMetrics: topicMetrics,
-            lastUpdated: Date.now(),
-            isValid: true,
-        };
-
-        setTopicGraphCache(websiteCollection, newCache);
-
-        tracker.endOperation(
-            "ensureTopicGraphCache",
-            topics.length + relationships.length,
-            topics.length,
-        );
-        tracker.printReport("ensureTopicGraphCache");
-    } catch (error) {
-        console.error("[Topic Graph] Failed to build cache:", error);
-        tracker.endOperation("ensureTopicGraphCache", 0, 0);
-
-        // Mark cache as invalid
-        const existingCache = getTopicGraphCache(websiteCollection);
-        if (existingCache) {
-            existingCache.isValid = false;
-        }
-    }
 }
 
 // Ensure graph data is cached for fast access
@@ -2682,43 +2435,6 @@ function analyzeConnectivity(entities: any[], relationships: any[]): any {
     };
 }
 
-function buildImportanceWeightedAdjacency(
-    entities: any[],
-    relationships: any[],
-): Map<string, Array<{ entity: any; importance: number }>> {
-    const adjacencyMap = new Map<
-        string,
-        Array<{ entity: any; importance: number }>
-    >();
-    const entityMap = new Map<string, any>();
-
-    entities.forEach((entity) => {
-        entityMap.set(entity.name.toLowerCase(), entity);
-        adjacencyMap.set(entity.name.toLowerCase(), []);
-    });
-
-    relationships.forEach((rel) => {
-        const fromKey = rel.fromEntity.toLowerCase();
-        const toKey = rel.toEntity.toLowerCase();
-
-        const fromEntity = entityMap.get(fromKey);
-        const toEntity = entityMap.get(toKey);
-
-        if (fromEntity && toEntity) {
-            adjacencyMap.get(fromKey)?.push({
-                entity: toEntity,
-                importance: toEntity.importance || 0,
-            });
-            adjacencyMap.get(toKey)?.push({
-                entity: fromEntity,
-                importance: fromEntity.importance || 0,
-            });
-        }
-    });
-
-    return adjacencyMap;
-}
-
 function calculateDistributionPercentiles(
     importanceScores: number[],
 ): number[] {
@@ -2734,573 +2450,6 @@ function calculateDistributionPercentiles(
 // ============================================================================
 // Hierarchical Topics Functions
 // ============================================================================
-
-/**
- * Get hierarchical topics from the website collection
- */
-export async function getTopicImportanceLayer(
-    parameters: {
-        maxNodes?: number;
-        minImportanceThreshold?: number;
-    },
-    context: SessionContext<BrowserActionContext>,
-): Promise<{
-    topics: any[];
-    relationships: any[];
-    metadata: any;
-}> {
-    try {
-        const websiteCollection = context.agentContext.websiteCollection;
-
-        if (!websiteCollection) {
-            return {
-                topics: [],
-                relationships: [],
-                metadata: {
-                    totalTopicsInSystem: 0,
-                    selectedTopicCount: 0,
-                    coveragePercentage: 0,
-                    importanceThreshold: 0,
-                    layer: "topic_importance",
-                },
-            };
-        }
-
-        if (!websiteCollection.hierarchicalTopics) {
-            return {
-                topics: [],
-                relationships: [],
-                metadata: {
-                    error: "Hierarchical topics not available",
-                    layer: "topic_importance",
-                },
-            };
-        }
-
-        await ensureTopicGraphCache(websiteCollection);
-
-        const cache = getTopicGraphCache(websiteCollection);
-        if (!cache || !cache.isValid) {
-            return {
-                topics: [],
-                relationships: [],
-                metadata: {
-                    error: "Topic cache not available",
-                    layer: "topic_importance",
-                },
-            };
-        }
-
-        const allTopics = cache.topics || [];
-        const allRelationships = cache.relationships || [];
-        const topicMetrics = cache.topicMetrics || [];
-
-        if (allTopics.length === 0) {
-            return {
-                topics: [],
-                relationships: [],
-                metadata: {
-                    totalTopicsInSystem: 0,
-                    selectedTopicCount: 0,
-                    coveragePercentage: 0,
-                    importanceThreshold: 0,
-                    layer: "topic_importance",
-                },
-            };
-        }
-
-        const maxNodes = parameters.maxNodes || 500;
-
-        // Build adjacency maps for BFS
-        const childrenMap = new Map<string, string[]>();
-        const parentMap = new Map<string, string>();
-        const topicMap = new Map<string, any>();
-        const metricsMap = new Map<string, any>();
-
-        allTopics.forEach((topic: any) => {
-            topicMap.set(topic.topicId, topic);
-            if (!childrenMap.has(topic.topicId)) {
-                childrenMap.set(topic.topicId, []);
-            }
-            if (topic.parentTopicId) {
-                parentMap.set(topic.topicId, topic.parentTopicId);
-                if (!childrenMap.has(topic.parentTopicId)) {
-                    childrenMap.set(topic.parentTopicId, []);
-                }
-                childrenMap.get(topic.parentTopicId)!.push(topic.topicId);
-            }
-        });
-
-        topicMetrics.forEach((metric: any) => {
-            metricsMap.set(metric.topicId, metric);
-        });
-
-        // Filter roots with children, expand ALL selected roots, then sort and select top 2M
-        const candidatePool = new Set<string>();
-        const rootTopics = allTopics.filter((t: any) => !t.parentTopicId);
-
-        // Filter roots to only include those with children
-        const candidateRoots = rootTopics.filter((t: any) => {
-            const children = childrenMap.get(t.topicId) || [];
-            return children.length > 0;
-        });
-
-        // Sort root topics by importance
-        const sortedRoots = candidateRoots.sort((a: any, b: any) => {
-            const importanceA = metricsMap.get(a.topicId)?.importance || 0;
-            const importanceB = metricsMap.get(b.topicId)?.importance || 0;
-            return importanceB - importanceA;
-        });
-
-        const maxRootsToExpand = Math.min(sortedRoots.length, 300);
-
-        // Expand ALL selected roots completely using BFS
-        for (let i = 0; i < maxRootsToExpand; i++) {
-            const root = sortedRoots[i];
-            candidatePool.add(root.topicId);
-
-            // BFS to add all descendants of this root
-            const queue: string[] = [root.topicId];
-            while (queue.length > 0) {
-                const currentId = queue.shift()!;
-                const children = childrenMap.get(currentId) || [];
-
-                for (const childId of children) {
-                    if (!candidatePool.has(childId)) {
-                        candidatePool.add(childId);
-                        queue.push(childId);
-                    }
-                }
-            }
-        }
-
-        // Sort candidate pool by importance
-        const sortedCandidates = Array.from(candidatePool)
-            .map((topicId) => ({
-                topicId,
-                importance: metricsMap.get(topicId)?.importance || 0,
-            }))
-            .sort((a, b) => b.importance - a.importance);
-
-        // Select top 2M nodes from sorted pool
-        const targetSize = maxNodes * 2;
-        const selectedTopicIds = new Set<string>();
-
-        for (
-            let i = 0;
-            i < Math.min(targetSize, sortedCandidates.length);
-            i++
-        ) {
-            selectedTopicIds.add(sortedCandidates[i].topicId);
-        }
-
-        const selectedMetrics = topicMetrics.filter((m: any) =>
-            selectedTopicIds.has(m.topicId),
-        );
-
-        const selectedTopics = allTopics.filter((t: any) =>
-            selectedTopicIds.has(t.topicId),
-        );
-
-        const hierarchicalRelationships = allRelationships.filter(
-            (rel: any) =>
-                selectedTopicIds.has(rel.from) && selectedTopicIds.has(rel.to),
-        );
-
-        const selectedTopicIdsArray = Array.from(selectedTopicIds);
-        let lateralRelationships: any[] = [];
-
-        if (websiteCollection.topicRelationships) {
-            // Fetch ALL lateral relationships (all types, min strength 0.3)
-            const lateralRels =
-                websiteCollection.topicRelationships.getRelationshipsForTopicsOptimized(
-                    selectedTopicIdsArray,
-                    0.3,
-                );
-
-            // Build parent map to filter out sibling relationships
-            const parentMap = new Map<string, string>();
-            for (const topic of selectedTopics) {
-                if (topic.parentTopicId) {
-                    parentMap.set(topic.topicId, topic.parentTopicId);
-                }
-            }
-
-            // Filter out sibling relationships (topics with same parent)
-            lateralRelationships = lateralRels
-                .filter((rel: any) => {
-                    const parentA = parentMap.get(rel.fromTopic);
-                    const parentB = parentMap.get(rel.toTopic);
-                    // Skip if both have same parent (siblings)
-                    return !(parentA && parentB && parentA === parentB);
-                })
-                .map((rel: any) => ({
-                    from: rel.fromTopic,
-                    to: rel.toTopic,
-                    type: rel.relationshipType,
-                    strength: rel.strength,
-                }));
-
-            debug(
-                `[Topic Graph] Fetched ${lateralRels.length} lateral relationships, kept ${lateralRelationships.length} after filtering siblings`,
-            );
-        }
-
-        const selectedRelationships = [
-            ...hierarchicalRelationships,
-            ...lateralRelationships,
-        ];
-
-        const topicsWithMetrics = selectedTopics.map((topic: any) => {
-            const metrics = selectedMetrics.find(
-                (m: any) => m.topicId === topic.topicId,
-            );
-            return {
-                ...topic,
-                importance: metrics?.importance || 0,
-                pageRank: metrics?.pageRank || 0,
-                betweenness: metrics?.betweenness || 0,
-                descendantCount: metrics?.descendantCount || 0,
-            };
-        });
-
-        const metadata = {
-            totalTopicsInSystem: allTopics.length,
-            selectedTopicCount: selectedTopics.length,
-            coveragePercentage:
-                (selectedTopics.length / allTopics.length) * 100,
-            importanceThreshold:
-                selectedMetrics[selectedMetrics.length - 1]?.importance || 0,
-            layer: "topic_importance",
-        };
-
-        const cacheKey = `topic_importance_${maxNodes}`;
-        let cachedGraph = getGraphologyCache(cacheKey);
-
-        if (!cachedGraph) {
-            debug("[Graphology] Building layout for topic importance layer...");
-            const layoutStart = performance.now();
-
-            const graphNodes: GraphNode[] = topicsWithMetrics.map(
-                (topic: any) => ({
-                    id: topic.topicId,
-                    name: topic.topicName,
-                    type: "topic",
-                    confidence: topic.confidence || 0.5,
-                    count: topic.descendantCount || 1,
-                    importance: topic.importance || 0,
-                    level: topic.level || 0,
-                    parentId: topic.parentTopicId,
-                    childCount: topic.childCount || 0,
-                }),
-            );
-
-            const graphEdges: GraphEdge[] = selectedRelationships.map(
-                (rel: any) => ({
-                    from: rel.from,
-                    to: rel.to,
-                    type: rel.type,
-                    confidence: rel.strength || rel.confidence || 0.5,
-                    strength: rel.strength || 0.5,
-                }),
-            );
-
-            const graph = buildGraphologyGraph(graphNodes, graphEdges, {
-                nodeLimit: maxNodes * 2,
-                minEdgeConfidence: 0.2,
-                denseClusterThreshold: 100,
-            });
-
-            const cytoscapeElements = convertToCytoscapeElements(graph, 2000);
-            const layoutMetrics = calculateLayoutQualityMetrics(graph);
-            const layoutDuration = performance.now() - layoutStart;
-
-            cachedGraph = createGraphologyCache(
-                graph,
-                cytoscapeElements,
-                layoutDuration,
-                layoutMetrics.avgSpacing,
-            );
-
-            setGraphologyCache(cacheKey, cachedGraph);
-
-            debug(
-                `[Graphology] Layout complete in ${layoutDuration.toFixed(2)}ms`,
-            );
-            debug(
-                `[Graphology] Average node spacing: ${layoutMetrics.avgSpacing.toFixed(2)}`,
-            );
-        } else {
-            debug("[Graphology] Using cached layout");
-        }
-
-        return {
-            topics: topicsWithMetrics,
-            relationships: selectedRelationships,
-            metadata: {
-                ...metadata,
-                graphologyLayout: {
-                    elements: cachedGraph.cytoscapeElements,
-                    layoutDuration: cachedGraph.metadata.layoutDuration,
-                    avgSpacing: cachedGraph.metadata.avgSpacing,
-                    communityCount: cachedGraph.metadata.communityCount,
-                },
-            },
-        };
-    } catch (error) {
-        console.error("Error getting topic importance layer:", error);
-        return {
-            topics: [],
-            relationships: [],
-            metadata: {
-                error: error instanceof Error ? error.message : "Unknown error",
-                layer: "topic_importance",
-            },
-        };
-    }
-}
-
-/**
- * Get viewport-based topic neighborhood expansion
- * Similar to entity graph neighborhood, but for topics
- */
-export async function getTopicViewportNeighborhood(
-    parameters: {
-        centerTopic: string;
-        viewportTopicIds: string[];
-        maxNodes?: number;
-        maxDepth?: number;
-    },
-    context: SessionContext<BrowserActionContext>,
-): Promise<{
-    topics: any[];
-    relationships: any[];
-    metadata: any;
-}> {
-    try {
-        const websiteCollection = context.agentContext.websiteCollection;
-
-        if (!websiteCollection) {
-            return {
-                topics: [],
-                relationships: [],
-                metadata: {
-                    error: "Website collection not available",
-                    layer: "viewport_neighborhood",
-                },
-            };
-        }
-
-        // Ensure cache is populated
-        await ensureTopicGraphCache(websiteCollection);
-
-        // Get cached data
-        const cache = getTopicGraphCache(websiteCollection);
-        if (!cache || !cache.isValid) {
-            return {
-                topics: [],
-                relationships: [],
-                metadata: {
-                    error: "Topic cache not available",
-                    layer: "viewport_neighborhood",
-                },
-            };
-        }
-
-        const allTopics = cache.topics || [];
-        const topicMetrics = cache.topicMetrics || [];
-        const maxNodes = parameters.maxNodes || 200;
-        const maxDepth = parameters.maxDepth || 3;
-
-        // Find center topic
-        const centerTopicData = allTopics.find(
-            (t: any) =>
-                t.topicId?.toLowerCase() ===
-                    parameters.centerTopic.toLowerCase() ||
-                t.topicName?.toLowerCase() ===
-                    parameters.centerTopic.toLowerCase(),
-        );
-
-        if (!centerTopicData) {
-            return {
-                topics: [],
-                relationships: [],
-                metadata: {
-                    error: "Center topic not found",
-                    layer: "viewport_neighborhood",
-                },
-            };
-        }
-
-        // Find viewport topics
-        const viewportTopics: any[] = [];
-        const viewportIdsLower = (parameters.viewportTopicIds || []).map((id) =>
-            id.toLowerCase(),
-        );
-
-        for (const topicId of viewportIdsLower) {
-            const topic = allTopics.find(
-                (t: any) =>
-                    t.topicId?.toLowerCase() === topicId ||
-                    t.topicName?.toLowerCase() === topicId,
-            );
-            if (topic) {
-                viewportTopics.push(topic);
-            }
-        }
-
-        // Build adjacency map (parent-child relationships)
-        const childrenMap = new Map<string, any[]>();
-        const parentMap = new Map<string, any>();
-
-        allTopics.forEach((topic: any) => {
-            if (topic.parentTopicId) {
-                if (!childrenMap.has(topic.parentTopicId)) {
-                    childrenMap.set(topic.parentTopicId, []);
-                }
-                childrenMap.get(topic.parentTopicId)!.push(topic);
-                parentMap.set(topic.topicId, topic.parentTopicId);
-            }
-        });
-
-        // Get topic importance
-        const topicImportanceMap = new Map<string, number>();
-        topicMetrics.forEach((metric: any) => {
-            topicImportanceMap.set(metric.topicId, metric.importance || 0.5);
-        });
-
-        // Start with center and viewport topics
-        const initialTopics = [centerTopicData, ...viewportTopics];
-        const visited = new Set<string>();
-        const result: any[] = [];
-
-        // Add all initial topics
-        initialTopics.forEach((topic) => {
-            if (!visited.has(topic.topicId)) {
-                visited.add(topic.topicId);
-                result.push(topic);
-            }
-        });
-
-        // BFS to expand neighborhood
-        type QueueItem = {
-            topic: any;
-            depth: number;
-        };
-        const queue: QueueItem[] = [];
-
-        // Add children and parents of initial topics
-        initialTopics.forEach((topic) => {
-            // Add children
-            const children = childrenMap.get(topic.topicId) || [];
-            children.forEach((child) => {
-                if (!visited.has(child.topicId)) {
-                    queue.push({ topic: child, depth: 1 });
-                }
-            });
-
-            // Add parent
-            const parentId = parentMap.get(topic.topicId);
-            if (parentId) {
-                const parent = allTopics.find(
-                    (t: any) => t.topicId === parentId,
-                );
-                if (parent && !visited.has(parent.topicId)) {
-                    queue.push({ topic: parent, depth: 1 });
-                }
-            }
-        });
-
-        // Sort by importance
-        queue.sort((a, b) => {
-            const impA = topicImportanceMap.get(a.topic.topicId) || 0;
-            const impB = topicImportanceMap.get(b.topic.topicId) || 0;
-            return impB - impA;
-        });
-
-        // Expand neighborhood
-        while (queue.length > 0 && result.length < maxNodes) {
-            const current = queue.shift()!;
-
-            if (visited.has(current.topic.topicId)) continue;
-            if (current.depth > maxDepth) continue;
-
-            visited.add(current.topic.topicId);
-            result.push(current.topic);
-
-            // Add children of this topic
-            const children = childrenMap.get(current.topic.topicId) || [];
-            children.forEach((child) => {
-                if (!visited.has(child.topicId)) {
-                    queue.push({ topic: child, depth: current.depth + 1 });
-                }
-            });
-
-            // Add parent
-            const parentId = parentMap.get(current.topic.topicId);
-            if (parentId) {
-                const parent = allTopics.find(
-                    (t: any) => t.topicId === parentId,
-                );
-                if (parent && !visited.has(parent.topicId)) {
-                    queue.push({ topic: parent, depth: current.depth + 1 });
-                }
-            }
-
-            // Re-sort by importance
-            queue.sort((a, b) => {
-                const impA = topicImportanceMap.get(a.topic.topicId) || 0;
-                const impB = topicImportanceMap.get(b.topic.topicId) || 0;
-                return impB - impA;
-            });
-        }
-
-        // Build relationships for returned topics
-        const relationships = buildTopicRelationships(result);
-
-        return {
-            topics: result,
-            relationships: relationships,
-            metadata: {
-                layer: "viewport_neighborhood",
-                centerTopic: centerTopicData.topicName,
-                viewportTopicCount: viewportTopics.length,
-                totalTopicsReturned: result.length,
-                maxDepth: maxDepth,
-            },
-        };
-    } catch (error) {
-        debug("[Topic Viewport Neighborhood] Error:", error);
-        return {
-            topics: [],
-            relationships: [],
-            metadata: {
-                error: String(error),
-                layer: "viewport_neighborhood",
-            },
-        };
-    }
-}
-
-/**
- * Build relationships from hierarchical topic parent-child structure
- */
-function buildTopicRelationships(topics: any[]): any[] {
-    const relationships: any[] = [];
-
-    for (const topic of topics) {
-        if (topic.parentTopicId) {
-            relationships.push({
-                from: topic.parentTopicId,
-                to: topic.topicId,
-                type: "parent-child",
-                strength: topic.confidence || 0.8,
-            });
-        }
-    }
-
-    return relationships;
-}
 
 /**
  * Get topic metrics for a specific topic

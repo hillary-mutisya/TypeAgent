@@ -175,7 +175,7 @@ class TopicGraphView {
         try {
             const topicData = await this.fetchGlobalImportanceView();
 
-            if (!topicData || topicData.topics.length === 0) {
+            if (!topicData) {
                 this.showError("No topic data available");
                 return;
             }
@@ -205,7 +205,7 @@ class TopicGraphView {
                 0.0,
             );
 
-            if (!result || !result.topics || result.topics.length === 0) {
+            if (!result ) {
                 console.warn(
                     "[TopicGraphView] No importance layer data available",
                 );
@@ -213,7 +213,7 @@ class TopicGraphView {
             }
 
             console.log(
-                `[TopicGraphView] Fetched global importance layer: ${result.topics.length} topics`,
+                `[TopicGraphView] Fetched global importance layer`,
             );
             if (result.metadata) {
                 console.log(`[TopicGraphView] Metadata:`, result.metadata);
@@ -233,11 +233,13 @@ class TopicGraphView {
      * Transform importance layer data to visualization format
      */
     private transformImportanceLayerData(data: any): any {
-        if (!data.topics || data.topics.length === 0) {
+        if (!data.topics) {
             return this.createEmptyTopicGraph();
         }
 
-        const topics = data.topics.map((topic: any) => ({
+        const inputTopics = data.topics || [];
+
+        const topics = inputTopics.map((topic: any) => ({
             id: topic.topicId,
             name: topic.topicName,
             level: topic.level,
@@ -245,7 +247,7 @@ class TopicGraphView {
             confidence: topic.confidence || 0.7,
             keywords: this.parseKeywords(topic.keywords),
             entityReferences: topic.entityReferences || [],
-            childCount: this.countChildren(topic.topicId, data.topics),
+            childCount: this.countChildren(topic.topicId, inputTopics),
             importance: topic.importance || 0.5,
         }));
 

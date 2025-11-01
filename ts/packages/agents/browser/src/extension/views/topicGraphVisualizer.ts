@@ -135,16 +135,16 @@ export class TopicGraphVisualizer {
                 minZoom: 0.25,
                 maxZoom: 4.0,
                 zoomingEnabled: true,
-                userZoomingEnabled: false,
+                userZoomingEnabled: true,
                 panningEnabled: true,
                 userPanningEnabled: true,
                 boxSelectionEnabled: false,
                 autoungrabify: false,
             });
+            this.setupEventHandlers();
         }
 
         await this.loadData(data);
-        this.setupEventHandlers();
     }
 
 

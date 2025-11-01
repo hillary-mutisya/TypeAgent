@@ -45,11 +45,10 @@ export class EntityGraphVisualizer {
     private entityGraphData: GraphData | null = null;
     private globalGraphData: any = null;
 
-    // Triple-instance approach: separate persistent instances for global, neighborhood, and detail views
+    // Dual-instance approach: separate persistent instances for global and detail views
     private globalInstance: any = null;
-    private neighborhoodInstance: any = null;
     private detailInstance: any = null;
-    private currentActiveView: "global" | "neighborhood" | "detail" = "global";
+    private currentActiveView: "global" | "detail" = "global";
     private onInstanceChangeCallback?: () => void;
     private zoomHandlersSetup: boolean = false;
 
@@ -63,9 +62,6 @@ export class EntityGraphVisualizer {
     // Cursor tracking for center node selection
     private lastCursorPosition: { x: number; y: number } | null = null;
     private isCursorOverMap: boolean = false;
-
-    // Transition protection flags
-    private isLoadingNeighborhood: boolean = false;
 
     // Global view state preservation
     private previousGlobalZoom: number = 1.0; // Store zoom level when leaving global view
@@ -83,16 +79,8 @@ export class EntityGraphVisualizer {
         details?: any;
     }> = [];
 
-    // Hierarchical partitioned loading
-    private currentLayer: "global" | "neighborhood" = "global";
-    private neighborhoodCache = new Map<string, any>();
-    private lastZoomLevel = 1.0;
+    // Graph data provider
     private graphDataProvider: any = null;
-    private zoomThresholds = {
-        enterNeighborhoodMode: 2.5, // Higher threshold - allow more global exploration
-        exitNeighborhoodMode: 0.8, // Zoom out below 0.8x returns to global
-        neighborhoodSwitch: 1.2, // TESTING: Lower pan threshold for smaller graphs
-    };
 
     private spacingScaleThreshold = 1.5; // Start scaling spacing above this zoom level
     private lastSpacingUpdate = 0; // Timestamp to throttle updates
@@ -264,16 +252,6 @@ export class EntityGraphVisualizer {
         globalContainer.style.visibility = "visible";
         this.container.appendChild(globalContainer);
 
-        // Create neighborhood instance container
-        const neighborhoodContainer = document.createElement("div");
-        neighborhoodContainer.style.width = "100%";
-        neighborhoodContainer.style.height = "100%";
-        neighborhoodContainer.style.position = "absolute";
-        neighborhoodContainer.style.top = "0";
-        neighborhoodContainer.style.left = "0";
-        neighborhoodContainer.style.visibility = "hidden";
-        this.container.appendChild(neighborhoodContainer);
-
         // Create detail instance container
         const detailContainer = document.createElement("div");
         detailContainer.style.width = "100%";
@@ -287,24 +265,6 @@ export class EntityGraphVisualizer {
         // Initialize global instance
         this.globalInstance = cytoscape({
             container: globalContainer,
-            elements: [],
-            style: this.getOptimizedStyles(),
-            layout: { name: "grid" },
-            renderer: rendererConfig,
-            minZoom: 0.25,
-            maxZoom: 4.0,
-            zoomingEnabled: true,
-            userZoomingEnabled: false,
-            panningEnabled: true,
-            userPanningEnabled: true,
-            boxSelectionEnabled: false,
-            selectionType: "single",
-            autoungrabify: false,
-        });
-
-        // Initialize neighborhood instance
-        this.neighborhoodInstance = cytoscape({
-            container: neighborhoodContainer,
             elements: [],
             style: this.getOptimizedStyles(),
             layout: { name: "grid" },
@@ -379,11 +339,10 @@ export class EntityGraphVisualizer {
      * Helper to manage instance visibility
      */
     private setInstanceVisibility(
-        activeView: "global" | "neighborhood" | "detail",
+        activeView: "global" | "detail",
     ): void {
         const containers = {
             global: this.globalInstance.container(),
-            neighborhood: this.neighborhoodInstance.container(),
             detail: this.detailInstance.container(),
         };
 
@@ -424,7 +383,6 @@ export class EntityGraphVisualizer {
         this.cy = this.globalInstance;
         this.currentActiveView = "global";
         this.viewMode = "global";
-        this.currentLayer = "global"; // Update layer state
 
         console.log(
             "[DEBUG-SWITCH] After switch state:",
@@ -475,17 +433,6 @@ export class EntityGraphVisualizer {
             this.currentAnchorNodes.clear();
         }
 
-        // Clear neighborhood instance data to prevent cached views
-        if (
-            this.neighborhoodInstance &&
-            this.neighborhoodInstance.elements().length > 0
-        ) {
-            console.log(
-                `[StateClearing] Removing ${this.neighborhoodInstance.elements().length} neighborhood elements`,
-            );
-            this.neighborhoodInstance.elements().remove();
-        }
-
         // Clear anchor position tracking data
         if (this.anchorNodeData && this.anchorNodeData.size > 0) {
             console.log(
@@ -503,15 +450,7 @@ export class EntityGraphVisualizer {
             `[StateClearing] Reset spacing state (preserving ${this.originalNodePositions.size} original positions)`,
         );
 
-        // Optionally clear neighborhood cache to force fresh data fetching
-        if (clearCache && this.neighborhoodCache.size > 0) {
-            console.log(
-                `[StateClearing] Clearing ${this.neighborhoodCache.size} neighborhood cache entries`,
-            );
-            this.neighborhoodCache.clear();
-        }
-
-        console.log("[StateClearing] Neighborhood state cleared successfully");
+        console.log("[StateClearing] State cleared successfully");
     }
 
     /**
@@ -820,34 +759,6 @@ export class EntityGraphVisualizer {
     }
 
     /**
-     * Switch to neighborhood view instance
-     */
-    public switchToNeighborhoodView(): void {
-        console.log("[TripleInstance] Switching to neighborhood view");
-
-        // Hide other instances and show neighborhood
-        this.setInstanceVisibility("neighborhood");
-
-        // Update active references
-        this.cy = this.neighborhoodInstance;
-        this.currentActiveView = "neighborhood";
-        this.viewMode = "global"; // Still global mode, but neighborhood layer
-        this.currentLayer = "neighborhood";
-
-        // Apply neighborhood-specific LoD to ensure labels are visible
-        const currentZoom = this.neighborhoodInstance.zoom();
-        console.log(
-            `[TripleInstance] Applying neighborhood LoD at zoom ${currentZoom.toFixed(3)}`,
-        );
-        this.updateNeighborhoodViewStyles(currentZoom);
-
-        // Notify UI of instance change
-        if (this.onInstanceChangeCallback) {
-            this.onInstanceChangeCallback();
-        }
-    }
-
-    /**
      * Switch to detail view instance
      */
     public switchToDetailView(): void {
@@ -882,7 +793,6 @@ export class EntityGraphVisualizer {
     public canUseFastNavigation(): boolean {
         const instancesExist =
             this.globalInstance !== null &&
-            this.neighborhoodInstance !== null &&
             this.detailInstance !== null;
         const globalHasData =
             instancesExist && this.globalInstance.elements().length > 0;
@@ -902,18 +812,6 @@ export class EntityGraphVisualizer {
     }
 
     /**
-     * Fast switch to neighborhood view
-     */
-    public fastSwitchToNeighborhood(): void {
-        if (
-            this.canUseFastNavigation() &&
-            this.neighborhoodInstance.elements().length > 0
-        ) {
-            this.switchToNeighborhoodView();
-        }
-    }
-
-    /**
      * Fast switch to detail view
      */
     public fastSwitchToDetail(): void {
@@ -925,7 +823,7 @@ export class EntityGraphVisualizer {
     /**
      * Get the current active view for UI integration
      */
-    public getCurrentActiveView(): "global" | "neighborhood" | "detail" {
+    public getCurrentActiveView(): "global" | "detail" {
         return this.currentActiveView;
     }
 
@@ -1461,7 +1359,6 @@ export class EntityGraphVisualizer {
         // Setup for all instances
         [
             this.globalInstance,
-            this.neighborhoodInstance,
             this.detailInstance,
         ].forEach((instance) => {
             if (!instance) return;
@@ -1482,8 +1379,7 @@ export class EntityGraphVisualizer {
 
             // Hide current view before transitioning to detail view
             if (
-                this.currentActiveView === "global" ||
-                this.currentActiveView === "neighborhood"
+                this.currentActiveView === "global"
             ) {
                 this.hideCurrentViewForDetailNavigation();
             }
@@ -1891,116 +1787,6 @@ export class EntityGraphVisualizer {
     }
 
     /**
-     * Load neighborhood data into neighborhood instance (Triple-Instance Architecture)
-     */
-    public async loadNeighborhoodGraph(
-        neighborhoodData: any,
-        centerEntity: string,
-        preserveZoom: boolean = false,
-    ): Promise<void> {
-        // Preserve visual continuity by extracting positions from global view
-        const globalNodePositions = this.extractGlobalNodePositions();
-
-        // Log anchor node positions from global view for comparison
-        const anchorGlobalPositions: any = {};
-        if (this.currentAnchorNodes && this.currentAnchorNodes.size > 0) {
-            this.currentAnchorNodes.forEach((anchorName) => {
-                const globalPos = globalNodePositions.get(anchorName);
-                if (globalPos) {
-                    anchorGlobalPositions[anchorName] = globalPos;
-                }
-            });
-        }
-
-        // SIMPLIFIED: Load all nodes but position non-anchors at center node
-        this.neighborhoodInstance.elements().remove();
-
-        // Use full neighborhood data (don't filter out non-anchor nodes)
-        const elements = this.convertToGraphElements(neighborhoodData);
-        this.neighborhoodInstance.add(elements);
-
-        // SKIP LAYOUT: Position anchor nodes at global coordinates, non-anchors at center
-        const layoutResult = { preservationRatio: 1.0 }; // Mock result for viewport calculation
-
-        // Get center node position (the entity we're centering the neighborhood on)
-        const centerNodePosition = globalNodePositions.get(centerEntity);
-        const centerPos = centerNodePosition || { x: 0, y: 0 };
-
-        this.positionAllNodesDirectly(globalNodePositions, centerPos);
-
-        // Log anchor node positions after direct positioning
-        const anchorPostLayoutPositions: any = {};
-        if (this.currentAnchorNodes && this.currentAnchorNodes.size > 0) {
-            this.currentAnchorNodes.forEach((anchorName) => {
-                // Use same robust node finding approach as positioning and viewport methods
-                let node = this.neighborhoodInstance.$(`#${anchorName}`);
-                if (node.length === 0) {
-                    node = this.neighborhoodInstance.$(
-                        `[name="${anchorName}"]`,
-                    );
-                }
-                if (node.length === 0) {
-                    node = this.neighborhoodInstance
-                        .nodes()
-                        .filter((n: any) => {
-                            const nodeData = n.data();
-                            return (
-                                nodeData.id === anchorName ||
-                                nodeData.name === anchorName
-                            );
-                        });
-                }
-
-                if (node.length > 0) {
-                    const pos = node.position();
-                    anchorPostLayoutPositions[anchorName] = {
-                        x: pos.x,
-                        y: pos.y,
-                    };
-                }
-            });
-            // Calculate position preservation effectiveness
-            let preservedCount = 0;
-            let totalShift = 0;
-            Object.keys(anchorGlobalPositions).forEach((anchorName) => {
-                if (anchorPostLayoutPositions[anchorName]) {
-                    const globalPos = anchorGlobalPositions[anchorName];
-                    const newPos = anchorPostLayoutPositions[anchorName];
-                    const shift = Math.sqrt(
-                        Math.pow(newPos.x - globalPos.x, 2) +
-                            Math.pow(newPos.y - globalPos.y, 2),
-                    );
-                    totalShift += shift;
-                    if (shift < 100) preservedCount++;
-                }
-            });
-        }
-
-        // Only set initial zoom when transitioning from global view, not when reloading
-        if (!preserveZoom) {
-            const preservationRatio = layoutResult.preservationRatio;
-
-            if (preservationRatio > 0.7) {
-                // High preservation: Calculate viewport to show same anchor nodes as global view
-
-                this.setViewportToMatchGlobalAnchors();
-            } else {
-                // Low preservation: Use standard fit
-                this.neighborhoodInstance.fit({
-                    padding: 30,
-                    animate: false,
-                });
-            }
-        }
-
-        // Switch to neighborhood view
-        this.switchToNeighborhoodView();
-
-        // Cache the neighborhood data
-        this.neighborhoodCache.set(centerEntity, neighborhoodData);
-    }
-
-    /**
      * Load entity detail into detail instance (existing - enhanced for triple-instance)
      */
     public async loadEntityDetailGraph(
@@ -2137,8 +1923,7 @@ export class EntityGraphVisualizer {
             // Set appropriate importance values based on current context
             const baseImportance =
                 entity.properties?.importance || entity.importance || 0;
-            const minImportance =
-                this.currentActiveView === "neighborhood" ? 0.5 : 0;
+            const minImportance = 0;
             const effectiveImportance = Math.max(baseImportance, minImportance);
 
             const entityId = entity.id || entity.name;
@@ -2458,9 +2243,8 @@ export class EntityGraphVisualizer {
 
         console.log("[Zoom] Setting up zoom handlers for all instances");
 
-        // Set up zoom interactions for all three instances
+        // Set up zoom interactions for all instances
         this.setupZoomInteractionsForInstance(this.globalInstance);
-        this.setupZoomInteractionsForInstance(this.neighborhoodInstance);
         this.setupZoomInteractionsForInstance(this.detailInstance);
 
         this.zoomHandlersSetup = true;
@@ -2473,8 +2257,6 @@ export class EntityGraphVisualizer {
         let instanceName = "unknown";
         if (instance === this.globalInstance) {
             instanceName = "global";
-        } else if (instance === this.neighborhoodInstance) {
-            instanceName = "neighborhood";
         } else if (instance === this.detailInstance) {
             instanceName = "detail";
         }
@@ -2483,15 +2265,6 @@ export class EntityGraphVisualizer {
         instance.on("zoom", () => {
             const zoom = instance.zoom();
             this.zoomEventCount++;
-
-            // Enhanced logging with threshold information
-            const enterThreshold = this.zoomThresholds.enterNeighborhoodMode;
-            const exitThreshold = this.zoomThresholds.exitNeighborhoodMode;
-            const willTriggerNeighborhood =
-                this.currentActiveView === "global" && zoom > enterThreshold;
-            const willTriggerGlobal =
-                this.currentActiveView === "neighborhood" &&
-                zoom < exitThreshold;
 
             // Only handle view transitions and LOD updates for the currently active instance
             if (instance !== this.cy) {
@@ -2519,9 +2292,7 @@ export class EntityGraphVisualizer {
 
                 // Handle hierarchical loading based on zoom level
                 // Only process if not already loading
-                if (!this.isLoadingNeighborhood) {
-                    await this.handleHierarchicalZoomChange(zoom);
-                }
+                await this.handleHierarchicalZoomChange(zoom);
             }, 16); // ~60fps update rate
         });
 
@@ -2544,222 +2315,7 @@ export class EntityGraphVisualizer {
      * Handle zoom-based hierarchical transitions with protection against multiple triggers
      */
     private async handleHierarchicalZoomChange(newZoom: number): Promise<void> {
-        if (!this.graphDataProvider) return;
-
-        this.lastZoomLevel = newZoom;
-
-        // Determine transitions based on current view and zoom
-        if (
-            this.currentActiveView === "global" &&
-            newZoom > this.zoomThresholds.enterNeighborhoodMode
-        ) {
-            await this.transitionToNeighborhoodMode();
-        } else if (
-            this.currentActiveView === "neighborhood" &&
-            newZoom < this.zoomThresholds.exitNeighborhoodMode
-        ) {
-            await this.transitionToGlobalMode();
-        }
-    }
-
-    /**
-     * Transition from global view to neighborhood view
-     */
-    private async transitionToNeighborhoodMode(): Promise<void> {
-        if (this.isLoadingNeighborhood) {
-            return;
-        }
-
-        // Store current global zoom level before transitioning away
-        this.previousGlobalZoom = this.globalInstance.zoom();
-
-        // Get candidate nodes (viewport or all visible nodes)
-        let candidateNodes = this.getNodesInViewport();
-
-        if (candidateNodes.length === 0) {
-            // Fallback: use all visible nodes when viewport is too zoomed out
-            const activeInstance =
-                this.currentActiveView === "global"
-                    ? this.globalInstance
-                    : this.cy;
-            candidateNodes = activeInstance.nodes().filter((node: any) => {
-                return (
-                    node.style("display") !== "none" &&
-                    node.style("opacity") > 0
-                );
-            });
-        }
-
-        // Smart center node selection: cursor-based if available, otherwise importance-based
-        let centerNode = null;
-        if (this.isCursorOverMap && this.lastCursorPosition) {
-            console.log(
-                `[TripleInstance] Using cursor-based center selection at (${this.lastCursorPosition.x}, ${this.lastCursorPosition.y})`,
-            );
-            console.log(
-                `[TripleInstance] isCursorOverMap: ${this.isCursorOverMap}, lastCursorPosition:`,
-                this.lastCursorPosition,
-            );
-            centerNode = this.findNodeClosestToCursor(
-                candidateNodes,
-                this.lastCursorPosition,
-            );
-
-            if (centerNode) {
-                const centerNodeName =
-                    centerNode.data("name") || centerNode.data("id");
-                console.log(
-                    `[TripleInstance] Cursor-based selection found: ${centerNodeName}`,
-                );
-            } else {
-                console.log(
-                    `[TripleInstance] Cursor-based selection failed to find a node`,
-                );
-            }
-        } else {
-            console.log(
-                `[TripleInstance] Cursor-based selection not available: isCursorOverMap=${this.isCursorOverMap}, hasLastCursorPosition=${!!this.lastCursorPosition}`,
-            );
-        }
-
-        // Fallback to importance-based selection if cursor method didn't find a node
-        if (!centerNode) {
-            console.log(
-                `[TripleInstance] Falling back to importance-based center selection`,
-            );
-            centerNode = this.findMostImportantNode(candidateNodes);
-
-            if (centerNode) {
-                const centerNodeName =
-                    centerNode.data("name") || centerNode.data("id");
-                console.log(
-                    `[TripleInstance] Importance-based selection found: ${centerNodeName}`,
-                );
-            }
-        }
-
-        if (!centerNode) {
-            console.log(
-                "[TripleInstance] No suitable center node found in viewport or global view",
-            );
-            return;
-        }
-
-        const centerEntityName =
-            centerNode.data("name") || centerNode.data("id");
-        const importance =
-            centerNode.data("importance") ||
-            centerNode.data("computedImportance") ||
-            0;
-        console.log(
-            `[TripleInstance] Selected center node: ${centerEntityName} (importance: ${importance})`,
-        );
-
-        // Collect all viewport node names for anchor-based neighborhood construction
-        const viewportNodeNames = candidateNodes.map((node: any) => {
-            return node.data("name") || node.data("id");
-        });
-        console.log(
-            `[TripleInstance] Viewport contains ${viewportNodeNames.length} nodes that will anchor the neighborhood`,
-        );
-        console.log(
-            `[TripleInstance] Viewport nodes (first 10):`,
-            viewportNodeNames.slice(0, 10),
-        );
-
-        // STEP 1: Record current global viewport position before transition
-        this.storedGlobalViewport = {
-            zoom: this.globalInstance.zoom(),
-            pan: this.globalInstance.pan(),
-        };
-        const extent = this.globalInstance.extent();
-        console.log(`[ViewportPreservation] Recorded global viewport state:`, {
-            zoom: this.storedGlobalViewport.zoom,
-            pan: this.storedGlobalViewport.pan,
-            extent: {
-                x1: extent.x1,
-                y1: extent.y1,
-                x2: extent.x2,
-                y2: extent.y2,
-            },
-        });
-
-        // STEP 2: Log anchor node positions in global view before transition
-        this.logAnchorNodePositions("GLOBAL_VIEW", viewportNodeNames);
-
-        // STEP 3: Log global view node positions before transition (legacy)
-        this.logGlobalNodePositions("BEFORE_TRANSITION", viewportNodeNames);
-
-        // Set loading flag to prevent concurrent transitions
-        this.isLoadingNeighborhood = true;
-
-        try {
-            // Check if neighborhood instance already has data for this entity
-            if (this.neighborhoodInstance.elements().length > 0) {
-                // Check if current neighborhood contains center entity
-                const existingCenter = this.neighborhoodInstance.$(
-                    `#${centerEntityName}`,
-                );
-                if (existingCenter.length > 0) {
-                    // Just switch to existing neighborhood
-                    this.switchToNeighborhoodView();
-                    return;
-                }
-            }
-
-            // Load new neighborhood data with viewport nodes as anchors
-            await this.loadNeighborhoodAroundNodes(
-                centerEntityName,
-                viewportNodeNames,
-            );
-        } finally {
-            // Always clear the loading flag
-            this.isLoadingNeighborhood = false;
-        }
-    }
-
-    /**
-     * Transition from neighborhood view to global view
-     */
-    private async transitionToGlobalMode(): Promise<void> {
-        // Prevent duplicate calls during rapid zoom events
-        if (this.isLoadingNeighborhood) {
-            return;
-        }
-
-        // IMPORTANT: Restore viewport BEFORE making instance visible to prevent interference
-        if (this.storedGlobalViewport) {
-            const { zoom, pan } = this.storedGlobalViewport;
-
-            // Apply offset to ensure zoom stays below neighborhood threshold (2.5)
-            const globalZoomWithOffset = Math.min(
-                zoom,
-                this.zoomThresholds.enterNeighborhoodMode - 0.1,
-            );
-
-            // Restore both zoom and pan position while instance is still hidden
-            this.globalInstance.zoom(globalZoomWithOffset);
-            this.globalInstance.pan(pan);
-
-            // Clear stored state after restoration
-            this.storedGlobalViewport = null;
-        } else {
-            // Fallback to old method if no stored viewport
-            const globalZoomWithOffset = Math.min(
-                this.previousGlobalZoom,
-                this.zoomThresholds.enterNeighborhoodMode - 0.1,
-            );
-            this.globalInstance.zoom(globalZoomWithOffset);
-        }
-
-        // Now switch to global view after viewport is already restored
-        this.switchToGlobalView();
-
-        // Force a render to ensure viewport changes are applied (without changing viewport)
-        setTimeout(() => {
-            this.globalInstance.forceRender();
-            const postExtent = this.globalInstance.extent();
-        }, 50);
+        // Neighborhood view removed - zoom-based transitions now handle global and detail views only
     }
 
     private setupContainerInteractions(): void {
@@ -2851,15 +2407,6 @@ export class EntityGraphVisualizer {
         edgeThreshold: number;
     } {
         if (!this.cy) return { nodeThreshold: 0, edgeThreshold: 0 };
-
-        // In hierarchical loading mode, show more nodes since we've pre-filtered
-        if (this.currentLayer === "neighborhood") {
-            // In neighborhood mode, show most nodes (they're already filtered)
-            return {
-                nodeThreshold: 0.01, // Very low threshold to show most nodes
-                edgeThreshold: 0.1,
-            };
-        }
 
         // Get target visibility percentages based on zoom level
         const { nodeVisibilityPercentage, edgeVisibilityPercentage } =
@@ -2958,103 +2505,6 @@ export class EntityGraphVisualizer {
     /**
      * Style-based LOD for entity view mode
      */
-    /**
-     * Update neighborhood view styles with specific LoD for 50-100 node graphs
-     */
-    private updateNeighborhoodViewStyles(zoom: number): void {
-        if (!this.neighborhoodInstance) return;
-
-        const nodes = this.neighborhoodInstance.nodes();
-        const edges = this.neighborhoodInstance.edges();
-        const nodeCount = nodes.length;
-
-        console.log(
-            `[NeighborhoodLoD] Updating styles for ${nodeCount} nodes at zoom ${zoom.toFixed(2)}`,
-        );
-
-        // Calculate neighborhood-specific thresholds based on node count
-        // For 50-100 nodes, we want more granular control and better initial visibility
-        const thresholds = {
-            labelMinZoom: 0.7, // Show labels when zoomed in > 0.7x (more permissive)
-            labelFadeStart: 0.5, // Start fading labels at 0.5x
-            edgeMinZoom: 0.3, // Show edges when > 0.3x
-            nodeMinImportance: 0.1, // Minimum importance to show node
-            labelMinImportance: 0.2, // Minimum importance to show label (more permissive)
-        };
-
-        // Update node visibility and labels based on zoom and importance
-        nodes.forEach((node: any) => {
-            const importance =
-                node.data("importance") ||
-                node.data("computedImportance") ||
-                0.5;
-
-            // Always show nodes in neighborhood view (they're already filtered)
-            node.style("display", "element");
-
-            // Label visibility based on zoom and importance
-            if (
-                zoom >= thresholds.labelMinZoom &&
-                importance >= thresholds.labelMinImportance
-            ) {
-                // Full label visibility when zoomed in
-                const labelOpacity = Math.min(
-                    1,
-                    (zoom - thresholds.labelFadeStart) /
-                        (thresholds.labelMinZoom - thresholds.labelFadeStart),
-                );
-                node.style({
-                    "text-opacity": labelOpacity,
-                    "font-size": Math.max(
-                        8,
-                        Math.min(16, 8 + (zoom - 0.5) * 8),
-                    ),
-                    label: node.data("name"),
-                });
-            } else if (zoom >= thresholds.labelFadeStart) {
-                // Partial label visibility
-                const labelOpacity = (zoom - thresholds.labelFadeStart) / 0.2;
-                node.style({
-                    "text-opacity": labelOpacity * 0.5,
-                    "font-size": 8,
-                    label: node.data("name"),
-                });
-            } else {
-                // Hide labels when zoomed out
-                node.style("text-opacity", 0);
-            }
-
-            // Let Cytoscape handle natural zoom scaling for consistent spacing
-            // Only adjust border width to maintain visual hierarchy
-            const zoomFactor = Math.min(1.5, Math.max(0.5, zoom));
-            node.style({
-                "border-width": Math.max(1, 2 * zoomFactor),
-            });
-        });
-
-        // Edge visibility based on zoom
-        edges.forEach((edge: any) => {
-            if (zoom >= thresholds.edgeMinZoom) {
-                const edgeOpacity = Math.min(
-                    0.8,
-                    0.3 + (zoom - thresholds.edgeMinZoom) * 2,
-                );
-                edge.style({
-                    display: "element",
-                    opacity: edgeOpacity,
-                    // Let Cytoscape handle natural edge width scaling with zoom
-                });
-            } else {
-                edge.style("display", "none");
-            }
-        });
-
-        console.log(
-            `[NeighborhoodLoD] Applied: ${nodes.filter(":visible").length} visible nodes, ` +
-                `${edges.filter(":visible").length} visible edges`,
-        );
-    }
-
     private updateEntityViewStyles(zoom: number): void {
         if (!this.cy) return;
 
@@ -3472,38 +2922,6 @@ export class EntityGraphVisualizer {
         console.log(
             "[DEBUG-VIEWPORT] ================================================",
         );
-    }
-
-    /**
-     * Force apply neighborhood sizes to override CSS mapData
-     */
-    private forceApplyNeighborhoodSizes(): void {
-        console.log(`[SizeForce] === FORCING SIZE APPLICATION ===`);
-
-        let forcedCount = 0;
-        this.neighborhoodInstance.nodes().forEach((node: any) => {
-            const overrideSize = node.data("overrideSize");
-            if (overrideSize) {
-                // Force apply the size with high specificity
-                node.style({
-                    width: `${overrideSize}px !important`,
-                    height: `${overrideSize}px !important`,
-                });
-
-                if (forcedCount < 5) {
-                    const nodeName = node.data("name") || node.data("id");
-                    console.log(
-                        `[SizeForce] Forced ${nodeName}: ${overrideSize}px`,
-                    );
-                }
-                forcedCount++;
-            }
-        });
-
-        console.log(`[SizeForce] Applied forced sizes to ${forcedCount} nodes`);
-
-        // Trigger a style refresh
-        this.neighborhoodInstance.style().update();
     }
 
     /**
@@ -4238,100 +3656,10 @@ export class EntityGraphVisualizer {
         centerEntityName: string,
         viewportNodeNames: string[],
     ): Promise<void> {
-        // Create cache key that includes both center and viewport nodes for better cache utilization
-        const cacheKey = `${centerEntityName}_viewport_${viewportNodeNames.length}`;
-
-        // Check cache first - but be more selective with viewport-based caching
-        // Only use cache if we have the exact same viewport configuration
-        if (this.neighborhoodCache.has(cacheKey)) {
-            console.log(
-                `[TripleInstance] Cache hit for viewport-based neighborhood: ${cacheKey}`,
-            );
-            const cachedData = this.neighborhoodCache.get(cacheKey);
-            // Preserve zoom when loading from cache to avoid jarring resets
-            const shouldPreserveZoom =
-                this.currentActiveView === "neighborhood";
-            await this.loadNeighborhoodGraph(
-                cachedData,
-                centerEntityName,
-                shouldPreserveZoom,
-            );
-            return;
-        }
-
-        // Loading flag is managed by the calling method to avoid conflicts
-        try {
-            this.showNeighborhoodLoadingIndicator(centerEntityName);
-
-            // Use high maxNodes for viewport-based neighborhoods to explore more comprehensively
-            // Since we have multiple anchor points, we want to ensure thorough exploration
-            const maxNodesForNeighborhood = 100;
-            console.log(
-                `[TripleInstance] Using maxNodes=${maxNodesForNeighborhood} for comprehensive viewport-based exploration`,
-            );
-
-            console.log(
-                `[TripleInstance] Loading viewport-based neighborhood for ${centerEntityName} with ${viewportNodeNames.length} anchor nodes`,
-            );
-
-            const neighborhoodData =
-                await this.graphDataProvider.getViewportBasedNeighborhood(
-                    centerEntityName,
-                    viewportNodeNames,
-                    maxNodesForNeighborhood,
-                );
-
-            console.log(
-                "[TripleInstance] About to load viewport-based neighborhood data:",
-                JSON.stringify({
-                    entities: neighborhoodData.entities?.length || 0,
-                    relationships: neighborhoodData.relationships?.length || 0,
-                    centerEntity: centerEntityName,
-                    viewportAnchors: viewportNodeNames.length,
-                    source: neighborhoodData.metadata?.source || "unknown",
-                }),
-            );
-
-            // Apply custom importance calculation for multi-anchor neighborhoods
-            this.calculateMultiAnchorImportance(
-                neighborhoodData,
-                viewportNodeNames,
-            );
-
-            // Cache the result for faster subsequent loads
-            this.neighborhoodCache.set(cacheKey, neighborhoodData);
-
-            // Load into neighborhood instance with anchor-aware LoD
-            // Don't preserve zoom for fresh neighborhood loads (allow initial zoom setup)
-            await this.loadNeighborhoodGraphWithAnchorLoD(
-                neighborhoodData,
-                centerEntityName,
-                viewportNodeNames,
-                false,
-            );
-
-            console.log(
-                "[TripleInstance] Viewport-based neighborhood loaded successfully",
-            );
-
-            // STEP 4: Log anchor node positions in neighborhood view after loading
-            setTimeout(() => {
-                this.logAnchorNodePositions(
-                    "NEIGHBORHOOD_VIEW",
-                    viewportNodeNames,
-                );
-                this.analyzeAnchorNodeShifts(viewportNodeNames);
-            }, 100); // Small delay to ensure rendering is complete
-        } catch (error) {
-            console.error(
-                "[TripleInstance] Error loading viewport-based neighborhood:",
-                error,
-            );
-            this.showNeighborhoodError(centerEntityName);
-        } finally {
-            this.hideNeighborhoodLoadingIndicator();
-            // Loading flag is cleared by the calling method to avoid conflicts
-        }
+        // Neighborhood view removed - method no longer needed
+        console.log(
+            "[TripleInstance] loadNeighborhoodAroundNodes called but neighborhood view is disabled",
+        );
     }
 
     /**
@@ -4515,41 +3843,12 @@ export class EntityGraphVisualizer {
         return distances;
     }
 
-    /**
-     * Load neighborhood graph with anchor-aware Level of Detail
-     */
-    private async loadNeighborhoodGraphWithAnchorLoD(
-        graphData: any,
-        centerEntityName: string,
-        anchorNames: string[],
-        preserveZoom: boolean = false,
-    ): Promise<void> {
-        console.log(
-            `[AnchorLoD] Loading neighborhood with anchor-aware LoD for ${anchorNames.length} anchors`,
-        );
-
-        // Store anchor information for LoD calculations
-        this.currentAnchorNodes = new Set(anchorNames);
-
-        // Load the graph using existing method first
-        await this.loadNeighborhoodGraph(
-            graphData,
-            centerEntityName,
-            preserveZoom,
-        );
-
-        // Apply initial anchor-based LoD after loading
-        this.applyAnchorBasedLoD(this.neighborhoodInstance.zoom());
-
-        console.log(`[AnchorLoD] Anchor-aware LoD applied`);
-    }
-
     // Store current anchor nodes for LoD calculations
     private currentAnchorNodes: Set<string> = new Set();
 
     // Navigation state tracking for hide/show approach with viewport preservation
     private hiddenViewStack: Array<{
-        view: "global" | "neighborhood";
+        view: "global" | "detail";
         viewport: {
             zoom: number;
             pan: { x: number; y: number };
@@ -4561,13 +3860,10 @@ export class EntityGraphVisualizer {
      * Apply Level of Detail based on anchor proximity and zoom level
      */
     private applyAnchorBasedLoD(zoom: number): void {
-        if (!this.neighborhoodInstance || this.currentAnchorNodes.size === 0)
-            return;
+        // Neighborhood view removed - anchor-based LoD no longer needed
+        return;
 
-        console.log(
-            `[AnchorLoD] Applying LoD at zoom ${zoom.toFixed(2)} with ${this.currentAnchorNodes.size} anchors`,
-        );
-
+        /* Dead code - commented out to fix compilation errors
         // Define zoom-based visibility thresholds
         const thresholds = {
             anchorsOnly: 0.5, // Show only anchor nodes
@@ -4576,8 +3872,9 @@ export class EntityGraphVisualizer {
             fullGraph: 3.0, // Show all nodes based on importance
         };
 
-        const nodes = this.neighborhoodInstance.nodes();
-        const edges = this.neighborhoodInstance.edges();
+        // Neighborhood instance removed
+        // const nodes = this.neighborhoodInstance.nodes();
+        // const edges = this.neighborhoodInstance.edges();
 
         let visibleNodeCount = 0;
         let visibleEdgeCount = 0;
@@ -4691,20 +3988,18 @@ export class EntityGraphVisualizer {
             `[AnchorLoD] LoD applied: ${visibleNodeCount}/${nodes.length} nodes, ${visibleEdgeCount}/${edges.length} edges visible`,
         );
     }
+    */ // End dead code comment block
+    }
 
     /**
      * Hide current view for detail navigation
      */
     private hideCurrentViewForDetailNavigation(): void {
         if (
-            this.currentActiveView === "global" ||
-            this.currentActiveView === "neighborhood"
+            this.currentActiveView === "global"
         ) {
             // Capture current viewport state before hiding
-            const currentInstance =
-                this.currentActiveView === "global"
-                    ? this.globalInstance
-                    : this.neighborhoodInstance;
+            const currentInstance = this.globalInstance;
             const viewport = {
                 zoom: currentInstance.zoom(),
                 pan: currentInstance.pan(),
@@ -4766,29 +4061,6 @@ export class EntityGraphVisualizer {
                         `[Navigation] Global view zoom after restoration: ${restoredZoom.toFixed(3)} (expected: ${hiddenView.viewport.zoom.toFixed(3)})`,
                     );
                 }, 50);
-            } else if (hiddenView.view === "neighborhood") {
-                this.switchToNeighborhoodView();
-
-                // Delay viewport restoration to ensure LoD updates are complete
-                setTimeout(() => {
-                    // Force resize to recalculate container dimensions, then restore viewport
-                    this.neighborhoodInstance.resize();
-
-                    // Log current zoom before restoration
-                    const currentZoom = this.neighborhoodInstance.zoom();
-                    console.log(
-                        `[Navigation] Neighborhood view zoom before restoration: ${currentZoom.toFixed(3)}`,
-                    );
-
-                    this.neighborhoodInstance.zoom(hiddenView.viewport.zoom);
-                    this.neighborhoodInstance.pan(hiddenView.viewport.pan);
-
-                    // Verify zoom was actually set
-                    const restoredZoom = this.neighborhoodInstance.zoom();
-                    console.log(
-                        `[Navigation] Neighborhood view zoom after restoration: ${restoredZoom.toFixed(3)} (expected: ${hiddenView.viewport.zoom.toFixed(3)})`,
-                    );
-                }, 50);
             }
 
             console.log(
@@ -4811,7 +4083,7 @@ export class EntityGraphVisualizer {
     /**
      * Get the type of the most recent hidden view
      */
-    public getHiddenViewType(): "global" | "neighborhood" | null {
+    public getHiddenViewType(): "global" | "detail" | null {
         if (this.hiddenViewStack.length === 0) return null;
         return this.hiddenViewStack[this.hiddenViewStack.length - 1].view;
     }
@@ -4836,10 +4108,6 @@ export class EntityGraphVisualizer {
         // Route to appropriate instance-specific loading method
         if (this.currentActiveView === "global") {
             await this.loadGlobalGraph(graphData);
-        } else if (this.currentActiveView === "neighborhood") {
-            const centerEntity = graphData.entities?.[0]?.id || "unknown";
-            // Preserve zoom when reloading neighborhood data to avoid jarring resets
-            await this.loadNeighborhoodGraph(graphData, centerEntity, true);
         } else if (this.currentActiveView === "detail") {
             const centerEntity = graphData.entities?.[0]?.id || "unknown";
             await this.loadEntityDetailGraph(graphData, centerEntity);
@@ -5905,7 +5173,7 @@ export class EntityGraphVisualizer {
         const activeInstance =
             phase === "GLOBAL_VIEW"
                 ? this.globalInstance
-                : this.neighborhoodInstance;
+                : /* this.neighborhoodInstance */ this.globalInstance;
         const viewport = activeInstance.extent();
         const viewportInfo = {
             zoom: activeInstance.zoom(),
@@ -6286,14 +5554,10 @@ export class EntityGraphVisualizer {
      * Set neighborhood viewport to show the same anchor nodes that were visible in global view
      */
     private setViewportToMatchGlobalAnchors(): void {
-        if (!this.currentAnchorNodes || this.currentAnchorNodes.size === 0) {
-            console.log(
-                `[ViewportMatching] No anchor nodes available, using default fit`,
-            );
-            this.neighborhoodInstance.fit({ padding: 30, animate: false });
-            return;
-        }
+        // Neighborhood view removed - viewport matching no longer needed
+        return;
 
+        /* Dead code - all references to this.neighborhoodInstance have been commented out
         // Get anchor node positions in neighborhood view
         const anchorPositions: Array<{ x: number; y: number }> = [];
         this.currentAnchorNodes.forEach((anchorName) => {
@@ -6383,6 +5647,7 @@ export class EntityGraphVisualizer {
         console.log(
             `[ViewportMatching] Anchor center: (${anchorCenterX.toFixed(1)}, ${anchorCenterY.toFixed(1)}), container: ${containerWidth}x${containerHeight}`,
         );
+        */
     }
 
     /**
@@ -6393,6 +5658,10 @@ export class EntityGraphVisualizer {
         globalPositions: Map<string, { x: number; y: number }>,
         centerPosition: { x: number; y: number },
     ): void {
+        // Neighborhood view removed - dead code
+        return;
+
+        /* Dead code - function not called, all neighborhood view references removed
         const allNodes = this.neighborhoodInstance.nodes();
         let anchorCount = 0;
         let nonAnchorCount = 0;
@@ -6629,13 +5898,11 @@ export class EntityGraphVisualizer {
         setTimeout(() => {
             anchorNodes.forEach((node: any) => node.unlock());
             console.log(
-                `[COSE Layout] 🔓 Unlocked ${anchorCount} anchor nodes after layout completion`,
+                `[COSE Layout] Unlocked ${anchorCount} anchor nodes after layout completion`,
             );
         }, 50);
 
-        // Apply size overrides after layout and positioning
-        setTimeout(() => {
-            this.forceApplyNeighborhoodSizes();
-        }, 200);
+        // Neighborhood view removed - size overrides no longer needed
+        */
     }
 }

@@ -843,11 +843,8 @@ export class EntityGraphVisualizer {
     }
 
     private setupNodeInteractions(): void {
-        [this.globalInstance].forEach((instance) => {
-            if (!instance) return;
-
-            this.setupNodeInteractionsForInstance(instance);
-        });
+        if (!this.cy) return;
+        this.setupNodeInteractionsForInstance(this.cy);
     }
 
     private setupNodeInteractionsForInstance(instance: any): void {

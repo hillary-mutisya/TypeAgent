@@ -9,7 +9,6 @@ interface TopicGraphViewState {
     searchQuery: string;
     visibleLevels: number[];
     sidebarOpen: boolean;
-    prototypeMode: boolean;
 }
 
 class TopicGraphView {
@@ -21,7 +20,6 @@ class TopicGraphView {
         searchQuery: "",
         visibleLevels: [0, 1, 2, 3],
         sidebarOpen: false,
-        prototypeMode: false,
     };
 
     private loadingOverlay: HTMLElement;
@@ -94,19 +92,6 @@ class TopicGraphView {
             ?.addEventListener("click", () => {
                 this.exportGraphologyJson();
             });
-
-        const prototypeModeCheckbox = document.getElementById("prototypeMode") as HTMLInputElement;
-        if (prototypeModeCheckbox) {
-            prototypeModeCheckbox.addEventListener("change", (e) => {
-                const checkbox = e.target as HTMLInputElement;
-                this.togglePrototypeMode(checkbox.checked);
-            });
-
-            // Enable prototype mode by default if checkbox is checked
-            if (prototypeModeCheckbox.checked) {
-                this.togglePrototypeMode(true);
-            }
-        }
 
         // Settings modal removed - using optimized defaults
 
@@ -1079,23 +1064,6 @@ class TopicGraphView {
         URL.revokeObjectURL(url);
 
         this.showNotification("Cytoscape JSON exported successfully");
-    }
-
-    private togglePrototypeMode(enabled: boolean): void {
-        this.state.prototypeMode = enabled;
-        console.log(
-            `[TopicGraphView] Prototype mode: ${enabled ? "ENABLED" : "DISABLED"}`,
-        );
-
-        if (!this.lastLoadedData) {
-            this.showNotification("No data available. Load a graph first.");
-            return;
-        }
-
-        this.visualizer?.setPrototypeMode(enabled);
-        this.showNotification(
-            enabled ? "Prototype mode enabled" : "Prototype mode disabled",
-        );
     }
 
     private toggleSidebar(): void {

@@ -55,7 +55,6 @@ export class EntityGraphVisualizer {
 
     private layoutCache: Map<string, any> = new Map();
     private zoomTimer: any = null;
-    private isUpdatingLOD: boolean = false;
     private isNodeBeingDragged: boolean = false;
     private layoutUpdateTimer: any = null;
     private selectedNodes: Set<string> = new Set();
@@ -83,12 +82,6 @@ export class EntityGraphVisualizer {
         zoom: number;
         details?: any;
     }> = [];
-
-    // LOD performance optimization
-    private lodThresholds: Map<
-        number,
-        { nodeThreshold: number; edgeThreshold: number }
-    > = new Map();
 
     // Hierarchical partitioned loading
     private currentLayer: "global" | "neighborhood" = "global";
@@ -1027,7 +1020,6 @@ export class EntityGraphVisualizer {
         }
 
         // Reset state flags
-        this.isUpdatingLOD = false;
         this.isNodeBeingDragged = false;
 
         // Clear cached data
@@ -1084,59 +1076,7 @@ export class EntityGraphVisualizer {
         };
     }
 
-    /**
-     * Pre-compute LOD thresholds to avoid calculation during zoom events
-     */
-    private precomputeLODThresholds(): void {
-        // Don't require this.cy to be set - we can precompute thresholds independently
-        const zoomLevels = [0.1, 0.3, 0.6, 1.0, 1.5, 3.0, 6.0, 10.0];
-        this.lodThresholds.clear();
 
-        zoomLevels.forEach((zoom) => {
-            const thresholds = this.calculateDynamicThresholds(zoom);
-            this.lodThresholds.set(zoom, thresholds);
-        });
-
-        console.log(
-            `[Performance] Pre-computed LOD thresholds for ${zoomLevels.length} zoom levels`,
-        );
-    }
-
-    /**
-     * Fast threshold lookup during zoom events
-     */
-    private getFastLODThresholds(zoom: number): {
-        nodeThreshold: number;
-        edgeThreshold: number;
-    } {
-        // Find closest pre-computed zoom level
-        const zoomLevels = Array.from(this.lodThresholds.keys()).sort(
-            (a, b) => a - b,
-        );
-
-        // Handle empty array case
-        if (zoomLevels.length === 0) {
-            console.warn(
-                `[Performance] LOD thresholds not precomputed, falling back to calculation for zoom ${zoom}`,
-            );
-            return this.calculateDynamicThresholds(zoom);
-        }
-
-        const closestZoom = zoomLevels.reduce((prev, curr) =>
-            Math.abs(curr - zoom) < Math.abs(prev - zoom) ? curr : prev,
-        );
-
-        const thresholds = this.lodThresholds.get(closestZoom);
-        if (thresholds) {
-            return thresholds;
-        }
-
-        // Fallback to calculation if not found
-        console.warn(
-            `[Performance] Precomputed threshold not found for zoom ${closestZoom}, falling back to calculation`,
-        );
-        return this.calculateDynamicThresholds(zoom);
-    }
 
     /**
      * Normalize wheel delta values for cross-platform consistency
@@ -2372,8 +2312,7 @@ export class EntityGraphVisualizer {
         this.cy = this.globalInstance;
         this.currentActiveView = "global";
 
-        // Pre-compute LOD thresholds for performance
-        this.precomputeLODThresholds();
+        // LoD system removed - using simple zoom-based opacity instead
 
         this.setupZoomInteractions();
         this.setupInteractions();
@@ -2388,9 +2327,7 @@ export class EntityGraphVisualizer {
         // Fit to view
         this.globalInstance.fit({ maxZoom: 2.0 });
 
-        // Apply initial LOD
-        const zoomAfterFit = this.globalInstance.zoom();
-        this.updateStyleBasedLOD(zoomAfterFit);
+        // LoD system removed - using simple zoom-based opacity instead
     }
 
     private async applyLayoutWithCache(cacheKey: string): Promise<void> {
@@ -2575,26 +2512,10 @@ export class EntityGraphVisualizer {
             // Smooth 60fps LOD updates
             clearTimeout(this.zoomTimer);
             this.zoomTimer = setTimeout(async () => {
-                // Use simplified LOD in prototype mode
-                if (this.prototypeMode) {
-                    this.updateSimplifiedLOD();
-                    return;
-                }
+                // LoD system removed - using simple zoom-based opacity instead
 
-                // Apply appropriate LoD based on current view and instance
-                if (
-                    instanceName === "neighborhood" &&
-                    this.currentAnchorNodes.size > 0
-                ) {
-                    // Use anchor-based LoD for neighborhood view
-                    this.applyAnchorBasedLoD(zoom);
-                } else {
-                    // Use standard style-based LoD for global and detail views
-                    this.updateStyleBasedLOD(zoom);
-
-                    // Apply dynamic spacing adjustments for global and detail views
-                    this.updateDynamicSpacing(zoom);
-                }
+                // Apply dynamic spacing adjustments
+                this.updateDynamicSpacing(zoom);
 
                 // Handle hierarchical loading based on zoom level
                 // Only process if not already loading
@@ -2920,134 +2841,6 @@ export class EntityGraphVisualizer {
         );
     }
 
-    /**
-     * Style-based LOD using Cytoscape.js best practices
-     * Replaces data swapping with style updates for smooth performance
-     */
-    private updateStyleBasedLOD(zoom: number): void {
-        if (!this.cy) {
-            console.log("[DEBUG] updateStyleBasedLOD: No cytoscape instance");
-            return;
-        }
-
-        // CRITICAL: Only apply LoD to the currently active/visible instance
-        // This prevents hidden instances from being modified while not visible
-        const isGlobalVisible = this.currentActiveView === "global";
-        const isNeighborhoodVisible = this.currentActiveView === "neighborhood";
-        const isDetailVisible = this.currentActiveView === "detail";
-
-        if (this.cy === this.globalInstance && !isGlobalVisible) {
-            return;
-        }
-        if (this.cy === this.neighborhoodInstance && !isNeighborhoodVisible) {
-            return;
-        }
-        if (this.cy === this.detailInstance && !isDetailVisible) {
-            return;
-        }
-
-        // Validate and clamp zoom value to reasonable bounds
-        if (!isFinite(zoom)) {
-            console.error(
-                `[Zoom] Non-finite zoom in updateStyleBasedLOD: ${zoom}`,
-            );
-            return; // Skip update with invalid zoom
-        }
-
-        // Clamp zoom to our configured bounds (0.25 - 4.0)
-        if (zoom < 0.25) {
-            console.warn(`[Zoom] Zoom too low (${zoom}), clamping to 0.25`);
-            zoom = 0.25;
-        } else if (zoom > 4.0) {
-            console.warn(`[Zoom] Zoom too high (${zoom}), clamping to 4.0`);
-            zoom = 4.0;
-        }
-
-        // Check active instance for triple-instance architecture
-        if (this.currentActiveView === "detail") {
-            // In detail view instance - only update styles, no automatic transitions
-            this.updateEntityViewStyles(zoom);
-            // Note: No automatic transitions in triple-instance architecture
-            return;
-        }
-
-        // Neighborhood view mode - specific LoD treatment
-        if (this.currentActiveView === "neighborhood") {
-            this.updateNeighborhoodViewStyles(zoom);
-            return;
-        }
-
-        // Use pre-computed thresholds for performance
-        const { nodeThreshold, edgeThreshold } =
-            this.getFastLODThresholds(zoom);
-
-        // Use batch for optimal performance
-        this.cy.batch(() => {
-            let visibleNodes = 0;
-            let visibleEdges = 0;
-
-            // Update node visibility based on importance
-            this.cy.nodes().forEach((node: any) => {
-                const importance =
-                    node.data("importance") ||
-                    node.data("computedImportance") ||
-                    0;
-                const degreeCount = node.data("degreeCount") || 0;
-                const centralityScore = node.data("centralityScore") || 0;
-
-                // Calculate effective importance from available metrics
-                const effectiveImportance = Math.max(
-                    importance,
-                    degreeCount / 100,
-                    centralityScore,
-                );
-
-                if (effectiveImportance >= nodeThreshold) {
-                    node.style("display", "element");
-
-                    // Show labels based on zoom level and importance
-                    const fontSize = this.calculateNodeFontSize(
-                        zoom,
-                        effectiveImportance,
-                    );
-                    node.style({
-                        "font-size": fontSize + "px",
-                        "text-opacity": fontSize > 0 ? 1 : 0,
-                    });
-
-                    visibleNodes++;
-                } else {
-                    node.style("display", "none");
-                }
-            });
-
-            // Update edge visibility based on confidence and connected node visibility
-            this.cy.edges().forEach((edge: any) => {
-                const confidence =
-                    edge.data("confidence") ||
-                    edge.data("strength") ||
-                    edge.data("weight") ||
-                    0.5;
-                const source = edge.source();
-                const target = edge.target();
-
-                // Only show edge if both nodes are visible and confidence meets threshold
-                const sourceVisible = source.style("display") === "element";
-                const targetVisible = target.style("display") === "element";
-
-                if (
-                    sourceVisible &&
-                    targetVisible &&
-                    confidence >= edgeThreshold
-                ) {
-                    edge.style("display", "element");
-                    visibleEdges++;
-                } else {
-                    edge.style("display", "none");
-                }
-            });
-        });
-    }
 
     /**
      * Calculate dynamic thresholds based on actual data distribution
@@ -3885,8 +3678,7 @@ export class EntityGraphVisualizer {
             this.cy.add(elements);
         });
 
-        // Pre-compute LOD thresholds for performance
-        this.precomputeLODThresholds();
+        // LoD system removed - using simple zoom-based opacity instead
 
         console.timeEnd("[Transition] Load global elements");
     }
@@ -3895,8 +3687,7 @@ export class EntityGraphVisualizer {
      * Apply global layout and focus on entity
      */
     private applyGlobalLayout(currentZoom: number, entityPosition: any): void {
-        // Apply style-based LOD for current zoom
-        this.updateStyleBasedLOD(currentZoom);
+        // LoD system removed - using simple zoom-based opacity instead
 
         // If we had an entity position, try to center on it
         if (entityPosition && this.currentEntity) {
@@ -5515,51 +5306,6 @@ export class EntityGraphVisualizer {
         }
     }
 
-    /**
-     * Simplified LOD system for prototype mode - replaces complex multi-instance logic
-     */
-    private updateSimplifiedLOD(): void {
-        if (!this.cy || !this.prototypeMode) return;
-
-        const zoom = this.cy.zoom();
-
-        if (zoom < 0.5) {
-            // Very zoomed out - show only high importance nodes
-            this.cy.nodes().forEach((node: any) => {
-                const importance = node.data('importance') || 0;
-                node.style({
-                    'opacity': importance > 0.8 ? 1 : 0.3,
-                    'text-opacity': 0
-                });
-            });
-            this.cy.edges().style({
-                'opacity': 0.2
-            });
-        } else if (zoom < 1.5) {
-            // Medium zoom - show all nodes, labels for important ones
-            this.cy.nodes().forEach((node: any) => {
-                const importance = node.data('importance') || 0;
-                node.style({
-                    'opacity': 1,
-                    'text-opacity': importance > 0.6 ? 1 : 0
-                });
-            });
-            this.cy.edges().style({
-                'opacity': 0.6
-            });
-        } else {
-            // Zoomed in - show all labels
-            this.cy.nodes().style({
-                'opacity': 1,
-                'text-opacity': 1
-            });
-            this.cy.edges().style({
-                'opacity': 0.8
-            });
-        }
-
-        console.log(`[EntityGraphVisualizer] Simplified LOD updated for zoom: ${zoom.toFixed(2)}`);
-    }
 
 
     // Interactive feature implementations

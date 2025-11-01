@@ -892,25 +892,15 @@ class TopicGraphView {
 
                 <div class="topic-keywords">
                     <h6>Keywords</h6>
-                    <div class="keyword-tags">
-                        ${topic.keywords
-                            .map(
-                                (keyword: string) =>
-                                    `<span class="keyword-tag">${this.escapeHtml(keyword)}</span>`,
-                            )
-                            .join("")}
+                    <div id="topicKeywords" class="keyword-tags">
+                        <span class="text-muted">Loading...</span>
                     </div>
                 </div>
 
                 <div class="topic-entities">
                     <h6>Related Entities</h6>
-                    <ul class="entity-list">
-                        ${topic.entityReferences
-                            .map(
-                                (entity: string) =>
-                                    `<li class="entity-item" title="Click to view in Entity Graph">${this.escapeHtml(entity)}</li>`,
-                            )
-                            .join("")}
+                    <ul id="topicEntities" class="entity-list">
+                        <li class="text-muted">Loading...</li>
                     </ul>
                 </div>
 
@@ -927,36 +917,66 @@ class TopicGraphView {
 
         this.state.sidebarOpen = true;
 
-        this.loadTopicMetrics(topic.id);
+        this.loadTopicDetails(topic.id);
     }
 
-    private async loadTopicMetrics(topicId: string): Promise<void> {
+    private async loadTopicDetails(topicId: string): Promise<void> {
         try {
-            const result = await this.extensionService.getTopicMetrics(topicId);
+            const result = await this.extensionService.getTopicDetails(topicId);
 
-            if (result && result.success) {
-                const metrics = result.metrics;
+            if (result && result.success && result.details) {
+                const details = result.details;
+
                 const firstSeenEl = document.getElementById("topicFirstSeen");
                 const lastSeenEl = document.getElementById("topicLastSeen");
+                const keywordsEl = document.getElementById("topicKeywords");
+                const entitiesEl = document.getElementById("topicEntities");
 
                 if (firstSeenEl) {
-                    firstSeenEl.textContent = metrics.firstSeen
-                        ? this.formatDate(metrics.firstSeen)
+                    firstSeenEl.textContent = details.firstSeen
+                        ? this.formatDate(details.firstSeen)
                         : "-";
                 }
 
                 if (lastSeenEl) {
-                    lastSeenEl.textContent = metrics.lastSeen
-                        ? this.formatDate(metrics.lastSeen)
+                    lastSeenEl.textContent = details.lastSeen
+                        ? this.formatDate(details.lastSeen)
                         : "-";
+                }
+
+                if (keywordsEl && details.keywords && details.keywords.length > 0) {
+                    keywordsEl.innerHTML = details.keywords
+                        .map(
+                            (keyword: string) =>
+                                `<span class="keyword-tag">${this.escapeHtml(keyword)}</span>`,
+                        )
+                        .join("");
+                } else if (keywordsEl) {
+                    keywordsEl.innerHTML = '<span class="text-muted">No keywords</span>';
+                }
+
+                if (entitiesEl && details.entityReferences && details.entityReferences.length > 0) {
+                    entitiesEl.innerHTML = details.entityReferences
+                        .map(
+                            (entity: string) =>
+                                `<li class="entity-item" title="Click to view in Entity Graph">${this.escapeHtml(entity)}</li>`,
+                        )
+                        .join("");
+                } else if (entitiesEl) {
+                    entitiesEl.innerHTML = '<li class="text-muted">No related entities</li>';
                 }
             }
         } catch (error) {
-            console.error("Error loading topic metrics:", error);
+            console.error("Error loading topic details:", error);
             const firstSeenEl = document.getElementById("topicFirstSeen");
             const lastSeenEl = document.getElementById("topicLastSeen");
+            const keywordsEl = document.getElementById("topicKeywords");
+            const entitiesEl = document.getElementById("topicEntities");
+
             if (firstSeenEl) firstSeenEl.textContent = "-";
             if (lastSeenEl) lastSeenEl.textContent = "-";
+            if (keywordsEl) keywordsEl.innerHTML = '<span class="text-muted">Error loading</span>';
+            if (entitiesEl) entitiesEl.innerHTML = '<li class="text-muted">Error loading</li>';
         }
     }
 

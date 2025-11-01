@@ -43,6 +43,8 @@ import {
     getUrlContentBreakdown,
     getTopicTimelines,
     discoverRelatedKnowledge,
+    getTopicDetails,
+    getEntityDetails,
 } from "./graphActions.mjs";
 import {
     checkAIModelStatus,
@@ -151,6 +153,11 @@ export async function handleKnowledgeAction(
         // Search Actions (kept in searchWebMemories)
         case "searchWebMemories":
             return await searchWebMemories(parameters, context);
+
+        case "getTopicDetails":
+            return await getTopicDetails(parameters, context);
+        case "getEntityDetails":
+            return await getEntityDetails(parameters, context);
 
         default:
             throw new Error(`Unknown knowledge action: ${actionName}`);

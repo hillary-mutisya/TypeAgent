@@ -1464,7 +1464,7 @@ export class EntityGraphVisualizer {
                     "text-background-opacity": 0.7,
                     "text-background-padding": "2px",
                     "border-width": 1,
-                    "border-color": "data(borderColor)",
+                    "border-color": "#666",
                     "z-index": 10,
                 },
             },

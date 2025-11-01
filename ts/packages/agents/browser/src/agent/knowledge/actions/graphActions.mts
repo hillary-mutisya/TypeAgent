@@ -3357,6 +3357,295 @@ export async function getTopicMetrics(
 }
 
 /**
+ * Get detailed information for a specific topic including entity references, keywords, and timeline
+ * This is called on-demand when user clicks a topic node to populate the sidepanel
+ */
+export async function getTopicDetails(
+    parameters: {
+        topicId: string;
+    },
+    context: SessionContext<BrowserActionContext>,
+): Promise<{
+    success: boolean;
+    details?: {
+        topicId: string;
+        topicName: string;
+        level: number;
+        confidence: number;
+        entityReferences: string[];
+        keywords: string[];
+        firstSeen?: string;
+        lastSeen?: string;
+        parentTopicId?: string;
+        childCount?: number;
+    };
+    error?: string;
+}> {
+    try {
+        const websiteCollection = context.agentContext.websiteCollection;
+
+        if (!websiteCollection) {
+            return {
+                success: false,
+                error: "Website collection not available",
+            };
+        }
+
+        if (!websiteCollection.hierarchicalTopics) {
+            return {
+                success: false,
+                error: "Hierarchical topics not available",
+            };
+        }
+
+        const allTopics = websiteCollection.hierarchicalTopics.getTopicHierarchy() || [];
+        const topic = allTopics.find((t: any) => t.topicId === parameters.topicId);
+
+        if (!topic) {
+            return {
+                success: false,
+                error: "Topic not found",
+            };
+        }
+
+        const topicData: any = topic;
+        const sourceTopicNames: Set<string> = new Set();
+
+        if (topicData.sourceTopicNames && Array.isArray(topicData.sourceTopicNames)) {
+            topicData.sourceTopicNames.forEach((name: string) => sourceTopicNames.add(name));
+        }
+
+        if (topicData.childIds && Array.isArray(topicData.childIds)) {
+            topicData.childIds.forEach((childId: string) => {
+                const childTopic = allTopics.find((t: any) => t.topicId === childId);
+                if (childTopic && childTopic.sourceTopicNames && Array.isArray(childTopic.sourceTopicNames)) {
+                    childTopic.sourceTopicNames.forEach((name: string) => sourceTopicNames.add(name));
+                }
+            });
+        }
+
+        const entityReferences: Set<string> = new Set();
+        const keywords: Set<string> = new Set();
+        let firstSeen: string | undefined;
+        let lastSeen: string | undefined;
+
+        if (websiteCollection.knowledgeTopics && sourceTopicNames.size > 0) {
+            const knowledgeTopicsCollection = websiteCollection.knowledgeTopics as any;
+
+            for (const topicName of sourceTopicNames) {
+                const knowledgeTopic = knowledgeTopicsCollection.topics?.get(topicName);
+
+                if (knowledgeTopic) {
+                    if (knowledgeTopic.entityReferences && Array.isArray(knowledgeTopic.entityReferences)) {
+                        knowledgeTopic.entityReferences.forEach((entity: string) => entityReferences.add(entity));
+                    }
+
+                    if (knowledgeTopic.keywords) {
+                        const keywordArray = Array.isArray(knowledgeTopic.keywords)
+                            ? knowledgeTopic.keywords
+                            : [knowledgeTopic.keywords];
+                        keywordArray.forEach((kw: string) => keywords.add(kw));
+                    }
+
+                    if (knowledgeTopic.firstSeenTime) {
+                        if (!firstSeen || knowledgeTopic.firstSeenTime < firstSeen) {
+                            firstSeen = knowledgeTopic.firstSeenTime;
+                        }
+                    }
+
+                    if (knowledgeTopic.lastSeenTime) {
+                        if (!lastSeen || knowledgeTopic.lastSeenTime > lastSeen) {
+                            lastSeen = knowledgeTopic.lastSeenTime;
+                        }
+                    }
+                }
+            }
+        }
+
+        const details: {
+            topicId: string;
+            topicName: string;
+            level: number;
+            confidence: number;
+            entityReferences: string[];
+            keywords: string[];
+            firstSeen?: string;
+            lastSeen?: string;
+            parentTopicId?: string;
+            childCount?: number;
+        } = {
+            topicId: topic.topicId,
+            topicName: topic.topicName,
+            level: topic.level || 0,
+            confidence: topic.confidence || 0,
+            entityReferences: Array.from(entityReferences),
+            keywords: Array.from(keywords),
+        };
+
+        if (firstSeen) details.firstSeen = firstSeen;
+        if (lastSeen) details.lastSeen = lastSeen;
+        if (topic.parentTopicId) details.parentTopicId = topic.parentTopicId;
+        if (topicData.childCount !== undefined) details.childCount = topicData.childCount as number;
+
+        return {
+            success: true,
+            details,
+        };
+    } catch (error) {
+        console.error("Error getting topic details:", error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : "Unknown error",
+        };
+    }
+}
+
+/**
+ * Get detailed information for a specific entity including related topics, entities, and sources
+ * This is called on-demand when user clicks an entity node to populate the sidepanel
+ */
+export async function getEntityDetails(
+    parameters: {
+        entityName: string;
+    },
+    context: SessionContext<BrowserActionContext>,
+): Promise<{
+    success: boolean;
+    details?: {
+        name: string;
+        type: string;
+        confidence: number;
+        count: number;
+        degree?: number;
+        importance?: number;
+        topicAffinity?: string[];
+        relatedEntities?: string[];
+        websites?: string[];
+        firstSeen?: string;
+        lastSeen?: string;
+        facets?: any[];
+    };
+    error?: string;
+}> {
+    try {
+        const websiteCollection = context.agentContext.websiteCollection;
+
+        if (!websiteCollection) {
+            return {
+                success: false,
+                error: "Website collection not available",
+            };
+        }
+
+        await ensureGraphCache(websiteCollection);
+        const cache = getGraphCache(websiteCollection);
+
+        if (!cache || !cache.isValid || !cache.entityMetrics) {
+            return {
+                success: false,
+                error: "Entity cache not available",
+            };
+        }
+
+        const entity = cache.entityMetrics.find((e: any) => e.name === parameters.entityName);
+
+        if (!entity) {
+            return {
+                success: false,
+                error: "Entity not found",
+            };
+        }
+
+        const relatedEntities: string[] = [];
+
+        if (cache.relationships) {
+            cache.relationships.forEach((rel: any) => {
+                if (rel.fromEntity === parameters.entityName) {
+                    if (!relatedEntities.includes(rel.toEntity)) {
+                        relatedEntities.push(rel.toEntity);
+                    }
+                } else if (rel.toEntity === parameters.entityName) {
+                    if (!relatedEntities.includes(rel.fromEntity)) {
+                        relatedEntities.push(rel.fromEntity);
+                    }
+                }
+            });
+        }
+
+        let searchData: any = null;
+        try {
+            const searchResults = await searchByEntities(
+                { entities: [parameters.entityName], maxResults: 20 },
+                context,
+            );
+
+            if (searchResults) {
+                searchData = {
+                    websites: searchResults.websites?.slice(0, 15) || [],
+                    relatedEntities: searchResults.relatedEntities?.slice(0, 15) || [],
+                    topTopics: searchResults.topTopics?.slice(0, 10) || [],
+                };
+            }
+        } catch (searchError) {
+            console.warn("Search enrichment failed for entity details:", searchError);
+        }
+
+        const details: any = {
+            name: entity.name,
+            type: entity.type || "entity",
+            confidence: entity.confidence || 0.5,
+            count: entity.count || 1,
+        };
+
+        if (entity.degree !== undefined) details.degree = entity.degree;
+        if (entity.importance !== undefined) details.importance = entity.importance;
+
+        if (searchData) {
+            if (searchData.topTopics && searchData.topTopics.length > 0) {
+                details.topicAffinity = searchData.topTopics.map((t: any) => t.topic || t.name || t);
+            }
+
+            if (searchData.relatedEntities && searchData.relatedEntities.length > 0) {
+                details.relatedEntities = searchData.relatedEntities.map((e: any) => e.entity || e.name || e);
+            }
+
+            if (searchData.websites && searchData.websites.length > 0) {
+                details.websites = searchData.websites.map((w: any) => w.url || w);
+
+                const allTimestamps: string[] = [];
+                searchData.websites.forEach((w: any) => {
+                    if (w.timestamp) allTimestamps.push(w.timestamp);
+                    if (w.date) allTimestamps.push(w.date);
+                    if (w.firstSeen) allTimestamps.push(w.firstSeen);
+                    if (w.lastSeen) allTimestamps.push(w.lastSeen);
+                });
+
+                if (allTimestamps.length > 0) {
+                    allTimestamps.sort();
+                    details.firstSeen = allTimestamps[0];
+                    details.lastSeen = allTimestamps[allTimestamps.length - 1];
+                }
+            }
+        }
+
+        if (relatedEntities.length > 0 && !details.relatedEntities) {
+            details.relatedEntities = relatedEntities.slice(0, 10);
+        }
+
+        return {
+            success: true,
+            details,
+        };
+    } catch (error) {
+        console.error("Error getting entity details:", error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : "Unknown error",
+        };
+    }
+}
+
+/**
  * Get per-URL breakdown of knowledge graph content
  * Shows how many topics, entities, semanticrefs, and relationships are associated with each URL
  */

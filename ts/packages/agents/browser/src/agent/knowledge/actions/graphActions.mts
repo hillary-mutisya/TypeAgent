@@ -1519,21 +1519,24 @@ export async function getGlobalImportanceLayer(
         }
 
         // Enrich entities with graphology colors and sizes
-        const enrichedEntities = optimizedEntities.map((entity: any) => {
-            const graphElement = cachedGraph!.cytoscapeElements.find(
-                (el: any) =>
-                    el.data?.id === entity.id || el.data?.label === entity.name,
-            );
-            if (graphElement?.data) {
-                return {
-                    ...entity,
-                    color: graphElement.data.color,
-                    size: graphElement.data.size,
-                    community: graphElement.data.community,
-                };
-            }
-            return entity;
-        });
+        // Only include entities that have corresponding graph elements (filter out isolated nodes)
+        const enrichedEntities = optimizedEntities
+            .map((entity: any) => {
+                const graphElement = cachedGraph!.cytoscapeElements.find(
+                    (el: any) =>
+                        el.data?.id === entity.id || el.data?.label === entity.name,
+                );
+                if (graphElement?.data) {
+                    return {
+                        ...entity,
+                        color: graphElement.data.color,
+                        size: graphElement.data.size,
+                        community: graphElement.data.community,
+                    };
+                }
+                return null;
+            })
+            .filter((entity: any) => entity !== null);
 
         // Debug logging to verify entity vs topic data
         console.log("[getGlobalImportanceLayer] DEBUG - First 10 entities:",

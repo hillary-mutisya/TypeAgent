@@ -170,9 +170,22 @@ function initializeCircularLayout(graph: Graph): void {
     debug("Initializing circular layout...");
     const positions = circular(graph, { scale: 100 });
 
+    let nodesWithMissingPositions = 0;
     for (const node of graph.nodes()) {
-        graph.setNodeAttribute(node, "x", positions[node].x);
-        graph.setNodeAttribute(node, "y", positions[node].y);
+        const pos = positions[node];
+        if (!pos || pos.x === undefined || pos.y === undefined || isNaN(pos.x) || isNaN(pos.y)) {
+            debug(`[POSITION-ERROR] Node ${node} has invalid position from circular layout: ${JSON.stringify(pos)}`);
+            nodesWithMissingPositions++;
+            graph.setNodeAttribute(node, "x", 0);
+            graph.setNodeAttribute(node, "y", 0);
+        } else {
+            graph.setNodeAttribute(node, "x", pos.x);
+            graph.setNodeAttribute(node, "y", pos.y);
+        }
+    }
+
+    if (nodesWithMissingPositions > 0) {
+        debug(`[POSITION-ERROR] ${nodesWithMissingPositions} nodes had invalid positions from circular layout`);
     }
 }
 
@@ -251,6 +264,21 @@ function applyMultiPhaseLayout(
             barnesHutTheta: 0.5,
         },
     });
+
+    // Check for invalid positions after ForceAtlas2
+    let invalidAfterFA2 = 0;
+    for (const node of graph.nodes()) {
+        const x = graph.getNodeAttribute(node, "x");
+        const y = graph.getNodeAttribute(node, "y");
+        if (x === undefined || y === undefined || isNaN(x) || isNaN(y)) {
+            debug(`[POSITION-ERROR] After ForceAtlas2, node ${node} has invalid position: (${x}, ${y})`);
+            invalidAfterFA2++;
+        }
+    }
+    if (invalidAfterFA2 > 0) {
+        debug(`[POSITION-ERROR] ${invalidAfterFA2} nodes have invalid positions after ForceAtlas2`);
+    }
+
     debug("  ✓ ForceAtlas2 complete");
 
     debug("Step 2: Applying global overlap prevention...");
@@ -408,10 +436,21 @@ export function convertToCytoscapeElements(
     debug(`Scaling factors: X=${scaleX.toFixed(2)}, Y=${scaleY.toFixed(2)}`);
     debug(`Target viewport: [${targetMin}, ${targetMax}]`);
 
+    let nodesWithInvalidPositions = 0;
     for (const node of graph.nodes()) {
         const attr = graph.getNodeAttributes(node);
-        const x = (attr.x - minX) * scaleX + targetMin;
-        const y = (attr.y - minY) * scaleY + targetMin;
+
+        let x: number, y: number;
+        if (attr.x === undefined || attr.x === null || isNaN(attr.x) ||
+            attr.y === undefined || attr.y === null || isNaN(attr.y)) {
+            debug(`Warning: Node ${node} has invalid position (x=${attr.x}, y=${attr.y}), using (0, 0)`);
+            nodesWithInvalidPositions++;
+            x = 0;
+            y = 0;
+        } else {
+            x = (attr.x - minX) * scaleX + targetMin;
+            y = (attr.y - minY) * scaleY + targetMin;
+        }
 
         const nodeData: any = {
             id: node,
@@ -434,6 +473,10 @@ export function convertToCytoscapeElements(
             data: nodeData,
             position: { x, y },
         });
+    }
+
+    if (nodesWithInvalidPositions > 0) {
+        debug(`WARNING: ${nodesWithInvalidPositions} nodes had invalid positions and were placed at (0, 0)`);
     }
 
     for (const edge of graph.edges()) {

@@ -1276,15 +1276,15 @@ class EntityGraphView {
                     }
                 }
 
-                // Load the graph into the visualizer
-                await this.visualizer.loadEntityGraph(
-                    {
-                        centerEntity: graphData.centerEntity,
-                        entities: allEntities,
-                        relationships: validatedRelationships,
-                    },
-                    graphData.centerEntity,
-                );
+                // PHASE 3d: Detail view removed - loadEntityGraph method no longer exists
+                // await this.visualizer.loadEntityGraph(
+                //     {
+                //         centerEntity: graphData.centerEntity,
+                //         entities: allEntities,
+                //         relationships: validatedRelationships,
+                //     },
+                //     graphData.centerEntity,
+                // );
 
                 // Find the center entity from allEntities (should be first)
                 const centerEntityFromGraph =
@@ -1704,10 +1704,10 @@ class EntityGraphView {
                 backToGlobalBtn.innerHTML =
                     '<i class="bi bi-arrow-left"></i> Global';
                 backToGlobalBtn.title = "Back to Global View";
-            } else if (hiddenViewType === "neighborhood") {
+            } else if (hiddenViewType === "detail") {
                 backToGlobalBtn.innerHTML =
-                    '<i class="bi bi-arrow-left"></i> Neighborhood';
-                backToGlobalBtn.title = "Back to Neighborhood View";
+                    '<i class="bi bi-arrow-left"></i> Details';
+                backToGlobalBtn.title = "Back to Detail View";
             } else {
                 backToGlobalBtn.innerHTML =
                     '<i class="bi bi-arrow-left"></i> Back';
@@ -1787,16 +1787,16 @@ class EntityGraphView {
             this.currentEntity &&
             this.currentViewMode.type === "entity-specific"
         ) {
-            // Check if we're in neighborhood view via the visualizer
-            const activeView = this.visualizer.getCurrentActiveView();
-            if (activeView === "neighborhood") {
-                title = `${this.currentEntity} Neighborhood`;
-            } else if (activeView === "detail") {
-                title = `${this.currentEntity} Details`;
-            } else {
-                // Fallback for entity-specific view
-                title = `${this.currentEntity} Details`;
-            }
+            /* COMMENTED OUT - Phase 3 detail view cleanup */
+            // const activeView = this.visualizer.getCurrentActiveView();
+            // if (activeView === "detail") {
+            //     title = `${this.currentEntity} Details`;
+            // } else {
+            //     // Fallback for entity-specific view
+            //     title = `${this.currentEntity} Details`;
+            // }
+            // Simplified - only global view now
+            title = `${this.currentEntity} Details`;
         } else {
             // Global view
             title = "Entity Graph";

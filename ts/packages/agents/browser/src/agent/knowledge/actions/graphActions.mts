@@ -3409,57 +3409,73 @@ export async function getTopicDetails(
         }
 
         const topicData: any = topic;
-        const sourceTopicNames: Set<string> = new Set();
-
-        if (topicData.sourceTopicNames && Array.isArray(topicData.sourceTopicNames)) {
-            topicData.sourceTopicNames.forEach((name: string) => sourceTopicNames.add(name));
-        }
-
-        if (topicData.childIds && Array.isArray(topicData.childIds)) {
-            topicData.childIds.forEach((childId: string) => {
-                const childTopic = allTopics.find((t: any) => t.topicId === childId);
-                if (childTopic && childTopic.sourceTopicNames && Array.isArray(childTopic.sourceTopicNames)) {
-                    childTopic.sourceTopicNames.forEach((name: string) => sourceTopicNames.add(name));
-                }
-            });
-        }
 
         const entityReferences: Set<string> = new Set();
         const keywords: Set<string> = new Set();
         let firstSeen: string | undefined;
         let lastSeen: string | undefined;
 
-        if (websiteCollection.knowledgeTopics && sourceTopicNames.size > 0) {
-            const knowledgeTopicsCollection = websiteCollection.knowledgeTopics as any;
+        const sourceRefOrdinals: Set<number> = new Set();
 
-            for (const topicName of sourceTopicNames) {
-                const knowledgeTopic = knowledgeTopicsCollection.topics?.get(topicName);
+        if (topicData.sourceRefOrdinals && Array.isArray(topicData.sourceRefOrdinals)) {
+            topicData.sourceRefOrdinals.forEach((ordinal: number) => sourceRefOrdinals.add(ordinal));
+        }
 
-                if (knowledgeTopic) {
-                    if (knowledgeTopic.entityReferences && Array.isArray(knowledgeTopic.entityReferences)) {
-                        knowledgeTopic.entityReferences.forEach((entity: string) => entityReferences.add(entity));
-                    }
+        if (topicData.childIds && Array.isArray(topicData.childIds)) {
+            topicData.childIds.forEach((childId: string) => {
+                const childTopic: any = allTopics.find((t: any) => t.topicId === childId);
+                if (childTopic && childTopic.sourceRefOrdinals && Array.isArray(childTopic.sourceRefOrdinals)) {
+                    childTopic.sourceRefOrdinals.forEach((ordinal: number) => sourceRefOrdinals.add(ordinal));
+                }
+            });
+        }
 
-                    if (knowledgeTopic.keywords) {
-                        const keywordArray = Array.isArray(knowledgeTopic.keywords)
-                            ? knowledgeTopic.keywords
-                            : [knowledgeTopic.keywords];
-                        keywordArray.forEach((kw: string) => keywords.add(kw));
-                    }
+        const timestamps: string[] = [];
+        const processedMessages = new Set<number>();
 
-                    if (knowledgeTopic.firstSeenTime) {
-                        if (!firstSeen || knowledgeTopic.firstSeenTime < firstSeen) {
-                            firstSeen = knowledgeTopic.firstSeenTime;
-                        }
-                    }
+        if (websiteCollection.semanticRefs && sourceRefOrdinals.size > 0) {
+            for (const ordinal of sourceRefOrdinals) {
+                const semanticRef = websiteCollection.semanticRefs.get(ordinal);
+                if (semanticRef) {
+                    const messageOrdinal = semanticRef.range.start.messageOrdinal;
 
-                    if (knowledgeTopic.lastSeenTime) {
-                        if (!lastSeen || knowledgeTopic.lastSeenTime > lastSeen) {
-                            lastSeen = knowledgeTopic.lastSeenTime;
+                    if (!processedMessages.has(messageOrdinal)) {
+                        processedMessages.add(messageOrdinal);
+
+                        const message = websiteCollection.messages.get(messageOrdinal);
+                        if (message) {
+                            if (message.timestamp) {
+                                timestamps.push(message.timestamp);
+                            }
+
+                            const knowledge = message.knowledge;
+                            if (knowledge) {
+                                if (knowledge.entities && Array.isArray(knowledge.entities)) {
+                                    knowledge.entities.forEach((entity: any) => {
+                                        if (entity.name) {
+                                            entityReferences.add(entity.name);
+                                        }
+                                    });
+                                }
+
+                                if (knowledge.topics && Array.isArray(knowledge.topics)) {
+                                    knowledge.topics.forEach((topic: any) => {
+                                        if (typeof topic === 'string') {
+                                            keywords.add(topic);
+                                        }
+                                    });
+                                }
+                            }
                         }
                     }
                 }
             }
+        }
+
+        if (timestamps.length > 0) {
+            timestamps.sort();
+            firstSeen = timestamps[0];
+            lastSeen = timestamps[timestamps.length - 1];
         }
 
         const details: {
@@ -3556,38 +3572,82 @@ export async function getEntityDetails(
             };
         }
 
-        const relatedEntities: string[] = [];
+        const entityReferences: Set<string> = new Set();
+        const topics: Set<string> = new Set();
+        const websites: Set<string> = new Set();
+        const timestamps: string[] = [];
+        const processedMessages = new Set<number>();
 
-        if (cache.relationships) {
-            cache.relationships.forEach((rel: any) => {
-                if (rel.fromEntity === parameters.entityName) {
-                    if (!relatedEntities.includes(rel.toEntity)) {
-                        relatedEntities.push(rel.toEntity);
-                    }
-                } else if (rel.toEntity === parameters.entityName) {
-                    if (!relatedEntities.includes(rel.fromEntity)) {
-                        relatedEntities.push(rel.fromEntity);
+        const kp = await import("knowpro");
+        const searchTermGroup = kp.createEntitySearchTermGroup(
+            parameters.entityName,
+            undefined,
+            undefined,
+            undefined,
+            false,
+        );
+
+        const whenFilter = { knowledgeType: "entity" as const };
+        const searchResult = await kp.searchConversationKnowledge(
+            websiteCollection,
+            searchTermGroup,
+            whenFilter,
+            { maxKnowledgeMatches: 100 },
+        );
+
+        if (searchResult) {
+            for (const [, result] of searchResult) {
+                if (result.semanticRefMatches) {
+                    for (const scoredRef of result.semanticRefMatches) {
+                        const semanticRef = websiteCollection.semanticRefs.get(scoredRef.semanticRefOrdinal);
+                        if (semanticRef) {
+                            const messageOrdinal = semanticRef.range.start.messageOrdinal;
+
+                            if (!processedMessages.has(messageOrdinal)) {
+                                processedMessages.add(messageOrdinal);
+
+                                const message = websiteCollection.messages.get(messageOrdinal);
+                                if (message) {
+                                    if (message.timestamp) {
+                                        timestamps.push(message.timestamp);
+                                    }
+
+                                    if ((message as any).url) {
+                                        websites.add((message as any).url);
+                                    }
+
+                                    const knowledge = message.knowledge;
+                                    if (knowledge) {
+                                        if (knowledge.entities && Array.isArray(knowledge.entities)) {
+                                            knowledge.entities.forEach((e: any) => {
+                                                if (e.name && e.name !== parameters.entityName) {
+                                                    entityReferences.add(e.name);
+                                                }
+                                            });
+                                        }
+
+                                        if (knowledge.topics && Array.isArray(knowledge.topics)) {
+                                            knowledge.topics.forEach((topic: any) => {
+                                                if (typeof topic === 'string') {
+                                                    topics.add(topic);
+                                                }
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-            });
+            }
         }
 
-        let searchData: any = null;
-        try {
-            const searchResults = await searchByEntities(
-                { entities: [parameters.entityName], maxResults: 20 },
-                context,
-            );
-
-            if (searchResults) {
-                searchData = {
-                    websites: searchResults.websites?.slice(0, 15) || [],
-                    relatedEntities: searchResults.relatedEntities?.slice(0, 15) || [],
-                    topTopics: searchResults.topTopics?.slice(0, 10) || [],
-                };
-            }
-        } catch (searchError) {
-            console.warn("Search enrichment failed for entity details:", searchError);
+        let firstSeen: string | undefined;
+        let lastSeen: string | undefined;
+        if (timestamps.length > 0) {
+            timestamps.sort();
+            firstSeen = timestamps[0];
+            lastSeen = timestamps[timestamps.length - 1];
         }
 
         const details: any = {
@@ -3600,37 +3660,20 @@ export async function getEntityDetails(
         if (entity.degree !== undefined) details.degree = entity.degree;
         if (entity.importance !== undefined) details.importance = entity.importance;
 
-        if (searchData) {
-            if (searchData.topTopics && searchData.topTopics.length > 0) {
-                details.topicAffinity = searchData.topTopics.map((t: any) => t.topic || t.name || t);
-            }
-
-            if (searchData.relatedEntities && searchData.relatedEntities.length > 0) {
-                details.relatedEntities = searchData.relatedEntities.map((e: any) => e.entity || e.name || e);
-            }
-
-            if (searchData.websites && searchData.websites.length > 0) {
-                details.websites = searchData.websites.map((w: any) => w.url || w);
-
-                const allTimestamps: string[] = [];
-                searchData.websites.forEach((w: any) => {
-                    if (w.timestamp) allTimestamps.push(w.timestamp);
-                    if (w.date) allTimestamps.push(w.date);
-                    if (w.firstSeen) allTimestamps.push(w.firstSeen);
-                    if (w.lastSeen) allTimestamps.push(w.lastSeen);
-                });
-
-                if (allTimestamps.length > 0) {
-                    allTimestamps.sort();
-                    details.firstSeen = allTimestamps[0];
-                    details.lastSeen = allTimestamps[allTimestamps.length - 1];
-                }
-            }
+        if (topics.size > 0) {
+            details.topicAffinity = Array.from(topics).slice(0, 15);
         }
 
-        if (relatedEntities.length > 0 && !details.relatedEntities) {
-            details.relatedEntities = relatedEntities.slice(0, 10);
+        if (entityReferences.size > 0) {
+            details.relatedEntities = Array.from(entityReferences).slice(0, 15);
         }
+
+        if (websites.size > 0) {
+            details.websites = Array.from(websites).slice(0, 15);
+        }
+
+        if (firstSeen) details.firstSeen = firstSeen;
+        if (lastSeen) details.lastSeen = lastSeen;
 
         return {
             success: true,

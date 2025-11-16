@@ -3,6 +3,7 @@
 
 import { sendActionToAgent } from "./websocket";
 import { getWebSocket } from "./websocket";
+import { M365ChatManager } from "./m365ChatManager";
 
 /**
  * Initializes the context menu items
@@ -76,6 +77,18 @@ export function initializeContextMenu(): void {
     chrome.contextMenus.create({
         title: "View Annotations",
         id: "showAnnotationsLibrary",
+        documentUrlPatterns: ["http://*/*", "https://*/*"],
+    });
+
+    chrome.contextMenus.create({
+        type: "separator",
+        id: "menuSeparator4",
+    });
+
+    chrome.contextMenus.create({
+        title: "💬 Chat with M365 Copilot",
+        id: "openM365Chat",
+        contexts: ["all"],
         documentUrlPatterns: ["http://*/*", "https://*/*"],
     });
 }
@@ -251,6 +264,14 @@ export async function handleContextMenuClick(
                 });
             }
 
+            break;
+        }
+
+        case "openM365Chat": {
+            await M365ChatManager.openChatPanel(tab.id!);
+            console.log(
+                `[ContextMenu] Opened M365 Chat sidepanel for tab ${tab.id}`,
+            );
             break;
         }
     }

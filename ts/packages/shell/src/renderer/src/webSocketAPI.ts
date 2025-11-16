@@ -75,6 +75,15 @@ export const webapi: ClientAPI = {
     continuousSpeechProcessing: async (_) => {
         throw new Error("Not implemented");
     },
+    openM365Chat: async () => {
+        throw new Error("Not implemented");
+    },
+    openOrSwitchM365Chat: async () => {
+        throw new Error("Not implemented");
+    },
+    isActiveTabM365Chat: async () => {
+        throw new Error("Not implemented");
+    },
 };
 
 const dispatcherChannel = createGenericChannel((message: any) =>

@@ -1091,6 +1091,14 @@ async function resolveWebPage(
                 return [site];
             }
 
+            // Try to recognize domain names without protocol (e.g., "homedepot.com")
+            // and convert them to canonical URL form
+            const siteWithProtocol = `https://${site}`;
+            if (URL.canParse(siteWithProtocol)) {
+                debug(`Converted domain name to URL: ${site} -> ${siteWithProtocol}`);
+                return [siteWithProtocol];
+            }
+
             // local sites
             try {
                 const port = await context.getSharedLocalHostPort(site);

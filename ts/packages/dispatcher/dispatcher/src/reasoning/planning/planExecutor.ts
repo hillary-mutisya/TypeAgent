@@ -156,10 +156,39 @@ export class PlanExecutor {
         debug(`Executing step ${step.stepNumber}: ${step.objective}`);
 
         try {
-            // Check preconditions
+            // Check if step should be skipped by default (fallback-only)
+            if (step.skipByDefault && step.executionMode === "fallback") {
+                debug(
+                    `Step ${step.stepNumber} is fallback-only, skipping in normal execution`,
+                );
+                return {
+                    stepId: step.stepId,
+                    stepNumber: step.stepNumber,
+                    success: true,
+                    duration: Date.now() - startTime,
+                    skipped: true,
+                    skipReason: "Step is fallback-only (skipByDefault)",
+                };
+            }
+
+            // Check if step has iteration config (loop)
+            if (step.iterationConfig) {
+                return await this.executeStepWithIteration(
+                    step,
+                    variables,
+                    context,
+                    startTime,
+                );
+            }
+
+            // Determine if we're in optimistic mode
+            const optimisticMode = step.optimisticExecution?.enabled || false;
+
+            // Check preconditions (with optimistic mode flag)
             const preconditionResult = this.checkPreconditions(
                 step.preconditions,
                 variables,
+                optimisticMode,
             );
 
             if (!preconditionResult.satisfied) {
@@ -185,7 +214,15 @@ export class PlanExecutor {
                 }
             }
 
-            // Substitute variables in parameter template
+            // Substitute variables in schema name, action name, and parameter template
+            const schemaName = this.substituteVariableInString(
+                step.action.schemaName,
+                variables,
+            );
+            const actionName = this.substituteVariableInString(
+                step.action.actionName,
+                variables,
+            );
             const parameters = this.substituteVariables(
                 step.action.parameterTemplate,
                 variables,
@@ -193,7 +230,7 @@ export class PlanExecutor {
 
             // Display status
             displayStatus(
-                `Executing: ${step.action.schemaName}.${step.action.actionName}...`,
+                `Executing: ${schemaName}.${actionName}...`,
                 context,
             );
 
@@ -201,8 +238,8 @@ export class PlanExecutor {
             const actionResult = await executeAction(
                 {
                     action: {
-                        schemaName: step.action.schemaName,
-                        actionName: step.action.actionName,
+                        schemaName,
+                        actionName,
                         parameters,
                     },
                 },
@@ -219,6 +256,42 @@ export class PlanExecutor {
             };
         } catch (error) {
             debug(`Step ${step.stepNumber} failed:`, error);
+
+            // Check if we should execute fallback steps
+            if (step.optimisticExecution?.fallbackOnError) {
+                const errorMessage =
+                    error instanceof Error ? error.message : String(error);
+                const fallbackConfig = step.optimisticExecution.fallbackOnError;
+
+                // Check if error matches any of the configured error types
+                const shouldFallback = fallbackConfig.errorTypes.some(
+                    (errorType) =>
+                        errorMessage
+                            .toLowerCase()
+                            .includes(errorType.toLowerCase()),
+                );
+
+                if (shouldFallback && fallbackConfig.fallbackSteps.length > 0) {
+                    debug(
+                        `Error matches fallback criteria, executing fallback steps: ${fallbackConfig.fallbackSteps.join(", ")}`,
+                    );
+
+                    // Execute fallback steps (not implemented in this phase - requires access to plan)
+                    // For now, just log that fallback would be triggered
+                    debug(
+                        `Fallback execution requires access to full plan - escalating to reasoning`,
+                    );
+
+                    return {
+                        stepId: step.stepId,
+                        stepNumber: step.stepNumber,
+                        success: false,
+                        duration: Date.now() - startTime,
+                        error: `${errorMessage} (fallback required: ${fallbackConfig.fallbackSteps.join(", ")})`,
+                    };
+                }
+            }
+
             return {
                 stepId: step.stepId,
                 stepNumber: step.stepNumber,
@@ -227,6 +300,97 @@ export class PlanExecutor {
                 error: error instanceof Error ? error.message : String(error),
             };
         }
+    }
+
+    /**
+     * Execute step with iteration (loop over array variable)
+     */
+    private async executeStepWithIteration(
+        step: PlanStep,
+        variables: Record<string, any>,
+        context: ActionContext<CommandHandlerContext>,
+        startTime: number,
+    ): Promise<StepExecutionResult> {
+        const iterationConfig = step.iterationConfig!;
+        const arrayVar = variables[iterationConfig.iterateOver];
+
+        if (!Array.isArray(arrayVar)) {
+            return {
+                stepId: step.stepId,
+                stepNumber: step.stepNumber,
+                success: false,
+                duration: Date.now() - startTime,
+                error: `Iteration variable ${iterationConfig.iterateOver} is not an array`,
+            };
+        }
+
+        debug(
+            `Executing step ${step.stepNumber} in iteration mode over ${arrayVar.length} items`,
+        );
+
+        const outputs: any[] = [];
+
+        for (let i = 0; i < arrayVar.length; i++) {
+            const item = arrayVar[i];
+
+            // Create temporary variables with current item
+            const iterationVars = {
+                ...variables,
+                [iterationConfig.itemVariable]: item,
+            };
+
+            // Substitute variables with current item
+            const schemaName = this.substituteVariableInString(
+                step.action.schemaName,
+                iterationVars,
+            );
+            const actionName = this.substituteVariableInString(
+                step.action.actionName,
+                iterationVars,
+            );
+            const parameters = this.substituteVariables(
+                step.action.parameterTemplate,
+                iterationVars,
+            );
+
+            // Display status
+            displayStatus(
+                `Executing: ${schemaName}.${actionName} (${i + 1}/${arrayVar.length})...`,
+                context,
+            );
+
+            try {
+                // Execute action for this item
+                const actionResult = await executeAction(
+                    {
+                        action: {
+                            schemaName,
+                            actionName,
+                            parameters,
+                        },
+                    },
+                    context,
+                    step.stepNumber,
+                );
+
+                outputs.push(actionResult);
+            } catch (error) {
+                debug(`Iteration ${i + 1} failed:`, error);
+                // Continue with other items even if one fails
+                outputs.push({
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                });
+            }
+        }
+
+        return {
+            stepId: step.stepId,
+            stepNumber: step.stepNumber,
+            success: true,
+            duration: Date.now() - startTime,
+            output: outputs,
+        };
     }
 
     /**
@@ -330,12 +494,24 @@ Extract variables now:`;
     private checkPreconditions(
         preconditions: Precondition[],
         variables: Record<string, any>,
+        optimisticMode: boolean = false,
     ): {
         satisfied: boolean;
         hasRequired: boolean;
         failedCondition?: string;
     } {
         for (const precondition of preconditions) {
+            // Skip preconditions marked for optimistic mode skip
+            if (
+                optimisticMode &&
+                precondition.optimistic?.skipInOptimisticMode
+            ) {
+                debug(
+                    `Skipping precondition in optimistic mode: ${precondition.description}`,
+                );
+                continue;
+            }
+
             if (precondition.type === "variable_exists") {
                 // Extract variable name from expression (e.g., "{{varName}}")
                 const varMatch = precondition.expression.match(/\{\{(\w+)\}\}/);
@@ -361,6 +537,20 @@ Extract variables now:`;
     }
 
     /**
+     * Substitute variables in a string
+     */
+    private substituteVariableInString(
+        text: string,
+        variables: Record<string, any>,
+    ): string {
+        return text.replace(/\{\{(\w+)\}\}/g, (_, varName) => {
+            return variables[varName] !== undefined
+                ? String(variables[varName])
+                : `{{${varName}}}`;
+        });
+    }
+
+    /**
      * Substitute variables in parameter template
      */
     private substituteVariables(
@@ -372,11 +562,7 @@ Extract variables now:`;
         for (const [key, value] of Object.entries(template)) {
             if (typeof value === "string") {
                 // Replace {{variable}} references
-                result[key] = value.replace(/\{\{(\w+)\}\}/g, (_, varName) => {
-                    return variables[varName] !== undefined
-                        ? String(variables[varName])
-                        : `{{${varName}}}`;
-                });
+                result[key] = this.substituteVariableInString(value, variables);
             } else if (typeof value === "object" && value !== null) {
                 // Recursively substitute in nested objects
                 result[key] = this.substituteVariables(value, variables);

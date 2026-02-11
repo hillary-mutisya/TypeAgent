@@ -74,6 +74,25 @@ export interface PlanStep {
         maxRetries: number;
         backoffMs: number;
     };
+
+    // Optimistic execution config
+    skipByDefault?: boolean; // Don't run by default (fallback-only)
+    executionMode?: "normal" | "fallback"; // Execution mode
+    optimisticExecution?: {
+        enabled: boolean; // Try without dependencies first
+        skipDependencies?: string[]; // Dependencies to skip optimistically
+        fallbackOnError?: {
+            errorTypes: string[]; // Error types that trigger fallback
+            fallbackSteps: string[]; // Steps to run on failure
+            retryAfterFallback: boolean; // Retry this step after fallback
+        };
+    };
+
+    // Iteration config (for loops)
+    iterationConfig?: {
+        iterateOver: string; // Variable to iterate over
+        itemVariable: string; // Variable name for current item
+    };
 }
 
 export interface Precondition {
@@ -81,6 +100,12 @@ export interface Precondition {
     description: string;
     expression: string;
     required: boolean;
+
+    // Optimistic mode support
+    optimistic?: {
+        skipInOptimisticMode: boolean; // Skip this precondition in optimistic run
+        requiredOnRetry: boolean; // Enforce on retry after fallback
+    };
 }
 
 export interface OutputVariable {

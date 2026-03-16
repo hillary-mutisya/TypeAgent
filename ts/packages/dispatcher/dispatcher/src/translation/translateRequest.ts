@@ -217,6 +217,7 @@ async function pickInitialSchema(
     request: string,
     activeSchemas: Set<string>,
     systemContext: CommandHandlerContext,
+    preferredSchema?: string,
 ) {
     const switchConfig = systemContext.session.getConfig().translation.switch;
     if (switchConfig.fixed !== "") {
@@ -225,6 +226,14 @@ async function pickInitialSchema(
         }
 
         return switchConfig.fixed;
+    }
+
+    // If an @-mention specified a preferred agent, use it if active
+    if (preferredSchema && activeSchemas.has(preferredSchema)) {
+        debugTranslate(
+            `Using @-mentioned agent schema: ${preferredSchema}`,
+        );
+        return preferredSchema;
     }
 
     // Start with the last translator used
@@ -680,12 +689,14 @@ async function translateRequestWithActiveSchemas(
     streamingActionIndex: number | undefined,
     activeSchemas: Set<string>,
     usageCallback: (usage: ai.CompletionUsageStats) => void,
+    preferredSchema?: string,
 ): Promise<ExecutableAction | ExecutableAction[]> {
     const systemContext = context.sessionContext.agentContext;
     const schemaName = await pickInitialSchema(
         request,
         activeSchemas,
         systemContext,
+        preferredSchema,
     );
 
     const result = await translateRequestWithSchema(
@@ -742,6 +753,7 @@ export async function translateRequest(
     streamingActionIndex?: number,
     activeSchemas?: string[],
     usageCallback: (usage: ai.CompletionUsageStats) => void = () => {},
+    preferredSchema?: string,
 ): Promise<TranslationResult> {
     const systemContext = context.sessionContext.agentContext;
     const config = systemContext.session.getConfig();
@@ -768,6 +780,7 @@ export async function translateRequest(
         streamingActionIndex,
         new Set(activeSchemaNames),
         usageCallback,
+        preferredSchema,
     );
 
     const requestAction = RequestAction.create(

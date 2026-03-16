@@ -398,6 +398,8 @@ export class RequestCommandHandler implements CommandHandler {
             if (systemContext.userRequestKnowledgeExtraction === true) {
                 addRequestToMemory(systemContext, request, cachedAttachments);
             }
+            // Use @-mention hint if set by the command parser
+            const preferredSchema = systemContext.mentionedAgentHint;
             let interpretResult: InterpretResult;
             try {
                 interpretResult = await interpretRequest(
@@ -405,6 +407,7 @@ export class RequestCommandHandler implements CommandHandler {
                     request,
                     cachedAttachments,
                     history,
+                    preferredSchema,
                 );
             } catch (e: any) {
                 if (systemContext.userRequestKnowledgeExtraction === true) {

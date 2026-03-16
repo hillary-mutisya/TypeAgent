@@ -29,6 +29,7 @@ import {
 } from "@typeagent/dispatcher-types";
 import { DispatcherName } from "../context/dispatcher/dispatcherUtils.js";
 import { getAppAgentName } from "../internal.js";
+import { extractAgentMention } from "./agentMention.js";
 
 const debugCommand = registerDebug("typeagent:dispatcher:command");
 const debugCommandError = registerDebug("typeagent:dispatcher:command:error");
@@ -248,8 +249,16 @@ export function normalizeCommand(
 ) {
     const input = originalInput.trimStart();
     if (!input.startsWith("@")) {
+        // Check for @-mentions in the text (e.g. "use the @player to play music")
+        const mention = extractAgentMention(input, context.agents);
+        if (mention !== undefined) {
+            context.mentionedAgentHint = mention.agentName;
+            debugCommand(
+                `Detected @-mention of agent '${mention.agentName}' in input`,
+            );
+        }
         const requestHandlerAgent = context.session.getConfig().request;
-        return `${requestHandlerAgent} request ${input}`;
+        return `${requestHandlerAgent} request ${mention?.cleanedInput ?? input}`;
     }
     return input.substring(1);
 }
@@ -299,6 +308,40 @@ async function parseCommand(
             // if we matched only default subcommand fall thru and error assuming that we matched only the table
         }
     }
+    // Command resolution failed — check if the original input contains an
+    // @-mention we can route as a natural language request to that agent.
+    if (originalInput.trimStart().startsWith("@")) {
+        const mention = extractAgentMention(
+            originalInput.trimStart(),
+            context.agents,
+        );
+        if (mention !== undefined) {
+            context.mentionedAgentHint = mention.agentName;
+            debugCommand(
+                `Command resolution failed; falling back to @-mention of agent '${mention.agentName}'`,
+            );
+            const requestHandlerAgent = context.session.getConfig().request;
+            const fallbackInput = `${requestHandlerAgent} request ${mention.cleanedInput}`;
+            const fallbackResult = await resolveCommand(
+                fallbackInput,
+                context,
+            );
+            if (fallbackResult.descriptor !== undefined) {
+                const params = fallbackResult.descriptor.parameters
+                    ? parseParams(
+                          fallbackResult.suffix,
+                          fallbackResult.descriptor.parameters,
+                      )
+                    : undefined;
+                return {
+                    appAgentName: fallbackResult.actualAppAgentName,
+                    command: fallbackResult.commands,
+                    params,
+                };
+            }
+        }
+    }
+
     const command = getParsedCommand(result);
 
     if (
@@ -389,6 +432,7 @@ function beginProcessCommand(
     context.currentAbortSignal = signal;
     context.commandResult = undefined;
     context.noReasoning = options?.noReasoning ?? false;
+    context.mentionedAgentHint = undefined;
 
     context.commandProfiler = context.metricsManager?.beginCommand(
         requestIdToString(requestId),

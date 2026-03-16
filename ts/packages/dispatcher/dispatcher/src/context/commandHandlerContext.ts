@@ -232,6 +232,10 @@ export type CommandHandlerContext = {
     userRequestKnowledgeExtraction: boolean;
     actionResultKnowledgeExtraction: boolean;
 
+    // Set by @-mention parsing to hint which agent schema should be preferred
+    // for translation. Cleared after each command execution.
+    mentionedAgentHint?: string | undefined;
+
     displayLog: DisplayLog;
 };
 

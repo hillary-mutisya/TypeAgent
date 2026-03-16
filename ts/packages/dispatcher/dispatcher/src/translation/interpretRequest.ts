@@ -100,6 +100,7 @@ async function interpretRequestWithActiveSchemas(
     streamingActionIndex: number | undefined,
     activeSchemaNames: string[],
     usageCallback: (usage: ai.CompletionUsageStats) => void,
+    preferredSchema?: string,
 ) {
     const cannotUseCacheReason = getCannotUseCacheReason(
         context.sessionContext.agentContext,
@@ -121,6 +122,7 @@ async function interpretRequestWithActiveSchemas(
             streamingActionIndex,
             activeSchemaNames,
             usageCallback,
+            preferredSchema,
         ))
     );
 }
@@ -133,6 +135,7 @@ async function interpretRequestWithActivityContext(
     streamingActionIndex: number | undefined,
     activeSchemaNames: string[],
     usageCallback: (usage: ai.CompletionUsageStats) => void,
+    preferredSchema?: string,
 ) {
     // Translate the request with only the activity schemas
     const activityContext = history.activityContext!;
@@ -150,6 +153,7 @@ async function interpretRequestWithActivityContext(
         streamingActionIndex,
         activitySchemas,
         usageCallback,
+        preferredSchema,
     );
 
     if (activityContext.restricted) {
@@ -222,6 +226,7 @@ export async function interpretRequest(
     request: string,
     attachments: CachedImageWithDetails[] | undefined,
     history: HistoryContext | undefined,
+    preferredSchema?: string,
 ): Promise<InterpretResult> {
     const systemContext = context.sessionContext.agentContext;
     const activeSchemaNames = systemContext.agents.getActiveSchemas();
@@ -247,6 +252,7 @@ export async function interpretRequest(
               0,
               activeSchemaNames,
               usageCallback,
+              preferredSchema,
           )
         : await interpretRequestWithActiveSchemas(
               context,
@@ -256,6 +262,7 @@ export async function interpretRequest(
               0,
               activeSchemaNames,
               usageCallback,
+              preferredSchema,
           );
 
     const { requestAction, replacedAction } = await confirmTranslation(

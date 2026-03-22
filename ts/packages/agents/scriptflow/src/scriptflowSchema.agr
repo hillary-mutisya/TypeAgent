@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-<Start> = <listScriptFlows> | <deleteScriptFlow>;
+<Start> = <listScriptFlows> | <deleteScriptFlow> | <importScriptFlow>;
 
 // Built-in action rules (dynamic flows are registered at runtime via addGeneratedRules)
 <listScriptFlows> = (<Polite>)? (<Greeting>)? (<Acknowledgement>)? (show me | list | display) (all)? (the)? (available)? script flows -> { actionName: "listScriptFlows", parameters: {} };
@@ -9,3 +9,7 @@
 <deleteScriptFlow> [spacing=optional] =
     (delete | remove) (the)? script flow $(name:wildcard)
       -> { actionName: "deleteScriptFlow", parameters: { name } };
+
+<importScriptFlow> [spacing=optional] =
+    import (a)? (powershell)? script (flow)? (from)? $(filePath:wildcard)
+      -> { actionName: "importScriptFlow", parameters: { filePath } };

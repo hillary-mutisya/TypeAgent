@@ -1,7 +1,14 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { BoundingBox, HTMLFragment } from "./types";
+import {
+    BoundingBox,
+    HTMLFragment,
+    AriaSnapshotOptions,
+    AriaSnapshotResult,
+    InteractionResult,
+    TabAriaSnapshot,
+} from "./types";
 import { downloadStringAsFile } from "./tabManager";
 
 export enum CompressionMode {
@@ -114,4 +121,61 @@ export async function getTabHTMLFragments(
     }
 
     return htmlFragments;
+}
+
+export async function getTabAriaSnapshot(
+    targetTab: chrome.tabs.Tab,
+    options?: AriaSnapshotOptions,
+): Promise<TabAriaSnapshot> {
+    const frames = await chrome.webNavigation.getAllFrames({
+        tabId: targetTab.id!,
+    });
+
+    const snapshots: AriaSnapshotResult[] = [];
+
+    if (frames) {
+        for (const frame of frames) {
+            if (frame.url === "about:blank") continue;
+            try {
+                const snapshot = await chrome.tabs.sendMessage(
+                    targetTab.id!,
+                    {
+                        type: "get_aria_snapshot",
+                        frameId: frame.frameId,
+                        includeTextContent: options?.includeTextContent,
+                        maxTextPerNode: options?.maxTextPerNode,
+                    },
+                    { frameId: frame.frameId },
+                );
+                if (snapshot) {
+                    snapshots.push(snapshot);
+                }
+            } catch {
+                // Frame may not have content script injected
+            }
+        }
+    }
+
+    return { frames: snapshots, timestamp: Date.now() };
+}
+
+export async function interactWithRef(
+    targetTab: chrome.tabs.Tab,
+    frameId: number,
+    ref: string,
+    action: string,
+    value?: string,
+    snapshotVersion?: number,
+): Promise<InteractionResult> {
+    return chrome.tabs.sendMessage(
+        targetTab.id!,
+        {
+            type: "interact_by_ref",
+            ref,
+            action,
+            value,
+            snapshotVersion,
+        },
+        { frameId },
+    );
 }

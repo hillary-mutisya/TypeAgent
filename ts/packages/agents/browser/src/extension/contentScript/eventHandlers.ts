@@ -26,6 +26,11 @@ import { createChannelAdapter } from "@typeagent/agent-rpc/channel";
 import { ContentScriptRpc } from "../../common/contentScriptRpc/types.mjs";
 import { createRpc } from "@typeagent/agent-rpc/rpc";
 import { sendMessageToBackground, sendMainWorldRequest } from "./messaging";
+import {
+    captureAriaSnapshot,
+    interactByRef,
+} from "./ariaSnapshot";
+import type { InteractionRequest } from "./ariaSnapshot";
 
 // Set up history interception for SPA navigation
 const interceptHistory = (method: "pushState" | "replaceState") => {
@@ -189,6 +194,12 @@ function setupMessageListeners(): void {
             const delay = timeout || 400;
             return new Promise((resolve) => setTimeout(resolve, delay));
         },
+        getAriaSnapshot: async (options?) => {
+            return captureAriaSnapshot(0, options);
+        },
+        interactByRef: async (request) => {
+            return interactByRef(request as InteractionRequest);
+        },
     };
 
     createRpc(
@@ -312,6 +323,26 @@ export async function handleMessage(
                     message.maxFragmentSize,
                 );
                 sendResponse(htmlFragments);
+                break;
+            }
+
+            case "get_aria_snapshot": {
+                const snapshot = captureAriaSnapshot(message.frameId ?? 0, {
+                    includeTextContent: message.includeTextContent,
+                    maxTextPerNode: message.maxTextPerNode,
+                });
+                sendResponse(snapshot);
+                break;
+            }
+
+            case "interact_by_ref": {
+                const result = interactByRef({
+                    ref: message.ref,
+                    action: message.action,
+                    value: message.value,
+                    snapshotVersion: message.snapshotVersion,
+                });
+                sendResponse(result);
                 break;
             }
 

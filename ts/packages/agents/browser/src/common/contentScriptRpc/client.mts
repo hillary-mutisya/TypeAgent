@@ -1,7 +1,11 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import type { ContentScriptRpc } from "./types.mjs";
+import type {
+    ContentScriptRpc,
+    AriaSnapshotOptions,
+    InteractionRequest,
+} from "./types.mjs";
 import type { RpcChannel } from "@typeagent/agent-rpc/channel";
 import { createRpc } from "@typeagent/agent-rpc/rpc";
 
@@ -45,5 +49,9 @@ export function createContentScriptRpcClient(
             contentScriptRpcClient.invoke("awaitPageLoad", timeout),
         awaitPageInteraction: (timeout?: number) =>
             contentScriptRpcClient.invoke("awaitPageInteraction", timeout),
+        getAriaSnapshot: (options?: AriaSnapshotOptions) =>
+            contentScriptRpcClient.invoke("getAriaSnapshot", options),
+        interactByRef: (request: InteractionRequest) =>
+            contentScriptRpcClient.invoke("interactByRef", request),
     };
 }

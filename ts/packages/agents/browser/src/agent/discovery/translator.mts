@@ -15,6 +15,37 @@ import { openai as ai } from "aiclient";
 import { fileURLToPath } from "node:url";
 import { SchemaDiscoveryActions } from "./schema/discoveryActions.mjs";
 import { PageDescription } from "./schema/pageSummary.mjs";
+import registerDebug from "debug";
+import nodePath from "node:path";
+import os from "node:os";
+import { mkdirSync, writeFileSync } from "node:fs";
+
+const debugPerf = registerDebug("typeagent:browser:discover:perf");
+
+const discoveryLogDir = nodePath.join(
+    os.tmpdir(),
+    "typeagent-discovery-logs",
+);
+
+function dumpPrompt(label: string, sections: any[]): void {
+    try {
+        mkdirSync(discoveryLogDir, { recursive: true });
+        const ts = new Date().toISOString().replace(/[:.]/g, "-");
+        const content = sections
+            .map((s: any) => {
+                if (s.type === "image_url")
+                    return `[image: ${s.image_url?.url?.substring(0, 50)}...]`;
+                return s.text || JSON.stringify(s);
+            })
+            .join("\n---SECTION---\n");
+        const filepath = nodePath.join(
+            discoveryLogDir,
+            `prompt-${label}-${ts}.txt`,
+        );
+        writeFileSync(filepath, content, "utf-8");
+        debugPerf(`  [${label}] full prompt written to: ${filepath}`);
+    } catch {}
+}
 
 export type HtmlFragments = {
     frameId: string;
@@ -72,6 +103,19 @@ function getHtmlPromptSection(fragments: HtmlFragments[] | undefined) {
         });
     }
     return htmlSection;
+}
+
+function getAriaTreePromptSection(ariaTree: string | undefined) {
+    if (!ariaTree) return [];
+    return [
+        {
+            type: "text",
+            text: `Here is the accessibility tree of the current page. Each element has a role, name, and optional state attributes. Elements with [ref=...] are interactable.
+'''
+${ariaTree}
+'''`,
+        },
+    ];
 }
 
 function getScreenshotPromptSection(
@@ -271,17 +315,20 @@ export class SchemaDiscoveryAgent<T extends object> {
         fragments?: HtmlFragments[],
         screenshots?: string[],
         pageSummary?: string,
+        ariaTree?: string,
     ) {
         const bootstrapTranslator = this.getBootstrapTranslator(
             "CandidateActionList",
             discoverySchema,
         );
 
-        const screenshotSection = getScreenshotPromptSection(
-            screenshots,
-            fragments,
-        );
-        const htmlSection = getHtmlPromptSection(fragments);
+        // Use ARIA tree when provided, otherwise fall back to HTML+screenshots
+        const pageContentSection = ariaTree
+            ? getAriaTreePromptSection(ariaTree)
+            : [
+                  ...getScreenshotPromptSection(screenshots, fragments),
+                  ...getHtmlPromptSection(fragments),
+              ];
         const prefixSection = getPrefixPromptSection();
         const suffixSection = getSuffixPromptSection();
         let requestSection = [];
@@ -297,13 +344,22 @@ export class SchemaDiscoveryAgent<T extends object> {
             });
         }
 
-        const promptSections = [
-            ...prefixSection,
-            ...screenshotSection,
-            ...htmlSection,
-            {
-                type: "text",
-                text: `
+        const instructionText = ariaTree
+            ? `
+        You are given a list of known user actions. Examine the accessibility tree above, then determine which of
+        these actions can actually be performed on THIS page. Match actions to page elements by considering:
+        - Action descriptions (in // comments) explain what the action does
+        - Action parameter names hint at which UI elements they target (e.g., "milkType" → a dropdown/combobox for milk)
+        - Look for buttons, links, comboboxes, radio buttons, and form elements that correspond to the action's purpose
+        - An "add to cart" action matches if there is any button or link for adding/ordering items
+        Only include actions that the page clearly supports. If none apply, return an empty actions array.
+        Return a SINGLE "${bootstrapTranslator.validator.getTypeName()}" response using the typescript schema below.
+
+        '''
+        ${bootstrapTranslator.validator.getSchemaText()}
+        '''
+        `
+            : `
         You are given a list of known user actions. Examine the page layout and content, then determine which of
         these actions can actually be performed on THIS page. Only include actions that the page supports.
         If none of the known actions apply, return an empty actions array.
@@ -312,18 +368,37 @@ export class SchemaDiscoveryAgent<T extends object> {
         '''
         ${bootstrapTranslator.validator.getSchemaText()}
         '''
-        `,
+        `;
+
+        const promptSections = [
+            ...prefixSection,
+            ...pageContentSection,
+            {
+                type: "text",
+                text: instructionText,
             },
             ...requestSection,
             ...suffixSection,
         ];
 
+        const promptChars = promptSections.reduce(
+            (sum, s: any) => sum + (s.text?.length || 0),
+            0,
+        );
+        debugPerf(
+            `  [getCandidateUserActions] prompt: ${promptChars} chars, hasSummary=${!!pageSummary}, hasAria=${!!ariaTree}`,
+        );
+        dumpPrompt("getCandidateUserActions", promptSections);
+        const llmStart = Date.now();
         const response = await bootstrapTranslator.translate("", [
             {
                 role: "user",
                 content: promptSections as MultimodalPromptContent[],
             },
         ]);
+        debugPerf(
+            `  [getCandidateUserActions] LLM translate: ${Date.now() - llmStart}ms`,
+        );
         return response;
     }
 
@@ -397,6 +472,7 @@ export class SchemaDiscoveryAgent<T extends object> {
         userRequest?: string,
         fragments?: HtmlFragments[],
         screenshots?: string[],
+        ariaTree?: string,
     ) {
         const resultsSchema = await getSchemaFileContents("pageSummary.mts");
         const bootstrapTranslator = this.getBootstrapTranslator(
@@ -404,11 +480,13 @@ export class SchemaDiscoveryAgent<T extends object> {
             resultsSchema,
         );
 
-        const screenshotSection = getScreenshotPromptSection(
-            screenshots,
-            fragments,
-        );
-        const htmlSection = getHtmlPromptSection(fragments);
+        // Use ARIA tree when provided, otherwise fall back to HTML+screenshots
+        const pageContentSection = ariaTree
+            ? getAriaTreePromptSection(ariaTree)
+            : [
+                  ...getScreenshotPromptSection(screenshots, fragments),
+                  ...getHtmlPromptSection(fragments),
+              ];
         const prefixSection = getPrefixPromptSection();
         const suffixSection = getSuffixPromptSection();
         let requestSection = [];
@@ -416,7 +494,7 @@ export class SchemaDiscoveryAgent<T extends object> {
             requestSection.push({
                 type: "text",
                 text: `
-               
+
             Here is  user request
             '''
             ${userRequest}
@@ -426,14 +504,13 @@ export class SchemaDiscoveryAgent<T extends object> {
         }
         const promptSections = [
             ...prefixSection,
-            ...screenshotSection,
-            ...htmlSection,
+            ...pageContentSection,
             {
                 type: "text",
                 text: `
         Examine the layout information provided and determine the content of the page and the actions users can take on it.
         Once you have this list, a SINGLE "${bootstrapTranslator.validator.getTypeName()}" response using the typescript schema below.
-                
+
         '''
         ${bootstrapTranslator.validator.getSchemaText()}
         '''
@@ -443,9 +520,24 @@ export class SchemaDiscoveryAgent<T extends object> {
             ...suffixSection,
         ];
 
+        const promptChars = promptSections.reduce(
+            (sum, s: any) => sum + (s.text?.length || 0),
+            0,
+        );
+        debugPerf(
+            `  [getPageSummary] prompt: ${promptChars} chars, ${pageContentSection.length} content sections`,
+        );
+        dumpPrompt("getPageSummary", promptSections);
+        const llmStart = Date.now();
         const response = await bootstrapTranslator.translate("", [
-            { role: "user", content: JSON.stringify(promptSections) },
+            {
+                role: "user",
+                content: promptSections as MultimodalPromptContent[],
+            },
         ]);
+        debugPerf(
+            `  [getPageSummary] LLM translate: ${Date.now() - llmStart}ms`,
+        );
         return response;
     }
 

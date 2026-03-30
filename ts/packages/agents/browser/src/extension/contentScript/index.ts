@@ -20,6 +20,7 @@ import "./pdfInterceptor";
 import "./schemaExtraction";
 import "./spaNavigation";
 import "./types";
+import "./ariaSnapshot";
 
 /**
  * Injects the tabId into the MAIN world so WebAgents can access it.

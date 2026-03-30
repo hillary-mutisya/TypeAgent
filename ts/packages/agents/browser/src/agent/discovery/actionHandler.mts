@@ -7,7 +7,10 @@ import {
     getBrowserControl,
     getCurrentPageScreenshot,
 } from "../browserActions.mjs";
-import { BrowserControl } from "../../common/browserControl.mjs";
+import { BrowserControl, TabAriaSnapshot } from "../../common/browserControl.mjs";
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
 import { createDiscoveryPageTranslator } from "./translator.mjs";
 import {
     ActionSchemaTypeDefinition,
@@ -36,6 +39,21 @@ import {
 import { sendWebFlowRefreshToClient } from "../browserActionHandler.mjs";
 
 const debug = registerDebug("typeagent:browser:discover:handler");
+const debugPerf = registerDebug("typeagent:browser:discover:perf");
+
+const discoveryLogDir = path.join(os.tmpdir(), "typeagent-discovery-logs");
+
+function dumpToFile(filename: string, content: string): string {
+    try {
+        fs.mkdirSync(discoveryLogDir, { recursive: true });
+        const filepath = path.join(discoveryLogDir, filename);
+        fs.writeFileSync(filepath, content, "utf-8");
+        return filepath;
+    } catch (e) {
+        debug(`Failed to write log file ${filename}: ${e}`);
+        return "(write failed)";
+    }
+}
 
 // Entity collection infrastructure for discovery actions
 export interface EntityInfo {
@@ -113,41 +131,132 @@ async function handleFindUserActions(
 
     // Build a TypeScript schema from the candidate WebFlows for TypeChat
     const discoverySchema = generateDiscoverySchema(candidateFlows);
+    debug(
+        `[discovery] ${candidateFlows.length} candidate flows: ${candidateFlows.map((f) => f.name).join(", ")}`,
+    );
 
-    const htmlFragments = await ctx.browser.getHtmlFragments();
-    let screenshot = "";
-    try {
-        screenshot = await getCurrentPageScreenshot(ctx.browser);
-    } catch (error) {
-        console.warn(
-            "Screenshot capture failed, continuing without screenshot:",
-            (error as Error)?.message,
+    const mode = ctx.sessionContext.agentContext.pageRepresentationMode;
+    const useAria = mode === "aria" || mode === "hybrid";
+    const totalStart = Date.now();
+
+    let ariaTree: string | undefined;
+    let htmlFragments: any[] | undefined;
+    let screenshots: string[] = [];
+
+    if (useAria) {
+        const captureStart = Date.now();
+        const snapshot: TabAriaSnapshot =
+            await ctx.browser.getAriaSnapshot({ includeTextContent: true });
+        ariaTree = snapshot.frames.map((f) => f.tree).join("\n---\n");
+        const totalRefs = snapshot.frames.reduce(
+            (sum, f) => sum + f.refCount,
+            0,
+        );
+        debugPerf(
+            `[aria] getAriaSnapshot: ${Date.now() - captureStart}ms, ${totalRefs} refs, ${ariaTree.length} chars, ${snapshot.frames.length} frames`,
+        );
+        debug(
+            `[aria] snapshot frames: ${JSON.stringify(snapshot.frames.map((f) => ({ frameId: f.frameId, refCount: f.refCount, treeLen: f.tree?.length, version: f.version })))}`,
+        );
+        const ts = new Date().toISOString().replace(/[:.]/g, "-");
+        const treePath = dumpToFile(
+            `aria-tree-${ts}.txt`,
+            ariaTree,
+        );
+        const snapshotPath = dumpToFile(
+            `aria-snapshot-${ts}.json`,
+            JSON.stringify(snapshot, null, 2),
+        );
+        debug(
+            `[aria] full tree written to: ${treePath}`,
+        );
+        debug(
+            `[aria] snapshot JSON written to: ${snapshotPath}`,
+        );
+
+        // Fall back to HTML if ARIA returned nothing useful
+        // refCount may be undefined/NaN if the content script is outdated
+        if (
+            snapshot.frames.length === 0 ||
+            snapshot.frames.every((f) => !f.refCount)
+        ) {
+            debug("ARIA snapshot empty (0 refs), falling back to HTML");
+            ariaTree = undefined;
+            const htmlStart = Date.now();
+            htmlFragments = await ctx.browser.getHtmlFragments();
+            debugPerf(
+                `[aria→html fallback] getHtmlFragments: ${Date.now() - htmlStart}ms`,
+            );
+        }
+    } else {
+        const htmlStart = Date.now();
+        htmlFragments = await ctx.browser.getHtmlFragments();
+        const htmlElapsed = Date.now() - htmlStart;
+
+        const ssStart = Date.now();
+        try {
+            const screenshot = await getCurrentPageScreenshot(ctx.browser);
+            if (screenshot) screenshots = [screenshot];
+        } catch (error) {
+            console.warn(
+                "Screenshot capture failed, continuing without screenshot:",
+                (error as Error)?.message,
+            );
+        }
+        const ssElapsed = Date.now() - ssStart;
+
+        const totalChars = htmlFragments.reduce(
+            (sum: number, f: any) => sum + (f.content?.length || 0),
+            0,
+        );
+        debugPerf(
+            `[html] getHtmlFragments: ${htmlElapsed}ms, ${htmlFragments.length} fragments, ${totalChars} chars`,
+        );
+        debugPerf(
+            `[html] captureScreenshot: ${ssElapsed}ms, ${screenshots.length > 0 ? "captured" : "skipped"}`,
         );
     }
-    const screenshots = screenshot ? [screenshot] : [];
 
+    // In ARIA mode the tree is already compact and semantic — the page
+    // summary adds an extra LLM round-trip for minimal benefit.
+    // Skip it when using ARIA to cut latency roughly in half.
     let pageSummary = "";
-    const summaryResponse = await ctx.agent.getPageSummary(
-        undefined,
-        htmlFragments,
-        screenshots,
-    );
-    if (summaryResponse.success) {
-        pageSummary =
-            "Page summary: \n" + JSON.stringify(summaryResponse.data, null, 2);
+    if (!useAria) {
+        const summaryStart = Date.now();
+        const summaryResponse = await ctx.agent.getPageSummary(
+            undefined,
+            htmlFragments,
+            screenshots,
+            ariaTree,
+        );
+        if (summaryResponse.success) {
+            pageSummary =
+                "Page summary: \n" +
+                JSON.stringify(summaryResponse.data, null, 2);
+        }
+        debugPerf(
+            `[html] getPageSummary LLM: ${Date.now() - summaryStart}ms, success=${summaryResponse.success}`,
+        );
+    } else {
+        debugPerf(
+            `[aria] getPageSummary: SKIPPED (ARIA tree is already semantic)`,
+        );
     }
 
-    const timerName = `Analyzing page actions`;
-    console.time(timerName);
-
+    const candidateStart = Date.now();
     const response = await ctx.agent.getCandidateUserActions(
         discoverySchema,
         htmlFragments,
         screenshots,
         pageSummary,
+        ariaTree,
     );
-
-    console.timeEnd(timerName);
+    debugPerf(
+        `[${useAria ? "aria" : "html"}] getCandidateUserActions LLM: ${Date.now() - candidateStart}ms, success=${response.success}`,
+    );
+    debugPerf(
+        `[${useAria ? "aria" : "html"}] handleFindUserActions total: ${Date.now() - totalStart}ms`,
+    );
 
     if (!response.success) {
         debug("Discovery LLM call failed: %s", response.message);
@@ -238,26 +347,76 @@ async function handleGetPageSummary(
     action: any,
     ctx: DiscoveryActionHandlerContext,
 ): Promise<DiscoveryActionResult> {
-    const htmlFragments = await ctx.browser.getHtmlFragments();
-    let screenshot = "";
-    try {
-        screenshot = await getCurrentPageScreenshot(ctx.browser);
-    } catch (error) {
-        console.warn(
-            "Screenshot capture failed, continuing without screenshot:",
-            (error as Error)?.message,
+    const mode = ctx.sessionContext.agentContext.pageRepresentationMode;
+    const useAria = mode === "aria" || mode === "hybrid";
+    const totalStart = Date.now();
+
+    let ariaTree: string | undefined;
+    let htmlFragments: any[] | undefined;
+    let screenshots: string[] = [];
+
+    if (useAria) {
+        const captureStart = Date.now();
+        const snapshot: TabAriaSnapshot =
+            await ctx.browser.getAriaSnapshot({ includeTextContent: true });
+        ariaTree = snapshot.frames.map((f) => f.tree).join("\n---\n");
+        const totalRefs = snapshot.frames.reduce(
+            (sum, f) => sum + f.refCount,
+            0,
+        );
+        debugPerf(
+            `[aria] getAriaSnapshot: ${Date.now() - captureStart}ms, ${totalRefs} refs, ${ariaTree.length} chars, ${snapshot.frames.length} frames`,
+        );
+        debug(
+            `[aria] snapshot frames: ${JSON.stringify(snapshot.frames.map((f) => ({ frameId: f.frameId, refCount: f.refCount, treeLen: f.tree?.length, version: f.version })))}`,
+        );
+        if (ariaTree.length < 200) {
+            debug(`[aria] full tree: ${ariaTree}`);
+        }
+
+        if (snapshot.frames.every((f) => f.refCount === 0)) {
+            debug("ARIA snapshot empty (0 refs), falling back to HTML");
+            ariaTree = undefined;
+            const htmlStart = Date.now();
+            htmlFragments = await ctx.browser.getHtmlFragments();
+            debugPerf(
+                `[aria→html fallback] getHtmlFragments: ${Date.now() - htmlStart}ms`,
+            );
+        }
+    } else {
+        const htmlStart = Date.now();
+        htmlFragments = await ctx.browser.getHtmlFragments();
+        debugPerf(
+            `[html] getHtmlFragments: ${Date.now() - htmlStart}ms`,
+        );
+
+        const ssStart = Date.now();
+        try {
+            const screenshot = await getCurrentPageScreenshot(ctx.browser);
+            if (screenshot) screenshots = [screenshot];
+        } catch (error) {
+            console.warn(
+                "Screenshot capture failed, continuing without screenshot:",
+                (error as Error)?.message,
+            );
+        }
+        debugPerf(
+            `[html] captureScreenshot: ${Date.now() - ssStart}ms`,
         );
     }
 
-    // Only include screenshot if it's not empty
-    const screenshots = screenshot ? [screenshot] : [];
-
-    const timerName = `Summarizing page`;
-    console.time(timerName);
+    const llmStart = Date.now();
     const response = await ctx.agent.getPageSummary(
         undefined,
         htmlFragments,
         screenshots,
+        ariaTree,
+    );
+    debugPerf(
+        `[${useAria ? "aria" : "html"}] getPageSummary LLM: ${Date.now() - llmStart}ms, success=${response.success}`,
+    );
+    debugPerf(
+        `[${useAria ? "aria" : "html"}] handleGetPageSummary total: ${Date.now() - totalStart}ms`,
     );
 
     if (!response.success) {
@@ -269,7 +428,6 @@ async function handleGetPageSummary(
         };
     }
 
-    console.timeEnd(timerName);
     return {
         displayText:
             "Page summary: \n" + JSON.stringify(response.data, null, 2),

@@ -584,6 +584,34 @@ export function createInlineBrowserControl(
                 `runBrowserAction not implemented for inline browser: ${actionName}`,
             );
         },
+        async getAriaSnapshot(options?: {
+            includeTextContent?: boolean;
+            maxTextPerNode?: number;
+        }) {
+            const snapshot =
+                await contentScriptControl.getAriaSnapshot(options);
+            return {
+                frames: [snapshot],
+                timestamp: Date.now(),
+            };
+        },
+        async interactByRef(
+            _frameId: number,
+            ref: string,
+            action: "click" | "fill" | "select" | "check" | "focus",
+            value?: string,
+            snapshotVersion?: number,
+        ) {
+            const localRef = ref.includes("-")
+                ? ref.split("-", 2)[1]
+                : ref;
+            return contentScriptControl.interactByRef({
+                ref: localRef,
+                action,
+                value,
+                snapshotVersion,
+            });
+        },
     };
     return {
         control,

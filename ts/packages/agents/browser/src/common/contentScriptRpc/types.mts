@@ -1,6 +1,31 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+export interface AriaSnapshotOptions {
+    includeTextContent?: boolean;
+    maxTextPerNode?: number;
+}
+
+export interface AriaSnapshotResult {
+    version: number;
+    tree: string;
+    textContent?: string;
+    refCount: number;
+    frameId: number;
+}
+
+export interface InteractionRequest {
+    ref: string;
+    action: "click" | "fill" | "select" | "check" | "focus";
+    value?: string;
+    snapshotVersion?: number;
+}
+
+export interface InteractionResult {
+    success: boolean;
+    error?: string;
+}
+
 export type ContentScriptRpc = {
     scrollUp(): Promise<void>;
     scrollDown(): Promise<void>;
@@ -17,4 +42,9 @@ export type ContentScriptRpc = {
     awaitPageInteraction(timeout?: number): Promise<void>;
 
     runPaleoBioDbAction(action: any): Promise<void>;
+
+    getAriaSnapshot(
+        options?: AriaSnapshotOptions,
+    ): Promise<AriaSnapshotResult>;
+    interactByRef(request: InteractionRequest): Promise<InteractionResult>;
 };

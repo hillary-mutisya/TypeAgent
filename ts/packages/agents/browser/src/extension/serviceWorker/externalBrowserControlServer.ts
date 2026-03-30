@@ -16,7 +16,12 @@ import {
 import { showBadgeBusy, showBadgeHealthy } from "./ui";
 import { createContentScriptRpcClient } from "../../common/contentScriptRpc/client.mjs";
 import { ContentScriptRpc } from "../../common/contentScriptRpc/types.mjs";
-import { getTabHTMLFragments, CompressionMode } from "./capture";
+import {
+    getTabHTMLFragments,
+    CompressionMode,
+    getTabAriaSnapshot,
+    interactWithRef,
+} from "./capture";
 import { screenshotCoordinator } from "./screenshotCoordinator";
 import { runBrowserAction } from "./browserActions";
 //import { generateEmbedding, indexesOfNearest, NormalizedEmbedding, SimilarityType } from "../../../../../typeagent/dist/indexNode";
@@ -587,6 +592,33 @@ export function createExternalBrowserServer(channel: RpcChannel) {
             const resolvedFilename = filename || `image_${Date.now()}.png`;
             await downloadImageAsFile(targetTab, dataUrl, resolvedFilename);
             return resolvedFilename;
+        },
+        getAriaSnapshot: async (options?: {
+            includeTextContent?: boolean;
+            maxTextPerNode?: number;
+        }) => {
+            const targetTab = await ensureActiveTab();
+            return getTabAriaSnapshot(targetTab, options);
+        },
+        interactByRef: async (
+            frameId: number,
+            ref: string,
+            action: "click" | "fill" | "select" | "check" | "focus",
+            value?: string,
+            snapshotVersion?: number,
+        ) => {
+            const localRef = ref.includes("-")
+                ? ref.split("-", 2)[1]
+                : ref;
+            const targetTab = await ensureActiveTab();
+            return interactWithRef(
+                targetTab,
+                frameId,
+                localRef,
+                action,
+                value,
+                snapshotVersion,
+            );
         },
         runBrowserAction: async (
             actionName: string,

@@ -27,6 +27,29 @@ export interface HTMLFragment {
     text: string;
 }
 
+export interface AriaSnapshotOptions {
+    includeTextContent?: boolean;
+    maxTextPerNode?: number;
+}
+
+export interface AriaSnapshotResult {
+    version: number;
+    tree: string;
+    textContent?: string;
+    refCount: number;
+    frameId: number;
+}
+
+export interface InteractionResult {
+    success: boolean;
+    error?: string;
+}
+
+export interface TabAriaSnapshot {
+    frames: AriaSnapshotResult[];
+    timestamp: number;
+}
+
 // Re-export types that are used across multiple files
 export {
     isWebAgentMessage,

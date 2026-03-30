@@ -3,6 +3,24 @@
 
 export type ExtractionMode = "basic" | "summary" | "content" | "full";
 
+export interface TabAriaSnapshot {
+    frames: AriaSnapshotFrameResult[];
+    timestamp: number;
+}
+
+export interface AriaSnapshotFrameResult {
+    version: number;
+    tree: string;
+    textContent?: string;
+    refCount: number;
+    frameId: number;
+}
+
+export interface AriaInteractionResult {
+    success: boolean;
+    error?: string;
+}
+
 export interface BrowserSettings {
     autoIndexing: boolean;
     extractionMode: ExtractionMode;
@@ -82,6 +100,19 @@ export type BrowserControlInvokeFunctions = {
         parameters: any,
         schemaName?: string,
     ): Promise<any>;
+
+    getAriaSnapshot(options?: {
+        includeTextContent?: boolean;
+        maxTextPerNode?: number;
+    }): Promise<TabAriaSnapshot>;
+
+    interactByRef(
+        frameId: number,
+        ref: string,
+        action: "click" | "fill" | "select" | "check" | "focus",
+        value?: string,
+        snapshotVersion?: number,
+    ): Promise<AriaInteractionResult>;
 };
 
 export type BrowserControlCallFunctions = {

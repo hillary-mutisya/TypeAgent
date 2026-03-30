@@ -316,6 +316,7 @@ async function initializeBrowserContext(
         },
         searchProviders: defaultSearchProviders,
         activeSearchProvider: defaultSearchProviders[0],
+        pageRepresentationMode: "html",
     };
 }
 
@@ -517,6 +518,12 @@ async function updateBrowserContext(
                         context.agentContext.activeSearchProvider =
                             config.activeSearchProvider ||
                             context.agentContext.searchProviders[0];
+
+                        // page representation mode
+                        if (config.pageRepresentationMode) {
+                            context.agentContext.pageRepresentationMode =
+                                config.pageRepresentationMode;
+                        }
                     }
                 }
             } catch (error) {
@@ -2757,5 +2764,67 @@ export const handlers: CommandHandlerTable = {
             },
         },
         search: new SearchProviderCommandHandlerTable(),
+        representation: {
+            description: "Set page representation mode for LLM consumption",
+            defaultSubCommand: "show",
+            commands: {
+                show: {
+                    description: "Show current representation mode",
+                    run: async (
+                        context: ActionContext<BrowserActionContext>,
+                    ) => {
+                        displaySuccess(
+                            `Page representation mode: ${context.sessionContext.agentContext.pageRepresentationMode}`,
+                            context,
+                        );
+                    },
+                },
+                html: {
+                    description:
+                        "Use HTML fragments (default)",
+                    run: async (
+                        context: ActionContext<BrowserActionContext>,
+                    ) => {
+                        context.sessionContext.agentContext.pageRepresentationMode =
+                            "html";
+                        await saveSettings(context.sessionContext);
+                        displaySuccess(
+                            "Page representation mode set to: html",
+                            context,
+                        );
+                    },
+                },
+                aria: {
+                    description:
+                        "Use ARIA accessibility tree snapshots",
+                    run: async (
+                        context: ActionContext<BrowserActionContext>,
+                    ) => {
+                        context.sessionContext.agentContext.pageRepresentationMode =
+                            "aria";
+                        await saveSettings(context.sessionContext);
+                        displaySuccess(
+                            "Page representation mode set to: aria",
+                            context,
+                        );
+                    },
+                },
+                hybrid: {
+                    description:
+                        "ARIA for discovery/interaction, HTML for knowledge extraction",
+                    run: async (
+                        context: ActionContext<BrowserActionContext>,
+                    ) => {
+                        context.sessionContext.agentContext.pageRepresentationMode =
+                            "hybrid";
+                        await saveSettings(context.sessionContext);
+                        displaySuccess(
+                            "Page representation mode set to: hybrid",
+                            context,
+                        );
+                    },
+                },
+            },
+        },
     },
 };

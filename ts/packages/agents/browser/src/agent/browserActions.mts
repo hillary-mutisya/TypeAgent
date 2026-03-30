@@ -16,6 +16,8 @@ import {
 } from "./agentWebSocketServer.mjs";
 import { getClientType } from "@typeagent/agent-server-protocol";
 
+export type PageRepresentationMode = "html" | "aria" | "hybrid";
+
 export type BrowserActionContext = {
     clientBrowserControl?: BrowserControl | undefined;
     externalBrowserControl?: ExternalBrowserClient | undefined;
@@ -45,6 +47,7 @@ export type BrowserActionContext = {
     };
     searchProviders: SearchProvider[];
     activeSearchProvider: SearchProvider;
+    pageRepresentationMode: PageRepresentationMode;
 };
 
 export function getBrowserControl(agentContext: BrowserActionContext) {
@@ -95,6 +98,8 @@ export async function saveSettings(
             resolverSettings: context.agentContext.resolverSettings,
             searchProviders: context.agentContext.searchProviders,
             activeSearchProvider: context.agentContext.activeSearchProvider,
+            pageRepresentationMode:
+                context.agentContext.pageRepresentationMode,
         }),
     );
 }

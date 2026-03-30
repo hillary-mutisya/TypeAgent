@@ -71,6 +71,10 @@ export function createExternalBrowserClient(
             getActiveRpc().invoke("downloadImage", ...args),
         runBrowserAction: async (...args) =>
             getActiveRpc().invoke("runBrowserAction", ...args),
+        getAriaSnapshot: async (...args) =>
+            getActiveRpc().invoke("getAriaSnapshot", ...args),
+        interactByRef: async (...args) =>
+            getActiveRpc().invoke("interactByRef", ...args),
     };
 
     return { control, dispose: () => {} };

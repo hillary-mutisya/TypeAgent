@@ -322,13 +322,11 @@ export class SchemaDiscoveryAgent<T extends object> {
             discoverySchema,
         );
 
-        // Use ARIA tree when provided, otherwise fall back to HTML+screenshots
+        // ARIA path: send the ARIA tree
+        // HTML path: send only HTML content (no screenshots, no text extraction)
         const pageContentSection = ariaTree
             ? getAriaTreePromptSection(ariaTree)
-            : [
-                  ...getScreenshotPromptSection(screenshots, fragments),
-                  ...getHtmlPromptSection(fragments),
-              ];
+            : getHtmlPromptSection(fragments);
         const prefixSection = getPrefixPromptSection();
         const suffixSection = getSuffixPromptSection();
         let requestSection = [];
@@ -480,13 +478,9 @@ export class SchemaDiscoveryAgent<T extends object> {
             resultsSchema,
         );
 
-        // Use ARIA tree when provided, otherwise fall back to HTML+screenshots
         const pageContentSection = ariaTree
             ? getAriaTreePromptSection(ariaTree)
-            : [
-                  ...getScreenshotPromptSection(screenshots, fragments),
-                  ...getHtmlPromptSection(fragments),
-              ];
+            : getHtmlPromptSection(fragments);
         const prefixSection = getPrefixPromptSection();
         const suffixSection = getSuffixPromptSection();
         let requestSection = [];

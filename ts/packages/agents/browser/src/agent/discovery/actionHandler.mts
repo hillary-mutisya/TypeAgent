@@ -193,18 +193,6 @@ async function handleFindUserActions(
         htmlFragments = await ctx.browser.getHtmlFragments();
         const htmlElapsed = Date.now() - htmlStart;
 
-        const ssStart = Date.now();
-        try {
-            const screenshot = await getCurrentPageScreenshot(ctx.browser);
-            if (screenshot) screenshots = [screenshot];
-        } catch (error) {
-            console.warn(
-                "Screenshot capture failed, continuing without screenshot:",
-                (error as Error)?.message,
-            );
-        }
-        const ssElapsed = Date.now() - ssStart;
-
         const totalChars = htmlFragments.reduce(
             (sum: number, f: any) => sum + (f.content?.length || 0),
             0,
@@ -212,36 +200,15 @@ async function handleFindUserActions(
         debugPerf(
             `[html] getHtmlFragments: ${htmlElapsed}ms, ${htmlFragments.length} fragments, ${totalChars} chars`,
         );
-        debugPerf(
-            `[html] captureScreenshot: ${ssElapsed}ms, ${screenshots.length > 0 ? "captured" : "skipped"}`,
-        );
     }
 
-    // In ARIA mode the tree is already compact and semantic — the page
-    // summary adds an extra LLM round-trip for minimal benefit.
-    // Skip it when using ARIA to cut latency roughly in half.
-    let pageSummary = "";
-    if (!useAria) {
-        const summaryStart = Date.now();
-        const summaryResponse = await ctx.agent.getPageSummary(
-            undefined,
-            htmlFragments,
-            screenshots,
-            ariaTree,
-        );
-        if (summaryResponse.success) {
-            pageSummary =
-                "Page summary: \n" +
-                JSON.stringify(summaryResponse.data, null, 2);
-        }
-        debugPerf(
-            `[html] getPageSummary LLM: ${Date.now() - summaryStart}ms, success=${summaryResponse.success}`,
-        );
-    } else {
-        debugPerf(
-            `[aria] getPageSummary: SKIPPED (ARIA tree is already semantic)`,
-        );
-    }
+    // Skip page summary — both ARIA and HTML paths send page content
+    // directly to getCandidateUserActions for a fair comparison and
+    // to avoid the extra LLM round-trip.
+    const pageSummary = "";
+    debugPerf(
+        `[${useAria ? "aria" : "html"}] getPageSummary: SKIPPED`,
+    );
 
     const candidateStart = Date.now();
     const response = await ctx.agent.getCandidateUserActions(

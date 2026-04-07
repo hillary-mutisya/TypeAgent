@@ -134,6 +134,7 @@ async function main() {
                         return {
                             connectionId: result.connectionId,
                             sessionId,
+                            name: result.name,
                         };
                     } catch (e) {
                         channelProvider.deleteChannel(

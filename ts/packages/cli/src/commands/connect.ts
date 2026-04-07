@@ -6,10 +6,11 @@ import { Dispatcher } from "agent-dispatcher";
 import {
     getEnhancedConsolePrompt,
     processCommandsEnhanced,
+    replayDisplayHistory,
     withEnhancedConsoleClientIO,
 } from "../enhancedConsole.js";
 import { isSlashCommand, getSlashCompletions } from "../slashCommands.js";
-import { ensureAndConnectDispatcher } from "@typeagent/agent-server-client";
+import { ensureAndConnectSession } from "@typeagent/agent-server-client";
 import { getStatusSummary } from "agent-dispatcher/helpers/status";
 
 type CompletionData = {
@@ -65,7 +66,8 @@ async function getCompletionsData(
 }
 
 export default class Connect extends Command {
-    static description = "Interactive mode";
+    static description =
+        "Connect to the agent server in interactive mode. Resumes the most recently active session, or specify --session <id> to join a specific one.";
     static flags = {
         request: Flags.string({
             description:
@@ -80,6 +82,11 @@ export default class Connect extends Command {
         port: Flags.integer({
             description: "Port for type agent server",
             default: 8999,
+        }),
+        session: Flags.string({
+            description:
+                "Session ID to join. Omit to resume the most recently active session.",
+            required: false,
         }),
         verbose: Flags.string({
             description:
@@ -114,16 +121,18 @@ export default class Connect extends Command {
         installDebugInterceptor();
 
         await withEnhancedConsoleClientIO(async (clientIO, bindDispatcher) => {
-            const dispatcher = await ensureAndConnectDispatcher(
+            const { dispatcher, name } = await ensureAndConnectSession(
                 clientIO,
                 flags.port,
-                undefined,
+                flags.session ? { sessionId: flags.session } : undefined,
                 () => {
                     console.error("Disconnected from dispatcher");
                     process.exit(1);
                 },
             );
-            bindDispatcher?.(dispatcher);
+            console.log(`Connected to session '${name}'.`);
+            bindDispatcher(dispatcher);
+            await replayDisplayHistory(dispatcher, clientIO);
             try {
                 let processed = false;
                 if (flags.request) {

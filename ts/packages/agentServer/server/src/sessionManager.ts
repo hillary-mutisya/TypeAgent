@@ -61,7 +61,7 @@ export type SessionManager = {
         clientIO: ClientIO,
         closeFn: () => void,
         options?: DispatcherConnectOptions,
-    ): Promise<{ dispatcher: Dispatcher; connectionId: string }>;
+    ): Promise<{ dispatcher: Dispatcher; connectionId: string; name: string }>;
     leaveSession(sessionId: string, connectionId: string): Promise<void>;
     listSessions(name?: string): SessionInfo[];
     renameSession(sessionId: string, newName: string): Promise<void>;
@@ -306,7 +306,11 @@ export async function createSessionManager(
             clientIO: ClientIO,
             closeFn: () => void,
             options?: DispatcherConnectOptions,
-        ): Promise<{ dispatcher: Dispatcher; connectionId: string }> {
+        ): Promise<{
+            dispatcher: Dispatcher;
+            connectionId: string;
+            name: string;
+        }> {
             const record = sessions.get(sessionId);
             if (record === undefined) {
                 throw new Error(`Session not found: ${sessionId}`);
@@ -329,6 +333,7 @@ export async function createSessionManager(
             return {
                 dispatcher,
                 connectionId: dispatcher.connectionId!,
+                name: record.name,
             };
         },
 
@@ -356,15 +361,16 @@ export async function createSessionManager(
         listSessions(name?: string): SessionInfo[] {
             const result: SessionInfo[] = [];
             for (const record of sessions.values()) {
+                const recordName = record.name ?? "";
                 if (
-                    name !== undefined &&
-                    !record.name.toLowerCase().includes(name.toLowerCase())
+                    name != null &&
+                    !recordName.toLowerCase().includes(name.toLowerCase())
                 ) {
                     continue;
                 }
                 result.push({
                     sessionId: record.sessionId,
-                    name: record.name,
+                    name: recordName,
                     clientCount: record.sharedDispatcher?.clientCount ?? 0,
                     createdAt: record.createdAt,
                 });

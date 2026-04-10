@@ -9,6 +9,7 @@ import {
     SessionInfo,
 } from "@typeagent/agent-server-protocol";
 import { ClientIO, Dispatcher, DispatcherOptions } from "agent-dispatcher";
+import type { PendingInteractionRequest } from "@typeagent/dispatcher-types";
 import {
     createSharedDispatcher,
     SharedDispatcher,
@@ -61,7 +62,12 @@ export type SessionManager = {
         clientIO: ClientIO,
         closeFn: () => void,
         options?: DispatcherConnectOptions,
-    ): Promise<{ dispatcher: Dispatcher; connectionId: string; name: string }>;
+    ): Promise<{
+        dispatcher: Dispatcher;
+        connectionId: string;
+        name: string;
+        pendingInteractions: PendingInteractionRequest[];
+    }>;
     leaveSession(sessionId: string, connectionId: string): Promise<void>;
     listSessions(name?: string): SessionInfo[];
     renameSession(sessionId: string, newName: string): Promise<void>;
@@ -316,6 +322,7 @@ export async function createSessionManager(
             dispatcher: Dispatcher;
             connectionId: string;
             name: string;
+            pendingInteractions: PendingInteractionRequest[];
         }> {
             const record = sessions.get(sessionId);
             if (record === undefined) {
@@ -340,6 +347,10 @@ export async function createSessionManager(
                 dispatcher,
                 connectionId: dispatcher.connectionId!,
                 name: record.name,
+                pendingInteractions: sharedDispatcher.getPendingInteractions(
+                    dispatcher.connectionId!,
+                    options?.filter ?? false,
+                ),
             };
         },
 

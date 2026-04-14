@@ -63,7 +63,7 @@ async function main() {
     // Pre-initialize the default session dispatcher before accepting clients,
     // so the first joinSession call is fast and concurrent joinSession calls
     // don't race to initialize the same dispatcher.
-    await sessionManager.prewarmDefaultSession();
+    await sessionManager.prewarmMostRecentSession();
 
     const portIdx = process.argv.indexOf("--port");
     const port =

@@ -52,11 +52,11 @@ export type SessionManager = {
      */
     resolveSessionId(sessionId: string | undefined): Promise<string>;
     /**
-     * Pre-initialize the default session's dispatcher so it is ready before
-     * the first client connects. If no sessions exist, a "default" session is
-     * created. Safe to call multiple times.
+     * Pre-initialize the most recently active session's dispatcher so it is
+     * ready before the first client connects. If no sessions exist, a "default"
+     * session is created. Safe to call multiple times.
      */
-    prewarmDefaultSession(): Promise<void>;
+    prewarmMostRecentSession(): Promise<void>;
     joinSession(
         sessionId: string,
         clientIO: ClientIO,
@@ -173,7 +173,6 @@ export async function createSessionManager(
                     createSharedDispatcher(hostName, {
                         ...baseOptions,
                         persistDir,
-                        instanceDir: baseDir, // global instance root — shared across all server sessions
                         persistSession: true,
                     }),
                 )
@@ -303,7 +302,7 @@ export async function createSessionManager(
             return info.sessionId;
         },
 
-        async prewarmDefaultSession(): Promise<void> {
+        async prewarmMostRecentSession(): Promise<void> {
             const sessionId = await manager.resolveSessionId(undefined);
             const record = sessions.get(sessionId)!;
             cancelIdleTimer(record);

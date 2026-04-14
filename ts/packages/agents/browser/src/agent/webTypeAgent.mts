@@ -38,20 +38,6 @@ const BUILTIN_WEBAGENT_URL_PATTERNS = [
     /bestcrosswords\.com\/bestcrosswords\/guestconstructor/,
     // PaleoBioDb
     /paleobiodb\.org/,
-    // Commerce sites
-    /amazon\.(com|co\.uk|de|fr|es|it|nl|in|ca|com\.mx|com\.br|com\.au)/,
-    /target\.com/,
-    /walmart\.com/,
-    /bestbuy\.com/,
-    /homedepot\.com/,
-    /lowes\.com/,
-    /costco\.com/,
-    /ebay\.com/,
-    // Restaurant reservations
-    /opentable\.com/,
-    /resy\.com/,
-    // Grocery
-    /instacart\.com/,
 ];
 
 function isBuiltInWebAgentUrl(url: string): boolean {

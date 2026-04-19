@@ -43,8 +43,10 @@ import {
     isSlashCommand,
     handleSlashCommand,
     getVerboseIndicator,
+    getConversationCommandContext,
     getSlashCompletions,
 } from "./slashCommands.js";
+import { handleConversationCommand } from "./conversationCommands.js";
 import {
     setSpinnerAccessor,
     getDebugPanel,
@@ -59,6 +61,20 @@ setSpinnerAccessor(() => currentSpinner);
 
 // Pending choice promise — main loop awaits this before showing next prompt
 let pendingChoicePromise: Promise<void> | null = null;
+
+// The active readline interface, set by processCommandsEnhanced.
+// undefined when using inline completions (stdin is in raw mode instead).
+let activeRl: readline.promises.Interface | undefined;
+
+/**
+ * Ask a yes/no question using the active CLI readline (or raw stdin if inline
+ * completions are enabled).  Always use this instead of creating a new
+ * readline.Interface, which would compete with the main input loop.
+ */
+export async function confirmYesNo(question: string): Promise<boolean> {
+    const answer = await question_internal(`${question} [y/N] `, activeRl);
+    return answer.trim().toLowerCase() === "y";
+}
 
 // Active custom prompt renderer (set by questionWithCompletion)
 let activePromptRenderer: PromptRenderer | null = null;
@@ -681,7 +697,7 @@ export function createEnhancedClientIO(
                     ? "Enter y/n or number (1-2): "
                     : `Enter number (1-${choices.length}): `,
             );
-            const input = await question(prompt, rl);
+            const input = await question_internal(prompt, rl);
 
             process.stdout.write(line + "\n");
 
@@ -809,7 +825,7 @@ export function createEnhancedClientIO(
                     let response: boolean | number[];
                     if (type === "yesNo") {
                         const prompt = `${chalk.dim(`[${source}]`)} ${message} ${chalk.dim("(y/n)")} `;
-                        const input = await question(prompt, rl);
+                        const input = await question_internal(prompt, rl);
                         response =
                             input.toLowerCase() === "y" ||
                             input.toLowerCase() === "yes";
@@ -823,7 +839,7 @@ export function createEnhancedClientIO(
                                 `  ${chalk.cyan(`${i + 1}.`)} ${choices[i]}\n`,
                             );
                         }
-                        const input = await question(
+                        const input = await question_internal(
                             `${chalk.dim("Enter choice numbers (comma-separated):")} `,
                             rl,
                         );
@@ -893,7 +909,11 @@ export function createEnhancedClientIO(
                             ? "Enter y/n or number (1-2): "
                             : `Enter number (1-${interaction.choices.length}): `,
                     );
-                    const input = await question(prompt, rl, ac.signal);
+                    const input = await question_internal(
+                        prompt,
+                        rl,
+                        ac.signal,
+                    );
                     displayContent(line);
 
                     const value = parseChoiceInput(
@@ -970,6 +990,53 @@ export function createEnhancedClientIO(
                 import("open").then(({ default: open }) =>
                     open(data as string),
                 );
+                return;
+            }
+            if (action === "manage-conversation") {
+                const payload = data as {
+                    subcommand: string;
+                    name?: string;
+                    newName?: string;
+                };
+                const convCtx = getConversationCommandContext();
+                if (!convCtx) {
+                    console.error(
+                        "Cannot manage conversations: not connected to agent server.",
+                    );
+                    return;
+                }
+                let args: string;
+                switch (payload.subcommand) {
+                    case "new":
+                        args = payload.name ? `new "${payload.name}"` : "new";
+                        break;
+                    case "list":
+                        args = "list";
+                        break;
+                    case "info":
+                        args = "info";
+                        break;
+                    case "switch":
+                        args = `switch "${payload.name}"`;
+                        break;
+                    case "delete":
+                        args = `delete "${payload.name}"`;
+                        break;
+                    case "rename":
+                        args = payload.name
+                            ? `rename "${payload.name}" "${payload.newName}"`
+                            : `rename "${payload.newName}"`;
+                        break;
+                    default:
+                        console.error(
+                            `Unknown conversation subcommand: ${payload.subcommand}`,
+                        );
+                        return;
+                }
+                pendingChoicePromise = handleConversationCommand(convCtx, args);
+                // Stop the spinner immediately so the y/n prompt is visible.
+                currentSpinner?.stop();
+                currentSpinner = null;
                 return;
             }
             throw new Error(`Action ${action} not supported`);
@@ -1490,7 +1557,7 @@ async function questionWithCompletion(
     });
 }
 
-async function question(
+async function question_internal(
     message: string,
     rl?: readline.promises.Interface,
     signal?: AbortSignal,
@@ -1795,6 +1862,7 @@ export async function processCommandsEnhanced<T>(
               history,
               terminal: true,
           });
+    activeRl = rl;
 
     const promptColor = chalk.cyanBright;
 
@@ -1822,7 +1890,7 @@ export async function processCommandsEnhanced<T>(
             process.stdout.write(
                 ANSI.dim + "─".repeat(width) + ANSI.reset + "\n",
             );
-            request = await question(promptColor(prompt), rl);
+            request = await question_internal(promptColor(prompt), rl);
             if (request.length) {
                 process.stdout.write(
                     ANSI.dim + "─".repeat(width) + ANSI.reset + "\n",
@@ -1891,7 +1959,10 @@ export async function processCommandsEnhanced<T>(
 
             // Wait for any pending choice prompt to complete
             // before showing "Complete" and the next prompt.
+            // Stop the spinner first so it doesn't overwrite the prompt.
             if (pendingChoicePromise) {
+                currentSpinner?.stop();
+                currentSpinner = null;
                 await pendingChoicePromise;
                 pendingChoicePromise = null;
             }

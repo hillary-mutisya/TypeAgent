@@ -179,7 +179,17 @@ export type StringPart = {
     type: "string";
     value: string[];
     optional?: undefined; // TODO: support optional string parts
-    variable?: undefined;
+    /**
+     * Optional capture variable.  When set, the matcher writes the
+     * joined matched tokens (`value.join(" ")`) into the slot/value
+     * named by this variable — same string the implicit-default path
+     * computes for a single-StringPart rule with no value expression,
+     * just routed to a named slot instead of the anonymous default.
+     *
+     * Currently introduced only by the optimizer's inliner pass; not
+     * exposed in `.agr` source syntax.
+     */
+    variable?: string | undefined;
 
     /**
      * Cache of compiled RegExp objects, keyed by
@@ -219,7 +229,15 @@ export type PhraseSetPart = {
     type: "phraseSet";
     /** Name of the phrase-set matcher (e.g. "Polite", "Greeting") */
     matcherName: string;
-    variable?: undefined;
+    /**
+     * Optional capture variable.  When set, the matcher writes the
+     * actual matched phrase (its tokens joined with a single space)
+     * into the slot/value named by this variable.
+     *
+     * Currently introduced only by the optimizer's inliner pass; not
+     * exposed in `.agr` source syntax.
+     */
+    variable?: string | undefined;
     optional?: undefined;
 };
 
@@ -229,6 +247,47 @@ export type GrammarPart =
     | VarNumberPart
     | RulesPart
     | PhraseSetPart;
+
+/**
+ * GrammarPart kinds that can carry an optional capture `variable`.
+ * Centralized so adding a future capture-bearing part type only needs
+ * one edit here plus the predicate / accessor below.
+ *
+ * - wildcard / number: source-level captures (`$(name:string)`, `$(n:number)`).
+ * - rules:             nested rule capture (`$(x:<Inner>)`).
+ * - string / phraseSet: optimizer-introduced captures only — no `.agr` source syntax.
+ */
+export type CaptureBearingPart =
+    | VarStringPart
+    | VarNumberPart
+    | RulesPart
+    | StringPart
+    | PhraseSetPart;
+
+/** Type guard: does this part kind support a capture `variable`? */
+export function isCaptureBearingPart(
+    part: GrammarPart,
+): part is CaptureBearingPart {
+    switch (part.type) {
+        case "wildcard":
+        case "number":
+        case "rules":
+        case "string":
+        case "phraseSet":
+            return true;
+        default:
+            return false;
+    }
+}
+
+/**
+ * Return the capture-variable name for any GrammarPart kind that
+ * supports one.  Returns `undefined` when the part either doesn't
+ * support captures or carries no binding.
+ */
+export function getCapturedVariableName(part: GrammarPart): string | undefined {
+    return isCaptureBearingPart(part) ? part.variable : undefined;
+}
 export type GrammarRule = {
     parts: GrammarPart[];
     value?: CompiledValueNode | undefined;
@@ -247,6 +306,8 @@ export type Grammar = {
 export type StringPartJson = {
     type: "string";
     value: string[];
+    /** Optional capture variable — see `StringPart.variable`. */
+    variable?: string | undefined;
 };
 
 export type VarStringPartJson = {
@@ -274,6 +335,8 @@ export type RulePartJson = {
 export type PhraseSetPartJson = {
     type: "phraseSet";
     matcherName: string;
+    /** Optional capture variable — see `PhraseSetPart.variable`. */
+    variable?: string | undefined;
 };
 
 export type GrammarPartJson =

@@ -798,16 +798,72 @@ describe("Grammar Optimizer - Wrapper rule spacingMode propagation", () => {
         }
     });
 
-    it("does not set wrapper spacingMode when members disagree", () => {
-        // Members with differing spacingMode → wrapper stays default
-        // (auto / undefined).
+    it("partitions by spacingMode so mismatched groups don't share a wrapper", () => {
+        // Members with differing spacingMode can't share a single
+        // wrapper rule.  `factorRules` partitions by spacingMode and
+        // factors each partition independently; with only one rule
+        // per partition here, no factoring happens, and both
+        // top-level rules survive with their original spacingMode.
         const text = `<Start> [spacing=required] = play hello -> 1;
 <Start> [spacing=optional] = play world -> 2;`;
         const optimized = loadGrammarRules("t.grammar", text, {
             optimizations: { factorCommonPrefixes: true },
         });
-        expect(optimized.rules.length).toBe(1);
-        expect(optimized.rules[0].spacingMode).toBeUndefined();
+        expect(optimized.rules.length).toBe(2);
+        expect(optimized.rules[0].spacingMode).toBe("required");
+        expect(optimized.rules[1].spacingMode).toBe("optional");
+
+        // Behavior is identical to the unoptimized grammar across
+        // representative inputs (with and without inter-token spacing).
+        const baseline = loadGrammarRules("t.grammar", text);
+        for (const input of [
+            "play hello",
+            "play world",
+            "playhello",
+            "playworld",
+        ]) {
+            expect(match(optimized, input)).toStrictEqual(
+                match(baseline, input),
+            );
+        }
+    });
+
+    it("factors within each spacingMode partition independently", () => {
+        // Two rules per spacing mode that share a prefix.  With
+        // partitioning, each spacing group factors on its own and
+        // produces its own wrapper rule carrying the partition's
+        // spacingMode.  Without partitioning the whole fork would
+        // bail out (mixed-spacing) and lose all factoring.
+        const text = `<Start> [spacing=required] = play song -> "rs";
+<Start> [spacing=required] = play album -> "ra";
+<Start> [spacing=optional] = play track -> "ot";
+<Start> [spacing=optional] = play list -> "ol";`;
+        const optimized = loadGrammarRules("t.grammar", text, {
+            optimizations: { factorCommonPrefixes: true },
+        });
+        // One wrapper per spacing group: 2 top-level rules total.
+        expect(optimized.rules.length).toBe(2);
+        const spacingModes = optimized.rules.map((r) => r.spacingMode).sort();
+        expect(spacingModes).toStrictEqual(["optional", "required"]);
+        // Each wrapper has the shared `play` prefix factored out.
+        for (const r of optimized.rules) {
+            expect(r.parts.length).toBeGreaterThanOrEqual(2);
+            expect(r.parts[0].type).toBe("string");
+        }
+
+        const baseline = loadGrammarRules("t.grammar", text);
+        for (const input of [
+            "play song",
+            "play album",
+            "play track",
+            "play list",
+            "playsong",
+            "playtrack",
+        ]) {
+            expect(match(optimized, input)).toStrictEqual(
+                match(baseline, input),
+            );
+        }
     });
 });
 

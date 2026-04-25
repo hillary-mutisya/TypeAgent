@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 /**
- * SpacingMode after compilation — "auto" is folded to undefined so it never
+ * SpacingMode after compilation - "auto" is folded to undefined so it never
  * appears in compiled grammar output (.ag.json) or at match time.
  */
 export type CompiledSpacingMode = "required" | "optional" | "none" | undefined;
@@ -157,7 +157,7 @@ export type CompiledValueExprNode =
     | CompiledSpreadValueExprNode
     | CompiledTemplateLiteralValueExprNode;
 
-/** ValueNode without comment annotations — used in compiled grammar output (.ag.json). */
+/** ValueNode without comment annotations - used in compiled grammar output (.ag.json). */
 export type CompiledValueNode =
     | CompiledLiteralValueNode
     | CompiledVariableValueNode
@@ -182,7 +182,7 @@ export type StringPart = {
     /**
      * Optional capture variable.  When set, the matcher writes the
      * joined matched tokens (`value.join(" ")`) into the slot/value
-     * named by this variable — same string the implicit-default path
+     * named by this variable - same string the implicit-default path
      * computes for a single-StringPart rule with no value expression,
      * just routed to a named slot instead of the anonymous default.
      *
@@ -228,6 +228,39 @@ export type RulesPart = {
     variable?: string | undefined;
     optional?: boolean | undefined;
     repeat?: boolean | undefined; // Kleene star: zero or more occurrences
+
+    /**
+     * Optimizer-only flag marking this `RulesPart` as a true *tail call*.
+     * When set, the matcher does not push a parent frame on entry - the
+     * selected member's value flows up directly as the containing
+     * (parent) rule's value, and the child's bindings cons onto the
+     * parent's `valueIds` chain (so member value-exprs see prefix
+     * bindings).
+     *
+     * Required structural constraints, validated by
+     * `validateGrammar`:
+     *   - This part is the LAST entry in its containing rule's `parts`.
+     *   - The containing rule has `value === undefined`.
+     *   - `repeat`, `optional`, and `variable` are all forbidden here.
+     *   - `rules.length >= 2`.  A single-rule tail `RulesPart` is
+     *     pointless: the lone member's value would just flow up to
+     *     the parent, which is equivalent to inlining the member's
+     *     parts directly into the parent (since tail already shares
+     *     scope with the parent).  The factorer only emits tail
+     *     wrappers at multi-member forks.
+     *   - Each member rule individually produces a value (explicit
+     *     `value` or implicit-default-eligible).
+     *   - `spacingMode` of every member equals the containing rule's
+     *     spacingMode (boundary semantics must match - see the
+     *     equivalent check in the inliner).
+     *
+     * Not exposed in `.agr` source syntax; introduced only by the
+     * factorer's prefix-factoring pass.  Named `tailCall` (not just
+     * `tail`) so it doesn't read as "this part is at the end of the
+     * parts list" - the flag means "matcher should treat this as a
+     * tail call".
+     */
+    tailCall?: boolean | undefined;
 };
 
 export type PhraseSetPart = {
@@ -260,7 +293,7 @@ export type GrammarPart =
  *
  * - wildcard / number: source-level captures (`$(name:string)`, `$(n:number)`).
  * - rules:             nested rule capture (`$(x:<Inner>)`).
- * - string / phraseSet: optimizer-introduced captures only — no `.agr` source syntax.
+ * - string / phraseSet: optimizer-introduced captures only - no `.agr` source syntax.
  */
 export type CaptureBearingPart =
     | VarStringPart
@@ -311,7 +344,7 @@ export type Grammar = {
 export type StringPartJson = {
     type: "string";
     value: string[];
-    /** Optional capture variable — see `StringPart.variable`. */
+    /** Optional capture variable - see `StringPart.variable`. */
     variable?: string | undefined;
 };
 
@@ -335,12 +368,14 @@ export type RulePartJson = {
     variable?: string | undefined;
     optional?: boolean | undefined;
     repeat?: boolean | undefined;
+    /** See `RulesPart.tailCall`. */
+    tailCall?: boolean | undefined;
 };
 
 export type PhraseSetPartJson = {
     type: "phraseSet";
     matcherName: string;
-    /** Optional capture variable — see `PhraseSetPart.variable`. */
+    /** Optional capture variable - see `PhraseSetPart.variable`. */
     variable?: string | undefined;
 };
 

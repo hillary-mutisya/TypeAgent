@@ -11,8 +11,9 @@ import {
     PhraseSetPart,
     RulesPart,
 } from "./grammarTypes.js";
+import { validateTailRulesParts } from "./grammarOptimizer.js";
 
-export function grammarFromJson(json: GrammarJson): Grammar {
+function grammarFromJsonInternal(json: GrammarJson): Grammar {
     const start = json[0];
     const indexToRules: Map<number, GrammarRule[]> = new Map();
     function grammarRuleFromJson(r: GrammarRuleJson, json: GrammarJson) {
@@ -48,6 +49,7 @@ export function grammarFromJson(json: GrammarJson): Grammar {
                     optional: p.optional,
                 };
                 if (p.repeat) part.repeat = true;
+                if (p.tailCall) part.tailCall = true;
                 return part;
             }
             case "phraseSet": {
@@ -64,4 +66,26 @@ export function grammarFromJson(json: GrammarJson): Grammar {
     return {
         rules: start.map((r) => grammarRuleFromJson(r, json)),
     };
+}
+
+/**
+ * Deserialize a `GrammarJson` and validate the structural contract on
+ * any tail `RulesPart` it carries.  Cost is dominated by tree size,
+ * not the presence of tail parts, so validation is on by default for
+ * every load - cached/untrusted JSON surfaces contract violations as
+ * a clear `Error` at load time rather than as confusing match
+ * failures or NFA-compile crashes downstream.
+ *
+ * Trusted producers (the in-process compiler emitting JSON it just
+ * built) can opt out by passing `validate: false` to skip the walk.
+ */
+export function grammarFromJson(
+    json: GrammarJson,
+    options?: { validate?: boolean },
+): Grammar {
+    const grammar = grammarFromJsonInternal(json);
+    if (options?.validate !== false) {
+        validateTailRulesParts(grammar.rules);
+    }
+    return grammar;
 }

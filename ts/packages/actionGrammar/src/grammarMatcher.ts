@@ -181,6 +181,7 @@ type ParentMatchState = {
     // when `repeatPartIndex !== undefined`.
     repeatStartIndex?: number | undefined;
     spacingMode: CompiledSpacingMode; // parent rule's spacingMode, restored in MatchState on return from nested rule
+    leadingSpacingMode: CompiledSpacingMode; // parent rule's leadingSpacingMode, restored on return from nested rule
 };
 
 // A wildcard slot awaiting its capture value.  Used on MatchState.pendingWildcard
@@ -391,6 +392,18 @@ export type PendingMatchState = {
     // block, so the flag never influences a subsequent part.
     suppressOptionalFork?: boolean | undefined;
 
+    // Spacing mode that governs the leading separator before the
+    // first part of the current rule.  Precomputed at rule-entry
+    // time so `leadingSpacingMode` returns it directly (O(1))
+    // instead of walking the parent chain.  Set at four points:
+    //   - `initialMatchState`: set to the rule's own `spacingMode`
+    //   - non-tail rule entry: computed from parent context
+    //   - tail-call rule entry: computed from wrapper context
+    //   - `finalizeNestedRule` / snapshot restore: restored from
+    //     the saved `ParentMatchState` so repeat re-entry and
+    //     backtracking always see the correct value.
+    leadingSpacingMode: CompiledSpacingMode;
+
     spacingMode: CompiledSpacingMode; // active spacing mode for this rule
 
     index: number;
@@ -471,6 +484,7 @@ function captureSnapshot(state: MatchState): SnapshotState {
         parent: state.parent,
         nestedLevel: state.nestedLevel,
         suppressOptionalFork: state.suppressOptionalFork,
+        leadingSpacingMode: state.leadingSpacingMode,
         spacingMode: state.spacingMode,
         index: state.index,
         pendingWildcard: state.pendingWildcard,
@@ -1242,6 +1256,7 @@ export function finalizeNestedRule(
         state.parts = parent.parts;
         state.partIndex = parent.partIndex;
         state.spacingMode = parent.spacingMode;
+        state.leadingSpacingMode = parent.leadingSpacingMode;
 
         // For repeat parts ()*  or )+: after each successful match, queue a state
         // that tries to match the same group again.  suppressOptionalFork
@@ -1419,32 +1434,19 @@ function matchStringPartWithoutWildcard(
 // previous part and this one.
 //
 // For the first part of a nested rule (partIndex === 0, parent exists),
-// we walk up the parent chain looking for the nearest ancestor that has
-// a flex-space boundary before the rule reference (parent.partIndex > 1
-// means the rule ref was not the first part).  That ancestor's spacing
-// mode controls the separator.  If no ancestor has a preceding
-// flex-space, we've reached the top-level rule - its spacing mode
-// determines the leading/trailing behavior (all modes except "none"
-// allow leading whitespace at the top level).
+// `leadingSpacingMode` provides the answer directly.  It was
+// precomputed at rule-entry time (non-tail or tail-call) from the
+// parent context and is saved/restored in `ParentMatchState`, so
+// repeat re-entry and backtracking always see the correct value.
+//
+// For the first part of a top-level rule (partIndex === 0, no parent),
+// the rule's own spacingMode governs (it controls whether leading
+// whitespace is allowed at the start of input).
 export function leadingSpacingMode(state: MatchState): CompiledSpacingMode {
     if (state.partIndex !== 0 || state.parent === undefined) {
         return state.spacingMode;
     }
-    let parent: ParentMatchState | undefined = state.parent;
-    while (parent !== undefined) {
-        if (parent.partIndex > 1) {
-            // The rule reference had a preceding part in this ancestor
-            // - use this ancestor's spacing mode for the flex-space.
-            return parent.spacingMode;
-        }
-        if (parent.parent === undefined) {
-            // Reached the top-level rule with no preceding flex-space.
-            return parent.spacingMode;
-        }
-        parent = parent.parent;
-    }
-    // Should not reach here (the loop terminates when parent.parent is undefined).
-    return state.spacingMode;
+    return state.leadingSpacingMode;
 }
 
 /**
@@ -1724,6 +1726,7 @@ function enterTailRulesPart(state: MatchState, part: RulesPart): void {
     // would otherwise check (rules.length >= 2, no
     // repeat/optional/variable, member spacingMode matches parent's)
     // are caught at construction time at the offending site.
+    state.leadingSpacingMode = leadingSpacingMode(state);
     state.name = getNestedStateName(state, part, 0);
     state.parts = rules[0].parts;
     state.value = rules[0].value;
@@ -1851,6 +1854,9 @@ export function matchState(state: MatchState, request: string) {
                     continue;
                 }
 
+                // Compute before saving parent frame (reads current-rule context).
+                const childLeadingSpacingMode = leadingSpacingMode(state);
+
                 // Save the current state to be restored after finishing the nested rule.
                 const parent: ParentMatchState = {
                     name: state.name,
@@ -1868,6 +1874,7 @@ export function matchState(state: MatchState, request: string) {
                     // field doc on `ParentMatchState`.
                     repeatStartIndex: part.repeat ? state.index : undefined,
                     spacingMode: state.spacingMode,
+                    leadingSpacingMode: state.leadingSpacingMode,
                 };
 
                 // The nested rule needs to track values if the current rule is tracking value AND
@@ -1886,6 +1893,7 @@ export function matchState(state: MatchState, request: string) {
                 state.parent = parent;
                 state.nestedLevel++;
                 state.suppressOptionalFork = undefined; // entering nested rules, clear suppression flag
+                state.leadingSpacingMode = childLeadingSpacingMode;
                 state.spacingMode = rules[0].spacingMode;
 
                 // Push a single compressed alternation cursor frame
@@ -1946,6 +1954,7 @@ export function initialMatchState(
         parent: undefined,
         nestedLevel: 0,
         suppressOptionalFork: undefined,
+        leadingSpacingMode: rules[0].spacingMode,
         spacingMode: rules[0].spacingMode,
         index: 0,
         pendingWildcard: undefined,

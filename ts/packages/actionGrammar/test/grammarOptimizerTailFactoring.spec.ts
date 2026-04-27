@@ -381,3 +381,214 @@ describe("Grammar Optimizer - tailFactoring + NFA compatibility", () => {
         );
     });
 });
+
+describe("Grammar Optimizer - tail-call spacing regression", () => {
+    // Regression: fuzz-found bug 178.
+    // A grammar with [spacing=none] on the top-level rule has
+    // alternatives starting with $(n:number).  After prefix-factoring
+    // with tailFactoring, the factored rule's first number part is
+    // shared and the suffix alternatives are in a tail-call RulesPart.
+    // The matcher's leadingSpacingMode must respect the wrapper rule's
+    // spacing=none for the suffix's first part; otherwise the number
+    // regex consumes a leading space and produces a spurious match.
+    it("preserves spacing=none across tail-call boundary (fuzz #178)", () => {
+        const text = `<Start> = <R0>;
+<R0> [spacing=none] = $(n10:number) $(n11:number) d -> n11 | $(v12:string) $(v13:string) $(v14:string) $(n15:number) | [spacing=auto]$(v16:string) $(v17:string) <R3> $(n18:number) -> v17 | $(n19:number) $(n20:number) -> [n19, n20];
+<R1> = $(v9:string) -> \`hello \${v9}\` | <R2> | <R3> | <R2>;
+<R2> = [spacing=none]e $(v8:string) | [spacing=none]<R3>;
+<R3> = d $(v0:string) $(n1:number) $(n2:number) -> n2 | d $(v3:string) $(v4:string) -> { actionName: "act", parameters: { v3, v4 } } | a | [spacing=none]$(n5:number) $(v6:string) $(n7:number);`;
+        const opts = {
+            startValueRequired: false,
+            enableValueExpressions: true,
+        };
+        const baseline = loadGrammarRules("t.grammar", text, opts);
+        const optimized = loadGrammarRules("t.grammar", text, {
+            ...opts,
+            optimizations: {
+                inlineSingleAlternatives: true,
+                factorCommonPrefixes: true,
+                tailFactoring: true,
+            },
+        });
+        // "21 22" must NOT match: spacing=none forbids the space
+        // between the two numbers.
+        expect(match(optimized, "21 22")).toStrictEqual(
+            match(baseline, "21 22"),
+        );
+        expect(match(optimized, "21 22")).toStrictEqual([]);
+    });
+
+    // Minimal reproducer: two number-leading alternatives with
+    // spacing=none that share a common prefix and get tail-factored.
+    it("spacing=none blocks separator in minimal tail-factored grammar", () => {
+        const text = `<Start> = <R>;
+<R> [spacing=none] = $(a:number) $(b:number) -> [a, b]
+                   | $(a:number) d -> a;`;
+        const opts = {
+            startValueRequired: false,
+            enableValueExpressions: true,
+        };
+        const baseline = loadGrammarRules("t.grammar", text, opts);
+        const optimized = loadGrammarRules("t.grammar", text, {
+            ...opts,
+            optimizations: {
+                inlineSingleAlternatives: true,
+                factorCommonPrefixes: true,
+                tailFactoring: true,
+            },
+        });
+        // With spacing=none, "1 2" should not match (space disallowed).
+        expect(match(optimized, "1 2")).toStrictEqual(match(baseline, "1 2"));
+        expect(match(optimized, "1 2")).toStrictEqual([]);
+        // "12" should match the first alt (two single-digit numbers
+        // directly adjacent).
+        expect(match(optimized, "12")).toStrictEqual(match(baseline, "12"));
+        // "1d" should match the second alt.
+        expect(match(optimized, "1d")).toStrictEqual(match(baseline, "1d"));
+        expect(match(optimized, "1d")).toStrictEqual([1]);
+    });
+});
+
+describe("leadingSpacingMode propagation through tail-call entries", () => {
+    // Mixed spacing modes: outer rule enforces spacing=required while
+    // the inner rule uses spacing=none. After tail-factoring, the
+    // boundary between outer and inner content must use the outer mode,
+    // while boundaries within the tail alternatives use the inner mode.
+    it("parent required, tail-factored child none: outer boundary enforced", () => {
+        const text = `<R> [spacing=none] = $(a:number) $(b:number) -> [a, b]
+                       | $(a:number) d -> a;
+<Start> [spacing=required] = do $(r:<R>) -> r;`;
+        const opts = {
+            startValueRequired: false,
+            enableValueExpressions: true,
+        };
+        const baseline = loadGrammarRules("t.grammar", text, opts);
+        const optimized = loadGrammarRules("t.grammar", text, {
+            ...opts,
+            optimizations: {
+                inlineSingleAlternatives: true,
+                factorCommonPrefixes: true,
+                tailFactoring: true,
+            },
+        });
+        const tailParts = findAllRulesParts(optimized.rules).filter(
+            (rp) => rp.tailCall,
+        );
+        expect(tailParts.length).toBeGreaterThanOrEqual(1);
+
+        // Space between "do" and first number: Start's required mode.
+        // No space between numbers/literals: R's none mode.
+        expect(match(optimized, "do 12")).toStrictEqual(
+            match(baseline, "do 12"),
+        );
+        expect(match(optimized, "do 1d")).toStrictEqual(
+            match(baseline, "do 1d"),
+        );
+        // Space within R's none-mode region is forbidden.
+        expect(match(optimized, "do 1 2")).toStrictEqual(
+            match(baseline, "do 1 2"),
+        );
+        expect(match(optimized, "do 1 2")).toStrictEqual([]);
+        // Missing space before R: Start's required mode rejects.
+        expect(match(optimized, "do12")).toStrictEqual(match(baseline, "do12"));
+        expect(match(optimized, "do12")).toStrictEqual([]);
+    });
+
+    // Reverse: parent optional, tail-factored child required.
+    // The boundary before the child's first part uses the parent's
+    // optional mode, but internal boundaries use the child's required.
+    it("parent optional, tail-factored child required: inner boundary enforced", () => {
+        const text = `<R> [spacing=required] = $(a:number) $(b:number) -> [a, b]
+                       | $(a:number) d -> a;
+<Start> [spacing=optional] = do $(r:<R>) -> r;`;
+        const opts = {
+            startValueRequired: false,
+            enableValueExpressions: true,
+        };
+        const baseline = loadGrammarRules("t.grammar", text, opts);
+        const optimized = loadGrammarRules("t.grammar", text, {
+            ...opts,
+            optimizations: {
+                inlineSingleAlternatives: true,
+                factorCommonPrefixes: true,
+                tailFactoring: true,
+            },
+        });
+        const tailParts = findAllRulesParts(optimized.rules).filter(
+            (rp) => rp.tailCall,
+        );
+        expect(tailParts.length).toBeGreaterThanOrEqual(1);
+
+        // No space before R: Start's optional allows adjacency.
+        expect(match(optimized, "do1 2")).toStrictEqual(
+            match(baseline, "do1 2"),
+        );
+        // With space before R: also fine.
+        expect(match(optimized, "do 1 2")).toStrictEqual(
+            match(baseline, "do 1 2"),
+        );
+        // No space within R: R's required mode rejects.
+        expect(match(optimized, "do12")).toStrictEqual(match(baseline, "do12"));
+        expect(match(optimized, "do12")).toStrictEqual([]);
+    });
+
+    // Directly exercise the latent bug scenario: a single-part
+    // tail-call wrapper (no prefix before the tailCall RulesPart).
+    // This shape is valid per validateTailRulesParts but cannot be
+    // produced by the current optimizer. Constructed via JSON.
+    //
+    // Grammar:
+    //   Start [required]: "do" $(x:<Wrapper>) "end" -> x
+    //   Wrapper [none]: [tailCall: ("bar" -> "b") | ("baz" -> "z")]
+    //
+    // Without the leadingSpacingMode fix, the old tailCallEntry
+    // flag would use the wrapper's "none" mode for the leading
+    // separator, incorrectly allowing "dobar end" to match.
+    it("single-part tail-call wrapper propagates ancestor leadingSpacingMode", () => {
+        const json: any = [
+            // Start rules
+            [
+                {
+                    parts: [
+                        { type: "string", value: ["do"] },
+                        { type: "rules", index: 1, variable: "x" },
+                        { type: "string", value: ["end"] },
+                    ],
+                    value: { type: "variable", name: "x" },
+                    spacingMode: "required",
+                },
+            ],
+            // Wrapper: single-part, just the tailCall RulesPart
+            [
+                {
+                    parts: [{ type: "rules", index: 2, tailCall: true }],
+                    spacingMode: "none",
+                },
+            ],
+            // Tail members
+            [
+                {
+                    parts: [{ type: "string", value: ["bar"] }],
+                    value: { type: "literal", value: "b" },
+                    spacingMode: "none",
+                },
+                {
+                    parts: [{ type: "string", value: ["baz"] }],
+                    value: { type: "literal", value: "z" },
+                    spacingMode: "none",
+                },
+            ],
+        ];
+        const grammar = grammarFromJson(json);
+
+        // Start's required mode governs the boundary before and after.
+        expect(match(grammar, "do bar end")).toStrictEqual(["b"]);
+        expect(match(grammar, "do baz end")).toStrictEqual(["z"]);
+
+        // The wrapper's none mode must NOT leak to the leading
+        // boundary. Without the fix, these would incorrectly match.
+        expect(match(grammar, "dobar end")).toStrictEqual([]);
+        expect(match(grammar, "dobaz end")).toStrictEqual([]);
+        expect(match(grammar, "do barend")).toStrictEqual([]);
+    });
+});

@@ -15,12 +15,13 @@
 
 import {
     runFuzz,
+    mergeFeatures,
     type FuzzConfig,
     type FuzzResult,
+    type FeaturesOverride,
     DEFAULT_CONFIG,
+    MINIMAL_FEATURES,
 } from "../src/fuzz/fuzzHarness.js";
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
  * Run the harness and emit one `it()` per result so Jest reports
@@ -29,19 +30,19 @@ import {
 function fuzzDescribe(
     name: string,
     configOverrides: Omit<Partial<FuzzConfig>, "features" | "generator"> & {
-        features?: Partial<FuzzConfig["features"]>;
+        features?: FeaturesOverride;
         generator?: Partial<FuzzConfig["generator"]>;
     },
 ): void {
     describe(name, () => {
-        // Merge config.
+        // Merge config.  Per-dimension tests intentionally start from
+        // MINIMAL_FEATURES (only literals + ruleRefs enabled) so they
+        // isolate the dimension under test rather than inheriting the
+        // broad-coverage defaults.
         const config: FuzzConfig = {
             ...DEFAULT_CONFIG,
             ...configOverrides,
-            features: {
-                ...DEFAULT_CONFIG.features,
-                ...(configOverrides.features ?? {}),
-            },
+            features: mergeFeatures(MINIMAL_FEATURES, configOverrides.features),
             generator: {
                 ...DEFAULT_CONFIG.generator,
                 ...(configOverrides.generator ?? {}),
@@ -90,8 +91,7 @@ fuzzDescribe("Fuzz: optimizer equivalence (literals + ruleRefs)", {
     count: 40,
     inputsPerGrammar: 6,
     features: {
-        literals: true,
-        ruleRefs: true,
+        partKinds: { literal: 1, ruleRef: 1 },
     },
     generator: {
         maxRules: 4,
@@ -106,11 +106,8 @@ fuzzDescribe("Fuzz: optimizer equivalence (wildcards + values)", {
     seed: 0xf0221,
     count: 30,
     features: {
-        literals: true,
-        ruleRefs: true,
-        wildcards: true,
-        numbers: true,
-        values: true,
+        partKinds: { literal: 1, ruleRef: 1, wildcard: 1, number: 1 },
+        values: { attachProb: 0.7 },
     },
     validations: ["optimizer"],
 });
@@ -119,11 +116,8 @@ fuzzDescribe("Fuzz: parse-write round-trip", {
     seed: 0xf0222,
     count: 30,
     features: {
-        literals: true,
-        ruleRefs: true,
-        wildcards: true,
-        numbers: true,
-        values: true,
+        partKinds: { literal: 1, ruleRef: 1, wildcard: 1, number: 1 },
+        values: { attachProb: 0.7 },
     },
     validations: ["roundtrip-text"],
 });
@@ -132,9 +126,8 @@ fuzzDescribe("Fuzz: spacing modes (optimizer equivalence)", {
     seed: 0xf0223,
     count: 30,
     features: {
-        literals: true,
-        ruleRefs: true,
-        spacingModes: true,
+        partKinds: { literal: 1, ruleRef: 1 },
+        spacing: { altProb: 0.3, ruleProb: 0.4 },
     },
     validations: ["optimizer"],
 });
@@ -143,10 +136,27 @@ fuzzDescribe("Fuzz: JSON serialization round-trip", {
     seed: 0xf0224,
     count: 30,
     features: {
-        literals: true,
-        ruleRefs: true,
-        wildcards: true,
-        numbers: true,
+        partKinds: { literal: 1, ruleRef: 1, wildcard: 1, number: 1 },
     },
     validations: ["roundtrip-json"],
+});
+
+fuzzDescribe("Fuzz: optional / repeat groups (optimizer equivalence)", {
+    seed: 0xf0225,
+    count: 30,
+    features: {
+        partKinds: { literal: 1, ruleRef: 1 },
+        groups: { optionalProb: 0.4, repeatProb: 0.3 },
+    },
+    validations: ["optimizer"],
+});
+
+fuzzDescribe("Fuzz: optional / repeat groups (parse-write round-trip)", {
+    seed: 0xf0226,
+    count: 30,
+    features: {
+        partKinds: { literal: 1, ruleRef: 1, wildcard: 1, number: 1 },
+        groups: { optionalProb: 0.3, repeatProb: 0.3 },
+    },
+    validations: ["roundtrip-text", "roundtrip-json"],
 });

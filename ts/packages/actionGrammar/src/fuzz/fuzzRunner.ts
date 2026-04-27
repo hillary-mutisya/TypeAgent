@@ -32,6 +32,10 @@ import chalk from "chalk";
 import {
     runFuzz,
     DEFAULT_CONFIG,
+    cloneFeatures,
+    zeroAllFeatures,
+    featureEntries,
+    FEATURE_FIELDS,
     validateOptimizerEquivalence,
     validateTextRoundTrip,
     validateJsonRoundTrip,
@@ -55,11 +59,24 @@ function printUsage(): void {
         "  --seed <N>           PRNG seed (decimal or 0x hex, default: 0xc0ffee)",
         "  --count <N>          Number of grammars to generate (default: 40)",
         "  --inputs <N>         Extra random inputs per grammar (default: 6)",
-        "  --features <csv>     Comma-separated feature flags (default: literals,ruleRefs)",
-        "                       Literals are always implicitly enabled as the",
-        "                       fallback part kind.  Other options:",
-        "                       ruleRefs, wildcards, numbers,",
-        "                                optionals (NYI), repeats (NYI), values, spacing",
+        "  --features <csv>     Comma-separated feature overrides.",
+        "                       Each entry is `path` (= weight 1) or",
+        "                       `path=<value>` where `path` is a dotted",
+        "                       reference into the FuzzFeatureFlags tree:",
+        "                         partKinds.{literal,ruleRef,wildcard,number}",
+        "                         values.attachProb",
+        "                         spacing.{altProb,ruleProb}",
+        "                         spacing.modes.{required,optional,none,auto}",
+        "                         groups.{optionalProb,repeatProb}",
+        "                       Fields named `*Prob` are probabilities in",
+        "                       [0,1]; other numeric fields are relative",
+        "                       weights for a weighted random pick.  When",
+        "                       --features is given, all weights/probs reset",
+        "                       to 0 first; partKinds.literal stays at 1 as",
+        "                       the fallback part kind unless overridden",
+        "                       (e.g. `--features partKinds.wildcard=5`",
+        "                       leaves literal=1, so wildcards are 5x as",
+        "                       common as literals).",
         "  --validation <csv>   Comma-separated validations (default: all)",
         "                       Options: optimizer, roundtrip-text, roundtrip-json",
         "  --depth <N>          Max rules / nesting depth (default: 4)",
@@ -72,7 +89,9 @@ function printUsage(): void {
         "",
         "Examples:",
         "  node ./dist/fuzz/fuzzRunner.js --seed 42 --count 10",
-        "  node ./dist/fuzz/fuzzRunner.js --features wildcards,values --validation optimizer --verbose",
+        "  node ./dist/fuzz/fuzzRunner.js --features partKinds.wildcard,values.attachProb=0.7 --validation optimizer --verbose",
+        "  node ./dist/fuzz/fuzzRunner.js --features partKinds.wildcard=5,partKinds.literal=1",
+        "  node ./dist/fuzz/fuzzRunner.js --features spacing.altProb=0.3,spacing.modes.required=3",
         "  node ./dist/fuzz/fuzzRunner.js --count 500 --seed 0xdeadbeef",
         "  node ./dist/fuzz/fuzzRunner.js --replay ./repro-cases",
         "",
@@ -80,17 +99,17 @@ function printUsage(): void {
     console.log(lines.join("\n"));
 }
 
-const FEATURE_MAP: Record<string, keyof FuzzFeatureFlags> = {
-    literals: "literals",
-    ruleRefs: "ruleRefs",
-    rulerefs: "ruleRefs",
-    wildcards: "wildcards",
-    numbers: "numbers",
-    optionals: "optionals",
-    repeats: "repeats",
-    values: "values",
-    spacing: "spacingModes",
-};
+// Dotted-path setters into FuzzFeatureFlags, derived from the
+// canonical FEATURE_FIELDS table in grammarGenerator.ts.  Keys are
+// lower-cased so CLI lookup is case-insensitive; canonical (camelCase)
+// paths are kept around for human-readable diagnostics.
+type FeatureSetter = (f: FuzzFeatureFlags, value: number) => void;
+const FEATURE_PATHS: Record<string, FeatureSetter> = Object.fromEntries(
+    FEATURE_FIELDS.map((field) => [field.path.toLowerCase(), field.set]),
+);
+const CANONICAL_FEATURE_PATHS: readonly string[] = FEATURE_FIELDS.map(
+    (field) => field.path,
+);
 
 const VALIDATION_MAP: Record<string, FuzzValidationKind> = {
     optimizer: "optimizer",
@@ -116,7 +135,7 @@ type ParsedArgs = {
 function parseArgs(argv: string[]): ParsedArgs {
     const config: FuzzConfig = {
         ...DEFAULT_CONFIG,
-        features: { ...DEFAULT_CONFIG.features },
+        features: cloneFeatures(DEFAULT_CONFIG.features),
         generator: { ...DEFAULT_CONFIG.generator },
         validations: [...DEFAULT_CONFIG.validations],
     };
@@ -163,27 +182,35 @@ function parseArgs(argv: string[]): ParsedArgs {
                 break;
             case "--features": {
                 if (!featuresExplicit) {
-                    // First --features resets all to false, then enables
-                    // the listed features.  Literals are always kept on
-                    // as the fallback part kind.
-                    for (const k of Object.keys(
-                        config.features,
-                    ) as (keyof FuzzFeatureFlags)[]) {
-                        config.features[k] = false;
-                    }
-                    config.features.literals = true;
+                    // First --features resets all to 0, then applies
+                    // the listed overrides.  partKinds.literal stays at
+                    // 1 as the fallback part kind unless overridden.
+                    zeroAllFeatures(config.features);
+                    config.features.partKinds.literal = 1;
                     featuresExplicit = true;
                 }
                 const parts = argv[++i].split(",");
                 for (const p of parts) {
-                    const key = FEATURE_MAP[p.trim().toLowerCase()];
-                    if (!key) {
+                    const trimmed = p.trim();
+                    if (!trimmed) continue;
+                    const eq = trimmed.indexOf("=");
+                    const rawPath = eq >= 0 ? trimmed.slice(0, eq) : trimmed;
+                    const rawValue = eq >= 0 ? trimmed.slice(eq + 1) : "1";
+                    const setter = FEATURE_PATHS[rawPath.trim().toLowerCase()];
+                    if (!setter) {
                         console.error(
-                            `Unknown feature: ${p.trim()}.  Valid: ${Object.keys(FEATURE_MAP).join(", ")}`,
+                            `Unknown feature path: ${rawPath.trim()}.  Valid paths: ${CANONICAL_FEATURE_PATHS.join(", ")}`,
                         );
                         process.exit(1);
                     }
-                    config.features[key] = true;
+                    const value = Number(rawValue);
+                    if (!Number.isFinite(value) || value < 0) {
+                        console.error(
+                            `Invalid value for feature '${rawPath.trim()}': ${rawValue}`,
+                        );
+                        process.exit(1);
+                    }
+                    setter(config.features, value);
                 }
                 break;
             }
@@ -308,7 +335,7 @@ function replayReproCases(dir: string): number {
         const gen: GeneratedGrammar = {
             text: grammarText,
             testInputs: [],
-            usesValueExpressions: meta.features.values,
+            usesValueExpressions: meta.features.values.attachProb > 0,
             startValueRequired: false,
         };
 
@@ -385,11 +412,9 @@ function main(): void {
     }
 
     // Print configuration summary.
-    const enabledFeatures = (
-        Object.entries(config.features) as [keyof FuzzFeatureFlags, boolean][]
-    )
-        .filter(([, v]) => v)
-        .map(([k]) => k)
+    const enabledFeatures = Array.from(featureEntries(config.features))
+        .filter(([, v]) => v > 0)
+        .map(([k, v]) => (v === 1 ? k : `${k}=${v}`))
         .join(", ");
 
     console.log(chalk.bold("Grammar Fuzz Runner"));

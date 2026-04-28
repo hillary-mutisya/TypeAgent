@@ -4,13 +4,15 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import child_process from "node:child_process";
 import readline from "node:readline/promises";
 import { getClient as getPIMClient } from "./lib/pimClient.mjs";
+import { getAzCliLoggedInInfo } from "./lib/azureUtils.mjs";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import chalk from "chalk";
 import { exit } from "node:process";
+import { DefaultAzureCredential } from "@azure/identity";
+import { SecretClient } from "@azure/keyvault-secrets";
 
 const require = createRequire(import.meta.url);
 const config = require("./getKeys.config.json");
@@ -26,6 +28,35 @@ const sharedPatterns = (config.env.sharedPatterns ?? []).map(
 let paramSharedVault = undefined;
 let paramPrivateVault = undefined;
 let paramCommit = false;
+let paramVerbose = false;
+
+function nowHHMMSS() {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function vlog(msg) {
+    if (paramVerbose) {
+        console.log(chalk.gray(`[${nowHHMMSS()}] ${msg}`));
+    }
+}
+
+async function timed(label, fn) {
+    if (!paramVerbose) {
+        return fn();
+    }
+    const start = Date.now();
+    vlog(`> ${label}`);
+    try {
+        const result = await fn();
+        vlog(`< ${label} (${Date.now() - start}ms)`);
+        return result;
+    } catch (e) {
+        vlog(`! ${label} FAILED after ${Date.now() - start}ms: ${e.message}`);
+        throw e;
+    }
+}
 
 function matchesSharedPattern(envKey) {
     return sharedPatterns.some((re) => re.test(envKey));
@@ -35,11 +66,22 @@ function isSharedKey(envKey) {
     return sharedKeys.includes(envKey) || matchesSharedPattern(envKey);
 }
 
+function isForbiddenByRbac(e) {
+    // Azure SDK RestError surfaces RBAC denial as 403 with the inner code
+    // "ForbiddenByRbac" carried in the message body. Az CLI's old check used
+    // the message text — keep both so we work whichever side throws.
+    return (
+        e?.statusCode === 403 ||
+        (typeof e?.message === "string" &&
+            e.message.includes("ForbiddenByRbac"))
+    );
+}
+
 async function getSecretListWithElevation(keyVaultClient, vaultName) {
     try {
         return await keyVaultClient.getSecrets(vaultName);
     } catch (e) {
-        if (!e.message.includes("ForbiddenByRbac")) {
+        if (!isForbiddenByRbac(e)) {
             throw e;
         }
 
@@ -96,122 +138,127 @@ async function getSecretListWithElevation(keyVaultClient, vaultName) {
 }
 
 async function getSecrets(keyVaultClient, vaultName, shared) {
+    const overallStart = Date.now();
     console.log(
         `Getting existing ${shared ? "shared" : "private"} secrets from ${chalk.cyanBright(vaultName)} key vault.`,
     );
+    const listStart = Date.now();
     const secretList = await getSecretListWithElevation(
         keyVaultClient,
         vaultName,
     );
+    const listElapsed = Date.now() - listStart;
     const enabled = secretList
         .filter((s) => s.attributes.enabled)
         .map((s) => s.id.split("/").pop());
+    vlog(
+        `list ${vaultName}: ${secretList.length} total, ${enabled.length} enabled (${listElapsed}ms)`,
+    );
 
     const results = [];
     const failures = [];
-    const concurrency = 5;
+    // SDK reads are HTTPS round-trips (no per-call process spawn), so we can
+    // parallelize aggressively. Key Vault per-vault rate limit is ~2000 ops
+    // per 10s, so 20 concurrent reads is well within bounds.
+    const concurrency = 20;
+    const batchCount = Math.ceil(enabled.length / concurrency);
     for (let i = 0; i < enabled.length; i += concurrency) {
         const batch = enabled.slice(i, i + concurrency);
+        const batchIdx = Math.floor(i / concurrency) + 1;
+        const batchStart = Date.now();
+        vlog(
+            `batch ${batchIdx}/${batchCount} (${batch.length} secrets) starting`,
+        );
         const batchResults = await Promise.all(
             batch.map(async (secretName) => {
+                const t0 = Date.now();
                 try {
                     const response = await keyVaultClient.readSecret(
                         vaultName,
                         secretName,
                     );
+                    vlog(`  read ${secretName} (${Date.now() - t0}ms)`);
                     return [secretName, response.value];
                 } catch (e) {
+                    vlog(
+                        `  read ${secretName} FAILED (${Date.now() - t0}ms): ${e.message}`,
+                    );
                     failures.push({ name: secretName, error: e.message });
                     return null;
                 }
             }),
         );
+        vlog(
+            `batch ${batchIdx}/${batchCount} done in ${Date.now() - batchStart}ms`,
+        );
         results.push(...batchResults.filter((r) => r !== null));
     }
 
+    vlog(
+        `getSecrets ${vaultName} total: ${Date.now() - overallStart}ms (${results.length} ok, ${failures.length} failed)`,
+    );
     return { results, failures };
 }
 
-async function execAsync(command, options) {
-    return new Promise((res, rej) => {
-        child_process.exec(command, options, (err, stdout, stderr) => {
-            if (err) {
-                rej(err);
-                return;
-            }
-            if (stderr) {
-                console.log(stderr + stdout);
-            }
-            res(stdout);
-        });
-    });
-}
-
-async function execWithRetry(command, options, maxRetries = 3) {
-    const SSL_ERROR = "SSL: UNEXPECTED_EOF_WHILE_READING";
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-            return await execAsync(command, options);
-        } catch (e) {
-            if (attempt < maxRetries && e.message.includes(SSL_ERROR)) {
-                const delay = attempt * 1000;
-                console.warn(
-                    chalk.yellow(
-                        `SSL error on attempt ${attempt}/${maxRetries}, retrying in ${delay}ms...`,
-                    ),
-                );
-                await new Promise((res) => setTimeout(res, delay));
-            } else {
-                throw e;
-            }
-        }
-    }
-}
-
-class AzCliKeyVaultClient {
+class SdkKeyVaultClient {
     static async get() {
-        // We use this to validate that the user is logged in (already ran `az login`).
+        // Print friendly identity info (one az call, like before). The actual
+        // secret operations below use DefaultAzureCredential — no more shell-outs.
         try {
-            const account = JSON.parse(await execAsync("az account show"));
-            console.log(`Logged in as ${chalk.cyanBright(account.user.name)}`);
+            await getAzCliLoggedInInfo();
         } catch (e) {
             console.error(
                 "ERROR: User not logged in to Azure CLI. Run 'az login'.",
             );
             process.exit(1);
         }
-        // Note: 'az keyvault' commands work regardless of which subscription is currently "in context",
-        // as long as the user is listed in the vault's access policy, so we don't need to do 'az account set'.
-        return new AzCliKeyVaultClient();
+        return new SdkKeyVaultClient(new DefaultAzureCredential());
+    }
+
+    constructor(credential) {
+        this.credential = credential;
+        this.clients = new Map();
+    }
+
+    clientFor(vaultName) {
+        let client = this.clients.get(vaultName);
+        if (client === undefined) {
+            client = new SecretClient(
+                `https://${vaultName}.vault.azure.net`,
+                this.credential,
+            );
+            this.clients.set(vaultName, client);
+        }
+        return client;
     }
 
     async getSecrets(vaultName) {
-        return JSON.parse(
-            await execWithRetry(
-                `az keyvault secret list --vault-name ${vaultName}`,
-            ),
-        );
+        // Iterate the paged async iterable into the shape the rest of this
+        // script expects: [{ id, attributes: { enabled } }].
+        const items = [];
+        for await (const props of this.clientFor(
+            vaultName,
+        ).listPropertiesOfSecrets()) {
+            items.push({
+                id: props.id,
+                attributes: { enabled: props.enabled },
+            });
+        }
+        return items;
     }
 
     async readSecret(vaultName, secretName) {
-        return JSON.parse(
-            await execWithRetry(
-                `az keyvault secret show --vault-name ${vaultName} --name ${secretName}`,
-            ),
-        );
+        const result = await this.clientFor(vaultName).getSecret(secretName);
+        return { value: result.value };
     }
 
     async writeSecret(vaultName, secretName, secretValue) {
-        return JSON.parse(
-            await execAsync(
-                `az keyvault secret set --vault-name ${vaultName} --name ${secretName} --value '${secretValue}'`,
-            ),
-        );
+        return this.clientFor(vaultName).setSecret(secretName, secretValue);
     }
 }
 
 async function getKeyVaultClient() {
-    return AzCliKeyVaultClient.get();
+    return SdkKeyVaultClient.get();
 }
 
 async function readDotenv() {
@@ -280,10 +327,10 @@ async function planPush(stdio, secrets, secretKey, value, shared = true) {
     return { action: "create", displayName: secretKey + suffix };
 }
 
-// Concurrency-5 parallel writer. `jobs` is an array of
+// Parallel writer. `jobs` is an array of
 // { vault, secretKey, value, displayName, action }.
 async function writePlanInParallel(keyVaultClient, jobs) {
-    const concurrency = 5;
+    const concurrency = 20;
     let updated = 0;
     const failures = [];
     for (let i = 0; i < jobs.length; i += concurrency) {
@@ -463,24 +510,36 @@ async function pullSecretsFromVault(keyVaultClient, vaultName, shared, dotEnv) {
 }
 
 async function pullSecrets() {
-    const dotEnv = new Map(await readDotenv());
-    const keyVaultClient = await getKeyVaultClient();
+    const overallStart = Date.now();
+    const dotEnv = new Map(await timed("readDotenv", () => readDotenv()));
+    const keyVaultClient = await timed("az login check", () =>
+        getKeyVaultClient(),
+    );
     const vaultNames = getVaultNames(dotEnv);
     console.log(`Pulling secrets to ${chalk.cyanBright(dotenvPath)}`);
-    const sharedResult = await pullSecretsFromVault(
-        keyVaultClient,
-        vaultNames.shared,
-        true,
-        dotEnv,
+    const sharedResult = await timed(
+        `pullSecretsFromVault(shared=${vaultNames.shared})`,
+        () =>
+            pullSecretsFromVault(
+                keyVaultClient,
+                vaultNames.shared,
+                true,
+                dotEnv,
+            ),
     );
     const privateResult = vaultNames.private
-        ? await pullSecretsFromVault(
-              keyVaultClient,
-              vaultNames.private,
-              false,
-              dotEnv,
+        ? await timed(
+              `pullSecretsFromVault(private=${vaultNames.private})`,
+              () =>
+                  pullSecretsFromVault(
+                      keyVaultClient,
+                      vaultNames.private,
+                      false,
+                      dotEnv,
+                  ),
           )
         : undefined;
+    vlog(`pull total elapsed: ${Date.now() - overallStart}ms`);
 
     if (
         sharedResult.updated === undefined &&
@@ -586,6 +645,11 @@ const commands = ["push", "pull", "help"];
         if (arg === "--dry-run") {
             // Explicit no-op; dry-run is the default.
             paramCommit = false;
+            continue;
+        }
+
+        if (arg === "--verbose" || arg === "-v") {
+            paramVerbose = true;
             continue;
         }
 

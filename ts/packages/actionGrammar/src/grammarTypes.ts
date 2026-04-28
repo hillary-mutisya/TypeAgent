@@ -219,10 +219,94 @@ export type VarNumberPart = {
     optional?: boolean | undefined;
 };
 
+/**
+ * One per-spacing-mode bucket table within a dispatched `RulesPart`.
+ * See `RulesPart.dispatch` for the full contract; in brief: the
+ * matcher peeks once with `spacingMode` as `tokenMode` and looks the
+ * peeked token up in `tokenMap` to find candidate rules.
+ */
+export type DispatchModeBucket = {
+    spacingMode: CompiledSpacingMode;
+    tokenMap: Map<string, GrammarRule[]>;
+};
+
+/**
+ * Alternation part.  Holds `rules.length` alternatives that are tried
+ * in order.  When the optional `dispatch` field is set, the matcher
+ * peeks one token at entry and tries the matching bucket members
+ * (per `dispatch[*].tokenMap`) before falling back to `rules`; when
+ * `dispatch` is absent, the matcher iterates `rules` linearly.
+ *
+ * **Dual role of `rules`.**  In a non-dispatched part, `rules` holds
+ * the full alternation.  In a dispatched part, `rules` holds only
+ * the *fallback subset* - members that could not be assigned to any
+ * dispatch bucket (wildcard / number / phraseSet / nested-rule first
+ * parts, members in `optional`/`none` spacing modes, etc.) plus any
+ * member whose first token is unknown.  Bucket members live solely
+ * inside `dispatch[*].tokenMap.values()`; each `GrammarRule` object
+ * is referenced from exactly one slot.
+ */
 export type RulesPart = {
     type: "rules";
 
-    rules: GrammarRule[];
+    alternatives: GrammarRule[];
+    /**
+     * Optimizer-only first-token dispatch table.  When set, the
+     * matcher peeks one input token at entry and looks it up across
+     * each per-mode `tokenMap` to filter candidate alternatives.
+     * The peeked token is *not* consumed: each suffix rule retains
+     * its full original `parts` (including its leading `StringPart`),
+     * and the matcher re-matches that token via the suffix rule's
+     * normal `StringPart` regex.  Dispatch's only role is to cull
+     * members whose first token cannot match the peeked input -
+     * turning what would otherwise be a linear scan over N
+     * alternatives into an O(1) hash lookup that yields a small
+     * bucket.
+     *
+     * Per-mode bucketing.  A dispatch may carry buckets for more
+     * than one spacing mode at once: the optimizer partitions the
+     * original alternation's members by each rule's own
+     * `spacingMode` and builds a separate `tokenMap` per
+     * dispatch-eligible mode (`required` and/or `undefined`/auto).
+     * At match time the matcher peeks once per `dispatch` entry
+     * (passing that entry's `spacingMode` as `tokenMode` to
+     * `peekNextToken`) and unions any hits.
+     *
+     * Eligibility (computed by `dispatchifyAlternations`):
+     *   - A member with `spacingMode === "required"` always
+     *     dispatches into the `required` bucket.
+     *   - A member with `spacingMode === undefined` (auto)
+     *     dispatches into the auto bucket; its bucket key is the
+     *     leading word-boundary-script prefix of its first literal
+     *     token (or the leading code point when that prefix is
+     *     empty).  The matcher applies the same prefix logic on
+     *     the input side.
+     *   - Members with `spacingMode === "optional"` or `"none"` are
+     *     never dispatch-eligible (peek-by-separator would mismatch
+     *     keys against unseparated input).  They land in `rules`
+     *     (the fallback subset) and are tried after the bucket
+     *     hits at match time.
+     *
+     * Invariants enforced by `tryDispatchifyRulesPart`:
+     *   - `dispatch.length >= 1`
+     *   - every entry's `tokenMap` is non-empty
+     *   - every entry's `spacingMode` is `"required"` or `undefined`
+     *   - entries have distinct `spacingMode` values
+     *   - entries appear in member-source order of first appearance
+     *
+     * Canonical shapes: total bucket count >= 2, OR total bucket
+     * count == 1 with non-empty `rules` (fallback subset).  Other
+     * shapes are semantically valid - the matcher handles them
+     * correctly - but offer no filtering benefit over the
+     * non-dispatched form.  `grammarDeserializer.ts` logs a `debug`
+     * advisory when it sees one.
+     *
+     * Not exposed in `.agr` source.  The NFA/DFA compile path walks
+     * `dispatch` plus `rules` to recover the full effective member
+     * list (the NFA already does global first-token dispatch via
+     * `buildFirstTokenIndex`, so `dispatch` is redundant there).
+     */
+    dispatch?: DispatchModeBucket[] | undefined;
     name?: string | undefined; // For debugging
 
     variable?: string | undefined;
@@ -242,7 +326,8 @@ export type RulesPart = {
      *   - This part is the LAST entry in its containing rule's `parts`.
      *   - The containing rule has `value === undefined`.
      *   - `repeat`, `optional`, and `variable` are all forbidden here.
-     *   - `rules.length >= 2`.  A single-rule tail `RulesPart` is
+     *   - Effective member count >= 2 (sum of bucket sizes plus
+     *     `rules.length`).  A single-rule tail `RulesPart` is
      *     pointless: the lone member's value would just flow up to
      *     the parent, which is equivalent to inlining the member's
      *     parts directly into the parent (since tail already shares
@@ -333,7 +418,20 @@ export type GrammarRule = {
 };
 
 export type Grammar = {
-    rules: GrammarRule[];
+    alternatives: GrammarRule[];
+    /**
+     * Optimizer-only first-token dispatch index over the top-level
+     * alternation.  Mirrors `RulesPart.dispatch` but lives at the
+     * grammar level so the optimizer doesn't need to synthesize a
+     * wrapper rule (which would impose a single uniform
+     * `spacingMode` on the wrapper that is wrong for top-level
+     * alternations mixing modes; see `dispatchifyAlternations`).
+     *
+     * When set, `rules` is the *fallback subset* (members not
+     * assigned to any bucket); when unset, `rules` is the full
+     * top-level alternation.
+     */
+    dispatch?: DispatchModeBucket[] | undefined;
     entities?: string[] | undefined; // Entity types this grammar depends on (e.g. ["Ordinal", "CalendarDate"])
     checkedVariables?: Set<string> | undefined; // Variable names with validation (checked_wildcard paramSpec)
 };
@@ -364,7 +462,31 @@ export type VarNumberPartJson = {
 export type RulePartJson = {
     type: "rules";
     name?: string | undefined;
+    /**
+     * Index into the shared `GrammarRulesJson` table.  In a
+     * non-dispatched part this is the full alternation; in a
+     * dispatched part it is the *fallback subset* (members not
+     * assigned to any bucket).  Suffix arrays dedup with named-rule
+     * arrays via the existing identity-sharing mechanism.
+     *
+     * When a dispatched part has no fallback rules the in-memory
+     * shape uses `rules: []` and the serializer points `index` at a
+     * shared empty-rules-array slot (deduped like any other).
+     */
     index: number;
+    /**
+     * Optimizer-only first-token dispatch index.  See `RulesPart.dispatch`.
+     * Each bucket entry's `tokenMap` is serialized as
+     * `[lowercased-token, rulesArrayIndex][]` (Maps don't survive
+     * JSON round-trip directly).  Each entry's `index` is a
+     * `GrammarRulesJson` index in the same shared `GrammarJson`
+     * table that the outer `index` references.
+     */
+    dispatch?: Array<{
+        spacingMode?: CompiledSpacingMode | undefined;
+        /** [lowercased-token, rulesArrayIndex][] */
+        tokenMap: Array<[string, number]>;
+    }>;
     variable?: string | undefined;
     optional?: boolean | undefined;
     repeat?: boolean | undefined;
@@ -392,4 +514,19 @@ export type GrammarRuleJson = {
     spacingMode?: CompiledSpacingMode | undefined; // undefined = auto (default)
 };
 export type GrammarRulesJson = GrammarRuleJson[];
-export type GrammarJson = GrammarRulesJson[];
+/**
+ * Serialized grammar shape.  Slot 0 of `rules` is the top-level
+ * alternation (or, when `dispatch` is set, the fallback subset).
+ * `dispatch` is the serialized form of `Grammar.dispatch`: each
+ * entry's `tokenMap` is `[lowercased-token, rulesArrayIndex][]` (an
+ * index into `rules`), mirroring the part-level `RulePartJson.dispatch`
+ * encoding.
+ */
+export type GrammarJson = {
+    rules: GrammarRulesJson[];
+    dispatch?: Array<{
+        spacingMode?: CompiledSpacingMode | undefined;
+        /** [lowercased-token, rulesArrayIndex][] */
+        tokenMap: Array<[string, number]>;
+    }>;
+};

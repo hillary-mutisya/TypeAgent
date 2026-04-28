@@ -15,7 +15,14 @@ import {
     StringPartRegExpEntry,
     VarNumberPart,
     VarStringPart,
+    DispatchModeBucket,
 } from "./grammarTypes.js";
+import { wordBoundaryScriptRe } from "./spacingScripts.js";
+import {
+    getDispatchEffectiveMembers,
+    getDispatchMergedSingle,
+    getDispatchMergedMulti,
+} from "./dispatchHelpers.js";
 
 // Separator mode for completion results.  Structurally identical to
 // SeparatorMode from @typeagent/agent-sdk (command.ts); independently
@@ -45,8 +52,10 @@ const wildcardTrimRegExp = new RegExp(
 // Mongolian). In "auto" mode, a separator is required between two adjacent
 // characters only when BOTH belong to one of these scripts. Unknown/unlisted
 // scripts (e.g. CJK) default to no separator needed.
-const wordBoundaryScriptRe =
-    /\p{Script=Latin}|\p{Script=Cyrillic}|\p{Script=Greek}|\p{Script=Armenian}|\p{Script=Georgian}|\p{Script=Hangul}|\p{Script=Arabic}|\p{Script=Hebrew}|\p{Script=Devanagari}|\p{Script=Bengali}|\p{Script=Tamil}|\p{Script=Telugu}|\p{Script=Kannada}|\p{Script=Malayalam}|\p{Script=Gujarati}|\p{Script=Gurmukhi}|\p{Script=Oriya}|\p{Script=Sinhala}|\p{Script=Ethiopic}|\p{Script=Mongolian}/u;
+//
+// The regex itself lives in `spacingScripts.ts` so the dispatch optimizer
+// can build matching bucket-key variants from the same source - that
+// module is the single source of truth.
 
 // Decimal digits are not part of any word-space script, but two adjacent
 // digit characters must still be separated: "123456" is a different token from
@@ -1116,6 +1125,126 @@ export function nextNonSeparatorIndex(request: string, index: number) {
     return match === null ? index : index + match[0].length;
 }
 
+// Sticky-anchored regex for scanning a contiguous run of non-separator
+// characters starting at `lastIndex`.  Used by `peekNextToken` to
+// extract the next "word" from input without allocating substrings.
+//
+// Module-level state caveat: `peekNextToken` mutates
+// `nonSeparatorRunRegExp.lastIndex` before each `exec()`.  This
+// matches the convention several other matcher regexes in this file
+// already use (the matcher runs single-threaded; no async work
+// happens between `lastIndex` write and `exec` call).  A future
+// reentrancy refactor (e.g. running matchers on worker threads) must
+// either fork these regexes per worker or copy `lastIndex`-bearing
+// regexes into local state at use sites.
+const nonSeparatorRunRegExp = new RegExp(`[^${separatorRegExpStr}]+`, "yu");
+const singleSeparatorRegExp = new RegExp(`[${separatorRegExpStr}]`, "u");
+// Auto-mode peek regex: matches either the leading run of
+// word-boundary-script characters (Latin / Cyrillic / ...) OR a
+// single non-WB code point (CJK, digit, punctuation).  Used by
+// `peekNextToken` in `tokenMode === undefined` (auto) - replaces
+// the previous two-pass `nonSeparatorRunRegExp.exec` followed by
+// `leadingWordBoundaryScriptRe.exec` with a single sticky exec.
+// `u` flag makes `.` match a single code point so surrogate pairs
+// stay intact.
+const peekAutoTokenRegExp = new RegExp(
+    `(?:${wordBoundaryScriptRe.source})+|.`,
+    "yu",
+);
+
+/**
+ * Peek the next "token" (lowercased run of non-separator chars) from
+ * `request` starting at `index`.  Returns `undefined` when no token
+ * is available (EOI, separator-only tail, or a leading separator
+ * exists in `none` leading mode).
+ *
+ * Used by `enterDispatchPart` (the dispatched `case "rules":` arm in
+ * `matchState`) to look up the first input token in a dispatched
+ * `RulesPart`'s tokenMap.  Two spacing modes
+ * govern independent concerns; both must agree with what the
+ * suffix's StringPart regex would consume:
+ *
+ *   - `leadingMode`: governs leading-separator handling at `index`.
+ *     This is the spacing mode of whatever precedes the dispatch in
+ *     the surrounding rule (typically `leadingSpacingMode(state)`).
+ *     In `none` mode a leading separator yields `undefined`; in any
+ *     other mode leading separators are skipped before the token
+ *     run.
+ *
+ *   - `tokenMode`: governs the token boundary itself.  This is the
+ *     spacing mode of the dispatched member rules (the dispatch's
+ *     own `part.spacingMode`).  In `auto` mode (`undefined`) the
+ *     run is truncated at the first non-word-boundary-script
+ *     character (`leadingWordBoundaryScriptPrefix`), matching the
+ *     implicit token boundary `matchStringPart` enforces in auto
+ *     mode (`needsSeparatorInAutoMode`): "play你好" peeks as "play".
+ *     When the leading character is itself non-word-boundary-script
+ *     (CJK, digit, punctuation) the WB-prefix is empty; the run's
+ *     first code point is returned instead so dispatch can still
+ *     bucket on it.  This mirrors `classifyDispatchMember`'s
+ *     first-code-point fallback in the optimizer.  Surrogate pairs
+ *     yield a 2-UTF-16-unit string that is a valid Map key.  In
+ *     `required` / `optional` / `none` `tokenMode` the entire
+ *     non-separator run is returned unchanged.
+ *
+ * Splitting the two modes matters when the outer and dispatch modes
+ * disagree, e.g. a `required`-mode dispatch nested in an `auto`
+ * outer rule (no auto-mode truncation of the peeked token), or an
+ * `auto`-mode dispatch following a `none`-mode preceding part
+ * (no leading separator allowed).
+ *
+ * The dispatch arm leaves `state.index` at the original index and
+ * re-matches via the suffix's StringPart regex, so callers do not
+ * need the end-of-run index - returning just the lowercased token
+ * keeps this hot-path helper allocation-free.
+ */
+export function peekNextToken(
+    request: string,
+    index: number,
+    leadingMode: CompiledSpacingMode,
+    tokenMode: CompiledSpacingMode,
+): string | undefined {
+    let start = index;
+    if (leadingMode === "none") {
+        // No leading separator allowed: input must start exactly at
+        // the token.  If a separator is present, no dispatch hit is
+        // possible (matches what `matchStringPart` would do).
+        if (
+            start < request.length &&
+            singleSeparatorRegExp.test(request.charAt(start))
+        ) {
+            return undefined;
+        }
+    } else {
+        start = nextNonSeparatorIndex(request, start);
+    }
+    if (start >= request.length) {
+        return undefined;
+    }
+    if (tokenMode === undefined) {
+        // auto: single-shot regex returns either the leading
+        // word-boundary-script run OR a single non-WB code point
+        // (CJK, digit, punctuation).  Mirrors what the StringPart
+        // regex would consume in auto mode and matches the bucket
+        // key derived by `classifyDispatchMember`.  Surrogate pairs
+        // stay intact (the `u` flag makes `.` match a code point).
+        peekAutoTokenRegExp.lastIndex = start;
+        const m = peekAutoTokenRegExp.exec(request);
+        if (m === null) {
+            return undefined;
+        }
+        return m[0].toLowerCase();
+    }
+    // required / optional / none: return the whole non-separator
+    // run unchanged.
+    nonSeparatorRunRegExp.lastIndex = start;
+    const m = nonSeparatorRunRegExp.exec(request);
+    if (m === null) {
+        return undefined;
+    }
+    return m[0].toLowerCase();
+}
+
 // Finalize the state to capture the last wildcard if any
 // and make sure to reject any trailing un-matched non-separator characters.
 export function finalizeState(state: MatchState, request: string) {
@@ -1718,7 +1847,6 @@ function matchVarStringPart(state: MatchState, part: VarStringPart) {
 // `captureSnapshot`) before any member binds - abandoned branches
 // are automatically discarded on restore.
 function enterTailRulesPart(state: MatchState, part: RulesPart): void {
-    const rules = part.rules;
     // Structural contract is enforced by `validateTailRulesParts`,
     // which runs at JSON load time (default in `grammarFromJson`) and
     // at the end of `optimizeGrammar` when `tailFactoring` is on.
@@ -1726,6 +1854,28 @@ function enterTailRulesPart(state: MatchState, part: RulesPart): void {
     // would otherwise check (rules.length >= 2, no
     // repeat/optional/variable, member spacingMode matches parent's)
     // are caught at construction time at the offending site.
+    const namePrefix = part.name ? `<${part.name}>` : getStateName(state);
+    enterTailAlternation(state, part, part.alternatives, namePrefix);
+}
+
+/**
+ * Common tail entry path for `RulesPart` (with or without a
+ * `dispatch` index) carrying `tailCall: true`.  Mirrors
+ * `enterRulesAlternation` but skips the parent frame push and does
+ * not reset `valueIds`: child member bindings cons onto the
+ * parent's persistent linked list, so member value-exprs resolve
+ * prefix-bound canonicals naturally through `createValue`.
+ * Backtracking across sibling alts comes for free because
+ * `pushAlternation` captures the alternation base via
+ * `forkMatchState`, which snapshots `valueIds` (see `captureSnapshot`)
+ * before any member binds.
+ */
+function enterTailAlternation(
+    state: MatchState,
+    part: RulesPart,
+    rules: ReadonlyArray<GrammarRule>,
+    namePrefix: string,
+): void {
     state.leadingSpacingMode = leadingSpacingMode(state);
     state.name = getNestedStateName(state, part, 0);
     state.parts = rules[0].parts;
@@ -1746,9 +1896,18 @@ function enterTailRulesPart(state: MatchState, part: RulesPart): void {
     // `forkMatchState` snapshots `valueIds` (and every other field) at
     // this fork point; restoring on backtrack rewinds anything an
     // abandoned member added to the chain.
-    const base = forkMatchState(state);
-    const namePrefix = part.name ? `<${part.name}>` : getStateName(state);
-    pushAlternation(state, base, rules, namePrefix);
+    //
+    // Mirror `enterRulesAlternation`'s `> 1` guard: when there is
+    // only one alternative there is nothing to fork to on backtrack
+    // (the alternation cursor would point at `rules[1]` which is
+    // undefined).  This case can arise for a tail-call dispatched RulesPart
+    // whose hits + fallback effective list happens to contain a
+    // single rule (e.g. peek matches a single-rule bucket and the
+    // dispatch has no fallback).
+    if (rules.length > 1) {
+        const base = forkMatchState(state);
+        pushAlternation(state, base, rules, namePrefix);
+    }
 }
 
 export function matchState(state: MatchState, request: string) {
@@ -1845,82 +2004,294 @@ export function matchState(state: MatchState, request: string) {
                 }
                 break;
             case "rules": {
-                const rules = part.rules;
-                debugMatch(state, `expanding ${rules.length} rules`);
-
+                if (part.dispatch !== undefined) {
+                    if (!enterDispatchPart(state, part, request)) {
+                        return false;
+                    }
+                    // continue the loop (without incrementing partIndex)
+                    continue;
+                }
                 if (part.tailCall) {
                     enterTailRulesPart(state, part);
                     // continue the loop (without incrementing partIndex)
                     continue;
                 }
-
-                // Compute before saving parent frame (reads current-rule context).
-                const childLeadingSpacingMode = leadingSpacingMode(state);
-
-                // Save the current state to be restored after finishing the nested rule.
-                const parent: ParentMatchState = {
-                    name: state.name,
-                    variable: part.variable,
-                    parts: state.parts,
-                    value: state.value,
-                    partIndex: state.partIndex + 1,
-                    valueIds: state.valueIds,
-                    parent: state.parent,
-                    repeatPartIndex: part.repeat ? state.partIndex : undefined,
-                    // Capture the input position AT THIS ITERATION'S start so
-                    // `finalizeNestedRule` can detect a zero-progress
-                    // iteration of a nullable-body repeat (`((foo)?)*` etc.)
-                    // and refuse to push another CONTINUE frame.  See the
-                    // field doc on `ParentMatchState`.
-                    repeatStartIndex: part.repeat ? state.index : undefined,
-                    spacingMode: state.spacingMode,
-                    leadingSpacingMode: state.leadingSpacingMode,
-                };
-
-                // The nested rule needs to track values if the current rule is tracking value AND
-                // - the current part has variable
-                // - the current rule has not explicit value and only has one part (default)
-                const requireValue =
-                    state.valueIds !== null &&
-                    (part.variable !== undefined || usesImplicitDefault(state));
-
-                // Update the current state to consider the first nested rule.
-                state.name = getNestedStateName(state, part, 0);
-                state.parts = rules[0].parts;
-                state.value = rules[0].value;
-                state.partIndex = 0;
-                state.valueIds = requireValue ? undefined : null;
-                state.parent = parent;
-                state.nestedLevel++;
-                state.suppressOptionalFork = undefined; // entering nested rules, clear suppression flag
-                state.leadingSpacingMode = childLeadingSpacingMode;
-                state.spacingMode = rules[0].spacingMode;
-
-                // Push a single compressed alternation cursor frame
-                // covering rules 1..N-1.  The shared `base` is the
-                // live state right after rule 0 setup - every
-                // alternative starts from the same fork-point
-                // context with only the four per-rule fields
-                // overlaid (read directly from `rules[i]` on
-                // restore).  The name prefix is computed once;
-                // `tryNextBacktrack` builds the per-rule debug name
-                // lazily as `${namePrefix}[${i}]`.
-                // `forkMatchState` enforces the single-owner
-                // invariant on the chain (the snapshot omits
-                // `backtracks`).
-                if (rules.length > 1) {
-                    const base = forkMatchState(state);
-                    const namePrefix = part.name
-                        ? `<${part.name}>`
-                        : getStateName(state);
-                    pushAlternation(state, base, rules, namePrefix);
-                }
+                debugMatch(
+                    state,
+                    `expanding ${part.alternatives.length} rules`,
+                );
+                const namePrefix = part.name
+                    ? `<${part.name}>`
+                    : getStateName(state);
+                enterRulesAlternation(
+                    state,
+                    part,
+                    part.alternatives,
+                    namePrefix,
+                );
                 // continue the loop (without incrementing partIndex)
                 continue;
             }
         }
         state.partIndex++;
     }
+}
+
+/**
+ * Common entry path for non-tail `RulesPart` alternations (with or
+ * without a `dispatch` index).  Sets up the parent frame, seeds the
+ * live state with rule 0, and pushes a single compressed alternation
+ * cursor frame covering rules 1..N-1.  `repeat` is honored via
+ * `repeatPartIndex` / `repeatStartIndex`; `optional` is handled
+ * uniformly by the optional-fork block in `matchState` *before*
+ * this helper is reached, so it needs no direct treatment here.
+ *
+ * `tailCall` is intentionally NOT handled here - tail entry skips
+ * the parent-frame push and lives in `enterTailRulesPart`.
+ */
+function enterRulesAlternation(
+    state: MatchState,
+    part: RulesPart,
+    rules: ReadonlyArray<GrammarRule>,
+    namePrefix: string,
+): void {
+    const repeat = !!part.repeat;
+    // Compute before saving parent frame (reads current-rule context).
+    const childLeadingSpacingMode = leadingSpacingMode(state);
+    // Save the current state to be restored after finishing the nested rule.
+    const parent: ParentMatchState = {
+        name: state.name,
+        variable: part.variable,
+        parts: state.parts,
+        value: state.value,
+        partIndex: state.partIndex + 1,
+        valueIds: state.valueIds,
+        parent: state.parent,
+        repeatPartIndex: repeat ? state.partIndex : undefined,
+        // Capture the input position AT THIS ITERATION'S start so
+        // `finalizeNestedRule` can detect a zero-progress
+        // iteration of a nullable-body repeat (`((foo)?)*` etc.)
+        // and refuse to push another CONTINUE frame.  See the
+        // field doc on `ParentMatchState`.
+        repeatStartIndex: repeat ? state.index : undefined,
+        spacingMode: state.spacingMode,
+        leadingSpacingMode: state.leadingSpacingMode,
+    };
+
+    // The nested rule needs to track values if the current rule is tracking value AND
+    // - the current part has variable
+    // - the current rule has not explicit value and only has one part (default)
+    const requireValue =
+        state.valueIds !== null &&
+        (part.variable !== undefined || usesImplicitDefault(state));
+
+    // Update the current state to consider the first nested rule.
+    state.name = `${namePrefix}[0]`;
+    state.parts = rules[0].parts;
+    state.value = rules[0].value;
+    state.partIndex = 0;
+    state.valueIds = requireValue ? undefined : null;
+    state.parent = parent;
+    state.nestedLevel++;
+    state.suppressOptionalFork = undefined; // entering nested rules, clear suppression flag
+    state.leadingSpacingMode = childLeadingSpacingMode;
+    state.spacingMode = rules[0].spacingMode;
+
+    // Push a single compressed alternation cursor frame
+    // covering rules 1..N-1.  See `pushAlternation` for the
+    // single-frame N-way encoding.  `forkMatchState` enforces the
+    // single-owner invariant on the chain (the snapshot omits
+    // `backtracks`).
+    if (rules.length > 1) {
+        const base = forkMatchState(state);
+        pushAlternation(state, base, rules, namePrefix);
+    }
+}
+
+/**
+ * Set up `state` to enter a dispatched `RulesPart` (one whose
+ * `dispatch` field is set).  Peeks the next input token (once per
+ * `dispatch` entry, typically 1; up to 2 for mixed-mode dispatch),
+ * partitions members into hits + fallback (`part.rules`) to form
+ * the effective alternation list, then delegates to
+ * `enterRulesAlternation` so dispatch shares all entry plumbing
+ * (parent frame, repeat handling, alternation cursor) with the
+ * non-dispatched `RulesPart` path.  Returns `false` when neither
+ * a token hit nor any fallback alternative exists.
+ *
+ * `state.index` is left at `originalIndex` - dispatch acts as a
+ * filter only.  The suffix rules retain their full leading
+ * `StringPart` so the matcher's existing implicit-default logic
+ * (which derives the rule's value from the StringPart's tokens)
+ * continues to work; the peeked token's only role is to partition
+ * members, and the matcher will re-match the token via each
+ * suffix's `StringPart` regex.
+ *
+ * Caching of merged `[...bucket(s), ...fallback]` arrays lives in
+ * `dispatchHelpers.ts` (`getDispatchMergedSingle` /
+ * `getDispatchMergedMulti`), keyed on the same per-`RulesPart`
+ * `WeakMap` that backs `getDispatchEffectiveMembers` so all three
+ * dispatch caches share one weakly-held entry per part.
+ */
+
+/**
+ * Peek the next input token under each per-mode `dispatch` entry
+ * and collect up to two bucket hits.  Shared by the in-rule
+ * `enterDispatchPart` path and the top-level `initialMatchState`
+ * path - both partition members the same way (peek per
+ * `spacingMode`, look up the bucket by lowercased token, stop at
+ * two hits since `dispatch` has at most one entry per spacingMode
+ * and typically <= 2 entries total).
+ *
+ * Returns `[firstHit, secondHit]`.  Either may be `undefined` when
+ * fewer than two entries hit.  Callers merge with their own
+ * fallback (`part.rules` or `grammar.rules`) and apply any
+ * per-RulesPart caching.
+ */
+function peekDispatchHits(
+    dispatch: ReadonlyArray<DispatchModeBucket>,
+    request: string,
+    index: number,
+    leading: CompiledSpacingMode,
+): [GrammarRule[] | undefined, GrammarRule[] | undefined] {
+    let firstHit: GrammarRule[] | undefined;
+    let secondHit: GrammarRule[] | undefined;
+    for (const m of dispatch) {
+        const token = peekNextToken(request, index, leading, m.spacingMode);
+        if (token === undefined) continue;
+        const bucket = m.tokenMap.get(token);
+        if (bucket === undefined) continue;
+        if (firstHit === undefined) {
+            firstHit = bucket;
+        } else {
+            secondHit = bucket;
+            // dispatch has at most one entry per spacingMode and
+            // typically <= 2 entries total, so we can stop after
+            // collecting two hits.  (If a future change ever allows
+            // more eligible modes, extend by widening the merged
+            // helper and the cache key.)
+            break;
+        }
+    }
+    return [firstHit, secondHit];
+}
+
+function enterDispatchPart(
+    state: MatchState,
+    part: RulesPart,
+    request: string,
+): boolean {
+    // Pending-wildcard fallback.  `state.index` points at the
+    // wildcard's start (its end isn't known until the next concrete
+    // part matches and resolves it via `commitPendingWildcard`).
+    // Peeking from there would return the wildcard's first token,
+    // not the next concrete token, so dispatch can't filter
+    // correctly.  Fall back to a non-dispatch alternation entry over
+    // the full effective member list - each member's leading
+    // `StringPart` will then resolve the wildcard the way it does
+    // in the unoptimized RulesPart path.  Note: tail dispatch flows
+    // through the same fallback (via `enterTailAlternation`) since
+    // tail factoring is the main reason dispatch ends up after a
+    // wildcard.
+    //
+    // Future optimization (deferred, no measured need yet): build a
+    // combined alternation regex over each dispatch entry's
+    // tokenMap.keys() at dispatch-build time, `exec()` it once from
+    // the wildcard's start to find which bucket keys actually appear
+    // in the remaining input, and try only those buckets (plus all
+    // fallback rules, which have no fixed leading literal).  This
+    // collapses N per-rule forward scans in
+    // `matchStringPartWithWildcard` into one combined scan + a
+    // smaller alternation.  See "Variant A" in the CJK-dispatch
+    // design discussion - keep semantics identical (wildcard
+    // policy, capture frames, ordering); pre-scan is a pure pruning
+    // pass.  Worth doing if profiling on a real grammar shows
+    // wildcard-prefix dispatch is a hot path.
+    if (state.pendingWildcard !== undefined) {
+        const all = getDispatchEffectiveMembers(part);
+        if (all.length === 0) {
+            debugMatch(state, `dispatch: pending-wildcard fallback empty`);
+            return false;
+        }
+        const namePrefix = part.name
+            ? `<${part.name}>`
+            : `${getStateName(state)}<dispatch>`;
+        if (part.tailCall) {
+            enterTailAlternation(state, part, all, namePrefix);
+        } else {
+            enterRulesAlternation(state, part, all, namePrefix);
+        }
+        return true;
+    }
+    // Two spacing modes govern peek independently:
+    //   - leading-separator handling at `state.index` follows the
+    //     surrounding context (`leadingSpacingMode(state)`), which
+    //     is shared across every dispatch entry's peek.
+    //   - token-boundary handling (auto-mode script-transition
+    //     truncation) follows each dispatch entry's own
+    //     `spacingMode`, since the suffix's StringPart regex uses
+    //     that mode and peek must agree with it.  We peek once per
+    //     dispatch entry (typically 1; up to 2 for mixed-mode
+    //     dispatches with both `required`- and `auto`-mode members).
+    const leading = leadingSpacingMode(state);
+    const [firstHit, secondHit] = peekDispatchHits(
+        part.dispatch!,
+        request,
+        state.index,
+        leading,
+    );
+    // `part.rules` doubles as the fallback subset for a dispatched
+    // RulesPart (members that could not be assigned to any bucket).
+    // An empty array means "no fallback".
+    if (firstHit === undefined && part.alternatives.length === 0) {
+        debugMatch(state, `dispatch: no hits or fallback`);
+        return false;
+    }
+    // Hits-before-fallback ordering: bucket members are tried first
+    // (in source order within each bucket; with multiple dispatch
+    // hits, the entry that appears earlier in `dispatch` wins -
+    // dispatch entries are stored in member-source order of first
+    // appearance, see `tryDispatchifyRulesPart`).  Then `part.rules`
+    // (in source order).  This is *not* a faithful preservation of
+    // the pre-dispatch alternation's source order: a fallback member
+    // that originally appeared *before* a token-bucket member is now
+    // tried after the bucket on a peek-hit, and a `required`-mode
+    // member's bucket may now precede an earlier-source `auto`-mode
+    // bucket member if `required` happens to appear first in
+    // `dispatch`.  See the `dispatchifyAlternations` doc for the full
+    // rationale (this is accepted as part of the dispatch
+    // optimization; a future `preserveSourceOrder` opt-in could bail
+    // out at such forks).
+    //
+    // Cache the merged array on the per-RulesPart cache so we
+    // allocate it once per (hit-bucket-set, fallback) combination
+    // and reuse across every match that hits the same combination.
+    let effective: GrammarRule[];
+    if (firstHit === undefined) {
+        effective = part.alternatives;
+    } else if (secondHit === undefined) {
+        effective =
+            part.alternatives.length === 0
+                ? firstHit
+                : getDispatchMergedSingle(part, firstHit, part.alternatives);
+    } else {
+        effective = getDispatchMergedMulti(
+            part,
+            firstHit,
+            secondHit,
+            part.alternatives,
+        );
+    }
+
+    const namePrefix = part.name
+        ? `<${part.name}>`
+        : `${getStateName(state)}<dispatch>`;
+    if (part.tailCall) {
+        enterTailAlternation(state, part, effective, namePrefix);
+    } else {
+        enterRulesAlternation(state, part, effective, namePrefix);
+    }
+    return true;
 }
 
 // Build the initial live MatchState for `matchGrammar` /
@@ -1931,22 +2302,102 @@ export function matchState(state: MatchState, request: string) {
 // reverse order so rule 1 is on top of the stack and gets
 // restored first by `tryNextBacktrack`, matching source
 // order.  Returns `undefined` for an empty grammar (no rules).
+//
+// Per-`Grammar` synthesized `RulesPart` used purely as a stable
+// identity key for caching merged top-level dispatch arrays via
+// the same `dispatchHelpers` machinery used by nested dispatched
+// parts.  Allocated lazily on the first match against a grammar
+// that has `grammar.dispatch` set; reused for every subsequent
+// match against the same grammar.  Held weakly so unreachable
+// grammars (and their cached merged arrays) are reclaimed.
+const topLevelDispatchCacheParts = new WeakMap<Grammar, RulesPart>();
+function getTopLevelDispatchCachePart(grammar: Grammar): RulesPart {
+    let p = topLevelDispatchCacheParts.get(grammar);
+    if (p === undefined) {
+        p = {
+            type: "rules",
+            alternatives: grammar.alternatives,
+            dispatch: grammar.dispatch,
+        };
+        topLevelDispatchCacheParts.set(grammar, p);
+    }
+    return p;
+}
+
 export function initialMatchState(
     grammar: Grammar,
+    request: string,
     options?: GrammarMatchOptions,
 ): MatchState | undefined {
-    const rules = grammar.rules;
-    if (rules.length === 0) {
-        return undefined;
-    }
     const wildcardPolicy = options?.wildcardPolicy ?? "exhaustive";
     const optionalPolicy = options?.optionalPolicy ?? "exhaustive";
     const repeatPolicy = options?.repeatPolicy ?? "exhaustive";
 
+    // Compute the effective top-level alternation.  When
+    // `grammar.dispatch` is set, peek the first input token under
+    // each per-mode bucket: selected bucket members come first, then
+    // `grammar.rules` (the fallback subset) - same hits-before-
+    // fallback ordering used inside `RulesPart.dispatch`.  Without
+    // dispatch, `grammar.rules` IS the full alternation.
+    //
+    // Top-level peek hardcodes auto-mode `leading`.  Justification:
+    // `tryDispatchifyRulesPart` only emits dispatch entries with
+    // `spacingMode` in `{"required", undefined}` - members in
+    // `optional`/`none` mode are routed to the fallback `rules`
+    // subset directly.  For both eligible modes the matcher's
+    // `StringPart` regex allows leading whitespace at the start of
+    // input (the regex prefixes `[separators]*?`), so a peek that
+    // skips whitespace agrees with what the matcher will consume.
+    // (`enterDispatchPart` derives `leading` from
+    // `leadingSpacingMode(state)` because it has a parent context;
+    // the top-level path has no parent and no preceding part, so
+    // there is no surrounding mode to mirror.)
+    let effective: GrammarRule[];
+    if (grammar.dispatch !== undefined) {
+        const [firstHit, secondHit] = peekDispatchHits(
+            grammar.dispatch,
+            request,
+            0,
+            undefined,
+        );
+        if (firstHit === undefined) {
+            effective = grammar.alternatives;
+        } else {
+            // Cache merged arrays per-Grammar via a synthesized
+            // RulesPart pinned in `topLevelDispatchPart` - reuses
+            // the same `dispatchHelpers` cache machinery as nested
+            // dispatched parts so each (hit-bucket, fallback)
+            // combination only allocates its merged array once.
+            const cachePart = getTopLevelDispatchCachePart(grammar);
+            if (secondHit === undefined) {
+                effective =
+                    grammar.alternatives.length === 0
+                        ? firstHit
+                        : getDispatchMergedSingle(
+                              cachePart,
+                              firstHit,
+                              grammar.alternatives,
+                          );
+            } else {
+                effective = getDispatchMergedMulti(
+                    cachePart,
+                    firstHit,
+                    secondHit,
+                    grammar.alternatives,
+                );
+            }
+        }
+    } else {
+        effective = grammar.alternatives;
+    }
+    if (effective.length === 0) {
+        return undefined;
+    }
+
     const state: MatchState = {
         name: `<Start>[0]`,
-        parts: rules[0].parts,
-        value: rules[0].value,
+        parts: effective[0].parts,
+        value: effective[0].value,
         partIndex: 0,
         valueIds: undefined,
         nextValueId: 0,
@@ -1954,8 +2405,8 @@ export function initialMatchState(
         parent: undefined,
         nestedLevel: 0,
         suppressOptionalFork: undefined,
-        leadingSpacingMode: rules[0].spacingMode,
-        spacingMode: rules[0].spacingMode,
+        leadingSpacingMode: effective[0].spacingMode,
+        spacingMode: effective[0].spacingMode,
         index: 0,
         pendingWildcard: undefined,
         lastMatchedPartInfo: undefined,
@@ -1964,14 +2415,14 @@ export function initialMatchState(
         repeatPolicy,
     };
     // Top-level alternation: push a single compressed cursor frame
-    // covering rules 1..N-1.  The cursor advances forward (rule 1
-    // first, then rule 2, ...) - same source order as the prior
-    // reverse-push of one frame per rule.  `base` is rule-0's
+    // covering effective[1..N-1].  The cursor advances forward
+    // (rule 1 first, then rule 2, ...) - same source order as the
+    // prior reverse-push of one frame per rule.  `base` is rule-0's
     // initial state; per-rule `parts/value/spacingMode` are read
-    // from `rules[i]` directly on restore, and the debug name is
+    // from `effective[i]` directly on restore, and the debug name is
     // built lazily as `<Start>[i]`.
-    if (rules.length > 1) {
-        pushAlternation(state, forkMatchState(state), rules, "<Start>");
+    if (effective.length > 1) {
+        pushAlternation(state, forkMatchState(state), effective, "<Start>");
     }
     return state;
 }
@@ -1999,7 +2450,7 @@ export function matchGrammar(
     request: string,
     options?: GrammarMatchOptions,
 ) {
-    const state = initialMatchState(grammar, options);
+    const state = initialMatchState(grammar, request, options);
     const results: GrammarMatchResult[] = [];
     if (state === undefined) {
         return results;

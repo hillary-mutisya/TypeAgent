@@ -40,6 +40,17 @@ export const CONFIGS: { name: string; opts: LoadGrammarRulesOptions }[] = [
         },
     },
     {
+        // dispatchifyAlternations alone - measures the impact of
+        // first-token dispatch in isolation.  At alternation forks
+        // whose members start with distinct, statically-known tokens,
+        // emits a dispatched `RulesPart` so the matcher does an O(1) hash
+        // lookup instead of trying each member's leading regex in turn.
+        name: "dispatch",
+        opts: {
+            optimizations: { dispatchifyAlternations: true },
+        },
+    },
+    {
         // All passes enabled: inline + factor + tailFactoring.
         name: "all",
         opts: {
@@ -50,20 +61,77 @@ export const CONFIGS: { name: string; opts: LoadGrammarRulesOptions }[] = [
             },
         },
     },
+    {
+        // All passes plus dispatch.
+        name: "all+dispatch",
+        opts: {
+            optimizations: {
+                inlineSingleAlternatives: true,
+                factorCommonPrefixes: true,
+                tailFactoring: true,
+                dispatchifyAlternations: true,
+            },
+        },
+    },
 ];
 
 // Speedup is colored once it moves more than 10% from baseline.
 export function colorSpeedup(speedup: number): string {
-    const text = `${speedup.toFixed(2)}x`.padStart(6);
+    const text = `${speedup.toFixed(2)}x`;
     if (speedup > 1.1) return chalk.green(text);
     if (speedup < 0.9) return chalk.red(text);
     return text;
+}
+
+/**
+ * Format a timing followed by its speedup in parentheses, padded to the
+ * given visible width.  ANSI color codes from `colorSpeedup` are added
+ * after padding so visible-width alignment is preserved.
+ *
+ * Example output: `   12.3 (1.45x)` (with the speedup colored).
+ */
+export function formatTimeWithSpeedup(
+    ms: number,
+    speedup: number,
+    width: number = 0,
+): string {
+    const speedStr = `${speedup.toFixed(2)}x`;
+    const plain = `${ms.toFixed(1)} (${speedStr})`;
+    const padded = width > 0 ? plain.padStart(width) : plain;
+    return padded.replace(speedStr, colorSpeedup(speedup));
 }
 
 export function timeMs(fn: () => void, iterations: number): number {
     const start = performance.now();
     for (let i = 0; i < iterations; i++) fn();
     return performance.now() - start;
+}
+
+const ANSI_RE = /\x1b\[[0-9;]*m/g;
+
+/** Visible (ANSI-stripped) length of a string. */
+export function visibleLen(s: string): number {
+    return s.replace(ANSI_RE, "").length;
+}
+
+/**
+ * Print a column-aligned table.  Each column is padded (right-aligned)
+ * to the visible width of its widest cell, ignoring ANSI color escapes
+ * so colored cells still align correctly.
+ */
+export function printAligned(header: string[], rows: string[][]): void {
+    const widths = header.map((h, i) =>
+        Math.max(visibleLen(h), ...rows.map((r) => visibleLen(r[i] ?? ""))),
+    );
+    const sep = widths.map((w) => "-".repeat(w)).join(" | ");
+    const padStart = (s: string, w: number): string =>
+        " ".repeat(Math.max(0, w - visibleLen(s))) + s;
+    const fmt = (row: string[]) =>
+        row.map((c, i) => padStart(c ?? "", widths[i])).join(" | ");
+    console.log(fmt(header));
+    console.log(sep);
+    for (const row of rows) console.log(fmt(row));
+    console.log();
 }
 
 export function countRulesParts(
@@ -75,11 +143,11 @@ export function countRulesParts(
         for (const p of parts) {
             if (p.type === "rules") {
                 count++;
-                for (const r of p.rules) visit(r.parts);
+                for (const r of p.alternatives) visit(r.parts);
             }
         }
     };
-    for (const r of grammar.rules) visit(r.parts);
+    for (const r of grammar.alternatives) visit(r.parts);
     return count;
 }
 
@@ -96,9 +164,9 @@ export function runBenchmark(
 ): void {
     console.log(`\n=== ${label} ===`);
     console.log(
-        `| config      | RulesParts | match ms (${ITERATIONS}x) | speedup |`,
+        `| config       | RulesParts | match ms (${ITERATIONS}x, speedup) |`,
     );
-    console.log(`|-------------|-----------:|---------------:|--------:|`);
+    console.log(`|--------------|-----------:|---------------------------:|`);
     let baselineMs = 0;
     for (const cfg of CONFIGS) {
         const errors: string[] = [];
@@ -129,7 +197,7 @@ export function runBenchmark(
         if (cfg.name === "baseline") baselineMs = ms;
         const speedup = baselineMs > 0 ? baselineMs / ms : 1;
         console.log(
-            `| ${cfg.name.padEnd(11)} | ${String(partCount).padStart(10)} | ${ms.toFixed(1).padStart(14)} | ${colorSpeedup(speedup)} |`,
+            `| ${cfg.name.padEnd(12)} | ${String(partCount).padStart(10)} | ${formatTimeWithSpeedup(ms, speedup, 26)} |`,
         );
     }
 }

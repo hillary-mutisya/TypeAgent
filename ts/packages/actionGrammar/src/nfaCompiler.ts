@@ -193,10 +193,29 @@ function isSingleLiteralRule(rule: GrammarRule): { literal: string } | false {
 export function normalizeGrammar(grammar: Grammar): Grammar {
     // Cache to avoid re-normalizing shared rule arrays (handles recursive grammars)
     const rulesCache = new Map<GrammarRule[], GrammarRule[]>();
-    return {
+    // Top-level dispatch: re-fold all bucket members + the
+    // fallback subset into a flat rules alternation, mirroring
+    // `stripDispatch` for nested dispatched RulesParts.  The NFA
+    // compiler does its own first-token dispatch via
+    // `buildFirstTokenIndex`, so the optimizer-only `dispatch`
+    // index adds nothing here.
+    let topRules = grammar.alternatives;
+    if (grammar.dispatch !== undefined) {
+        const expanded: GrammarRule[] = [];
+        for (const m of grammar.dispatch) {
+            for (const bucket of m.tokenMap.values()) {
+                for (const r of bucket) expanded.push(r);
+            }
+        }
+        for (const r of grammar.alternatives) expanded.push(r);
+        topRules = expanded;
+    }
+    const out: Grammar = {
         ...grammar,
-        rules: normalizeRulesArray(grammar.rules, rulesCache),
+        alternatives: normalizeRulesArray(topRules, rulesCache),
     };
+    delete out.dispatch;
+    return out;
 }
 
 /**
@@ -282,12 +301,55 @@ function normalizePart(
     if (part.type !== "rules") {
         return part; // Only RulesParts need normalization
     }
+    if (part.dispatch !== undefined) {
+        // Strip the optimizer-only `dispatch` index and re-fold all
+        // bucket members into a flat `RulesPart` for NFA
+        // compilation.  Dispatch is a filter only - rules retain
+        // their original parts including the leading token - so the
+        // expansion is just a union in
+        // `[...buckets.flat()..., ...rules]` order.  The NFA
+        // compiler does its own first-token dispatch via
+        // `buildFirstTokenIndex`, so the `dispatch` index adds
+        // nothing here.
+        return normalizePart(stripDispatch(part), cache);
+    }
 
     // Normalize all nested rules within this RulesPart (using cache)
     return {
         ...part,
-        rules: normalizeRulesArray(part.rules, cache),
+        alternatives: normalizeRulesArray(part.alternatives, cache),
     };
+}
+
+/**
+ * Strip the optimizer-only `dispatch` index from a `RulesPart` and
+ * re-fold all bucket members into a flat `rules` alternation in
+ * `[...buckets.flat()..., ...rules]` order.  The dispatched part
+ * stores the original alternation rules unchanged in its
+ * `dispatch[*].tokenMap` buckets and in `rules` (the fallback
+ * subset); this is just a union back into the canonical order.
+ */
+function stripDispatch(part: RulesPart): RulesPart {
+    if (part.dispatch === undefined) return part;
+    const expanded: GrammarRule[] = [];
+    for (const m of part.dispatch) {
+        for (const suffixRules of m.tokenMap.values()) {
+            for (const r of suffixRules) {
+                expanded.push(r);
+            }
+        }
+    }
+    for (const r of part.alternatives) expanded.push(r);
+    const rulesPart: RulesPart = {
+        type: "rules",
+        alternatives: expanded,
+        name: part.name,
+        variable: part.variable,
+    };
+    if (part.optional) rulesPart.optional = true;
+    if (part.repeat) rulesPart.repeat = true;
+    if (part.tailCall) rulesPart.tailCall = true;
+    return rulesPart;
 }
 
 /**
@@ -380,8 +442,8 @@ function createRuleTypeMap(rule: GrammarRule): Map<string, string> {
                 break;
             case "rules":
                 // RulesPart has nested rules
-                if (part.rules) {
-                    for (const nestedRule of part.rules) {
+                if (part.alternatives) {
+                    for (const nestedRule of part.alternatives) {
                         for (const nestedPart of nestedRule.parts) {
                             collectFromPart(nestedPart);
                         }
@@ -443,10 +505,10 @@ export function compileGrammarToNFA(grammar: Grammar, name?: string): NFA {
     // Compile each rule as an alternative path from start to accept
     for (
         let ruleIndex = 0;
-        ruleIndex < normalizedGrammar.rules.length;
+        ruleIndex < normalizedGrammar.alternatives.length;
         ruleIndex++
     ) {
-        const rule = normalizedGrammar.rules[ruleIndex];
+        const rule = normalizedGrammar.alternatives[ruleIndex];
 
         // VALIDATION: Multi-term rules MUST have value expressions
         // Single-term rules can omit value expressions (they inherit from the term)
@@ -1201,7 +1263,7 @@ function compileRulesPart(
                 "Disable `tailFactoring` in the grammar optimizer for NFA/DFA paths.",
         );
     }
-    if (part.rules.length === 0) {
+    if (part.alternatives.length === 0) {
         // Empty rules - epsilon transition
         builder.addEpsilonTransition(fromState, toState);
         return toState;
@@ -1220,7 +1282,7 @@ function compileRulesPart(
     const nestedOverride = part.variable ?? overrideVariableName;
 
     // Compile each nested rule as an alternative
-    for (const rule of part.rules) {
+    for (const rule of part.alternatives) {
         const ruleEntry = builder.createState(false);
 
         // Try to find this nested rule in the main grammar to get its rule index
@@ -1280,7 +1342,7 @@ function compileRulesPartWithSlots(
                 "Disable `tailFactoring` in the grammar optimizer for NFA/DFA paths.",
         );
     }
-    if (part.rules.length === 0) {
+    if (part.alternatives.length === 0) {
         // Empty rules - epsilon transition
         builder.addEpsilonTransition(fromState, toState);
         return toState;
@@ -1321,7 +1383,7 @@ function compileRulesPartWithSlots(
     let anyRuleCreatedEnvironment = false;
 
     // Compile each nested rule as an alternative
-    for (const rule of part.rules) {
+    for (const rule of part.alternatives) {
         const ruleEntry = builder.createState(false);
 
         // Create a new slot map for the nested rule FIRST (needed for compilation)
@@ -1476,8 +1538,8 @@ function compileRulesPartWithSlots(
 function findRuleIndex(grammar: Grammar, rule: GrammarRule): number {
     // Match based on rule value (action object)
     // This is a simple comparison - we could make it more sophisticated
-    for (let i = 0; i < grammar.rules.length; i++) {
-        const grammarRule = grammar.rules[i];
+    for (let i = 0; i < grammar.alternatives.length; i++) {
+        const grammarRule = grammar.alternatives[i];
         if (grammarRule.value && rulesMatch(grammarRule, rule)) {
             return i;
         }
@@ -1503,12 +1565,23 @@ export function compileRuleToNFA(rule: GrammarRule, name?: string): NFA {
     const startState = builder.createState(false);
     const acceptState = builder.createState(true);
 
-    // Create a minimal grammar for this single rule
-    const grammar: Grammar = {
-        rules: [rule],
-    };
+    // Normalize unconditionally so single-rule compilation matches
+    // `compileGrammarToNFA`'s behavior: passthrough rules acquire
+    // their `_result` capture and single-literal rules acquire their
+    // implicit `-> "literal"` value, and dispatched `RulesPart`s
+    // (which the NFA compiler doesn't understand directly) are
+    // expanded back into a flat plain `RulesPart`.
+    const ruleToCompile = normalizeGrammar({ alternatives: [rule] })
+        .alternatives[0];
+    const grammar: Grammar = { alternatives: [ruleToCompile] };
 
-    compileRuleFromState(builder, grammar, rule, startState, acceptState);
+    compileRuleFromState(
+        builder,
+        grammar,
+        ruleToCompile,
+        startState,
+        acceptState,
+    );
 
     return builder.build(startState, name);
 }

@@ -6,6 +6,7 @@ import {
     CompiledObjectElement,
     CompiledSpacingMode,
     CompiledValueNode,
+    DispatchModeBucket,
     getCapturedVariableName,
     Grammar,
     GrammarPart,
@@ -15,6 +16,8 @@ import {
     RulesPart,
     StringPart,
 } from "./grammarTypes.js";
+import { leadingWordBoundaryScriptPrefix } from "./spacingScripts.js";
+import { getDispatchEffectiveMembers } from "./dispatchHelpers.js";
 
 const debug = registerDebug("typeagent:grammar:opt");
 
@@ -75,6 +78,42 @@ export type GrammarOptimizationOptions = {
      * not, and will throw if it encounters one.
      */
     tailFactoring?: boolean;
+
+    /**
+     * Attach a first-token dispatch index to eligible `RulesPart`
+     * alternation forks.  At match time the matcher peeks one
+     * token, looks it up across the per-mode bucket maps, and tries
+     * only the listed alternatives before falling back to the
+     * non-bucketed `rules` subset.  Dispatch is a filter only - the
+     * peeked token is not consumed and each dispatched rule
+     * re-matches it via its normal leading `StringPart` (preserving
+     * implicit-default behavior).
+     *
+     * Eligibility (per spacing-mode partition):
+     *   - `required`  - always eligible.
+     *   - `undefined` (auto) - eligible iff every dispatch key is
+     *     composed entirely of word-boundary-script characters
+     *     (Latin / Cyrillic / Greek / etc.) so the matcher's
+     *     peek-by-separator aligns with the partition's boundary
+     *     semantics.
+     *   - `optional` / `none` - never eligible (peek-by-separator
+     *     would falsely segment unseparated input).
+     *
+     * Members whose first part is not a statically-known token
+     * (wildcard / number / phraseSet / nested RulesPart, bound
+     * first-StringPart, recursive or empty members) land in the
+     * fallback `rules` subset and are tried as ordinary
+     * alternatives after the bucket hits.
+     *
+     * The pass is observably equivalent to the unoptimized form -
+     * the matcher tries the same set of alternatives in the same
+     * order on a hit, plus all fallback rules.  The NFA/DFA
+     * compile path walks the union of buckets and `rules` to
+     * recover the full effective member list (the NFA already does
+     * global first-token dispatch via `buildFirstTokenIndex`, so
+     * the dispatch index is redundant there).
+     */
+    dispatchifyAlternations?: boolean;
 };
 
 /**
@@ -97,6 +136,7 @@ export const recommendedOptimizations: GrammarOptimizationOptions = {
     inlineSingleAlternatives: true,
     factorCommonPrefixes: true,
     tailFactoring: true,
+    dispatchifyAlternations: true,
 };
 
 /**
@@ -115,7 +155,7 @@ export function optimizeGrammar(
     if (!options) {
         return grammar;
     }
-    let rules = grammar.rules;
+    let rules = grammar.alternatives;
     const inlineConfig: InlineConfig = {
         onInvariantViolation: options.onInvariantViolation ?? "debug",
     };
@@ -168,10 +208,20 @@ export function optimizeGrammar(
             }
         }
     }
-    if (rules === grammar.rules) {
+    let topLevelDispatch: DispatchModeBucket[] | undefined;
+    if (options.dispatchifyAlternations) {
+        const result = dispatchifyAlternations(rules);
+        rules = result.alternatives;
+        topLevelDispatch = result.dispatch;
+    }
+    if (rules === grammar.alternatives && topLevelDispatch === undefined) {
         return grammar;
     }
-    return { ...grammar, rules };
+    const out: Grammar = { ...grammar, alternatives: rules };
+    if (topLevelDispatch !== undefined) {
+        out.dispatch = topLevelDispatch;
+    }
+    return out;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -230,7 +280,7 @@ function countRulesArrayRefs(rules: GrammarRule[]): Map<GrammarRule[], number> {
         visited.add(arr);
         for (const r of arr) {
             for (const p of r.parts) {
-                if (p.type === "rules") walk(p.rules);
+                if (p.type === "rules") walk(p.alternatives);
             }
         }
     }
@@ -358,14 +408,16 @@ function inlineParts(
         // Recurse into nested rules first (post-order), preserving
         // shared-array identity via memo.
         const inlinedRules = inlineRulesArray(
-            p.rules,
+            p.alternatives,
             counter,
             memo,
             refCounts,
             config,
         );
         const rewritten: RulesPart =
-            inlinedRules !== p.rules ? { ...p, rules: inlinedRules } : p;
+            inlinedRules !== p.alternatives
+                ? { ...p, alternatives: inlinedRules }
+                : p;
 
         // Refuse to inline a RulesPart whose body is shared by more than
         // one reference: inlining duplicates the child's parts at the
@@ -375,7 +427,7 @@ function inlineParts(
         // from the *input* AST; the rewritten array shares identity with
         // it via the memo when no nested change occurred, and otherwise
         // is unique to this site (so inlining is safe).
-        const shared = (refCounts.get(p.rules) ?? 1) > 1;
+        const shared = (refCounts.get(p.alternatives) ?? 1) > 1;
         const replacement = shared
             ? undefined
             : tryInlineRulesPart(rewritten, parentRule, renameState, config);
@@ -426,7 +478,7 @@ function tryInlineRulesPart(
     if (part.repeat || part.optional) {
         return undefined;
     }
-    if (part.rules.length !== 1) {
+    if (part.alternatives.length !== 1) {
         return undefined;
     }
     // Past this point, `part.rules.length === 1`.  Tail RulesParts have
@@ -447,7 +499,7 @@ function tryInlineRulesPart(
         debug(`${msg} - refusing to inline (onInvariantViolation=debug)`);
         return undefined;
     }
-    const child = part.rules[0];
+    const child = part.alternatives[0];
     if (child.parts.length === 0) {
         return undefined;
     }
@@ -681,7 +733,21 @@ export function factorCommonPrefixes(
 ): GrammarRule[] {
     const counter = { factored: 0 };
     const memo: RulesArrayMemo = new Map();
-    let result = factorRulesArray(rules, counter, memo, tailFactoring);
+    // Cache `factorRules` per input `GrammarRule[]` identity so that two
+    // `RulesPart`s pointing at the same alternatives array (compiler
+    // named-rule sharing) emit the same factored array - preserving the
+    // serializer's array-identity dedup invariant.  The transformation
+    // is a pure function of the input alternatives (the wrapping
+    // `RulesPart`'s flags only get re-stamped onto the output by
+    // `factorRulesPart` and never feed into the trie build).
+    const factorMemo: FactorMemo = new Map();
+    let result = factorRulesArray(
+        rules,
+        counter,
+        memo,
+        factorMemo,
+        tailFactoring,
+    );
 
     // Top-level factoring: the matcher treats top-level alternatives the
     // same way it treats inner `RulesPart` alternatives (each is queued
@@ -689,7 +755,7 @@ export function factorCommonPrefixes(
     // trie-based factoring applies.  Newly synthesized suffix
     // `RulesPart`s produced here are not themselves re-walked, matching
     // the existing behavior for nested factoring.
-    result = factorRules(result, counter, tailFactoring);
+    result = factorRulesCached(result, counter, factorMemo, tailFactoring);
 
     if (counter.factored > 0) {
         debug(`factored ${counter.factored} common prefix groups`);
@@ -697,10 +763,42 @@ export function factorCommonPrefixes(
     return result;
 }
 
+/**
+ * Per-invocation memo over `factorRules` keyed on the input
+ * `GrammarRule[]` identity.  Ensures two `RulesPart`s sharing the
+ * same alternatives array (named-rule dedup from the compiler) share
+ * the same factored output array, so the serializer's identity-based
+ * dedup still collapses them to a single JSON slot.
+ */
+type FactorMemo = Map<GrammarRule[], GrammarRule[]>;
+
+/**
+ * `factorRules` with input-identity memoization.  Always returns the
+ * cached result for a previously-seen input array; otherwise computes,
+ * caches, and returns.  Note: the cached output array is also stored
+ * under its own identity (mapped to itself) so that a second pass that
+ * happens to receive the post-factored array as input doesn't refactor
+ * it.
+ */
+function factorRulesCached(
+    rules: GrammarRule[],
+    counter: { factored: number },
+    factorMemo: FactorMemo,
+    tailFactoring: boolean,
+): GrammarRule[] {
+    const cached = factorMemo.get(rules);
+    if (cached !== undefined) return cached;
+    const result = factorRules(rules, counter, tailFactoring);
+    factorMemo.set(rules, result);
+    if (result !== rules) factorMemo.set(result, result);
+    return result;
+}
+
 function factorRulesArray(
     rules: GrammarRule[],
     counter: { factored: number },
     memo: RulesArrayMemo,
+    factorMemo: FactorMemo,
     tailFactoring: boolean,
 ): GrammarRule[] {
     const cached = memo.get(rules);
@@ -710,7 +808,13 @@ function factorRulesArray(
     // (see inlineRulesArray for rationale).
     let next: GrammarRule[] | undefined;
     for (let i = 0; i < rules.length; i++) {
-        const r = factorRule(rules[i], counter, memo, tailFactoring);
+        const r = factorRule(
+            rules[i],
+            counter,
+            memo,
+            factorMemo,
+            tailFactoring,
+        );
         if (next !== undefined) {
             next.push(r);
         } else if (r !== rules[i]) {
@@ -727,12 +831,14 @@ function factorRule(
     rule: GrammarRule,
     counter: { factored: number },
     memo: RulesArrayMemo,
+    factorMemo: FactorMemo,
     tailFactoring: boolean,
 ): GrammarRule {
     const { parts, changed } = factorParts(
         rule.parts,
         counter,
         memo,
+        factorMemo,
         tailFactoring,
     );
     if (!changed) return rule;
@@ -743,6 +849,7 @@ function factorParts(
     parts: GrammarPart[],
     counter: { factored: number },
     memo: RulesArrayMemo,
+    factorMemo: FactorMemo,
     tailFactoring: boolean,
 ): { parts: GrammarPart[]; changed: boolean } {
     // Single-pass: only allocate `out` once an element actually changes
@@ -757,15 +864,23 @@ function factorParts(
         // Recurse into nested rules first, preserving shared-array
         // identity via memo.
         const recursedRules = factorRulesArray(
-            p.rules,
+            p.alternatives,
             counter,
             memo,
+            factorMemo,
             tailFactoring,
         );
         const recursed: RulesPart =
-            recursedRules !== p.rules ? { ...p, rules: recursedRules } : p;
+            recursedRules !== p.alternatives
+                ? { ...p, alternatives: recursedRules }
+                : p;
 
-        const working = factorRulesPart(recursed, counter, tailFactoring);
+        const working = factorRulesPart(
+            recursed,
+            counter,
+            factorMemo,
+            tailFactoring,
+        );
         if (out !== undefined) {
             out.push(working);
         } else if (working !== p) {
@@ -783,11 +898,14 @@ function factorParts(
  * around `factorRules` that respects the `RulesPart`'s repeat/optional
  * flags (which change matcher loop-back semantics and so block
  * factoring) and re-wraps the factored alternatives back into the
- * `RulesPart` shape on success.
+ * `RulesPart` shape on success.  Routes through `factorRulesCached`
+ * so two `RulesPart`s sharing the same `alternatives` identity emit
+ * the same factored array (preserves the serializer dedup invariant).
  */
 function factorRulesPart(
     part: RulesPart,
     counter: { factored: number },
+    factorMemo: FactorMemo,
     tailFactoring: boolean,
 ): RulesPart {
     if (part.repeat || part.optional) {
@@ -795,9 +913,14 @@ function factorRulesPart(
         // such groups untouched to stay safe.
         return part;
     }
-    const factored = factorRules(part.rules, counter, tailFactoring);
-    if (factored === part.rules) return part;
-    return { ...part, rules: factored };
+    const factored = factorRulesCached(
+        part.alternatives,
+        counter,
+        factorMemo,
+        tailFactoring,
+    );
+    if (factored === part.alternatives) return part;
+    return { ...part, alternatives: factored };
 }
 
 /**
@@ -1207,7 +1330,7 @@ function* partsToEdgeSteps(parts: GrammarPart[]): Generator<TrieStep> {
             case "rules":
                 yield {
                     kind: "rules",
-                    rules: p.rules,
+                    rules: p.alternatives,
                     optional: !!p.optional,
                     repeat: !!p.repeat,
                     name: p.name,
@@ -1326,7 +1449,7 @@ function edgeToPart(edge: TrieEdge): GrammarPart {
             return out;
         }
         case "rules": {
-            const out: RulesPart = { type: "rules", rules: edge.rules };
+            const out: RulesPart = { type: "rules", alternatives: edge.rules };
             if (edge.canonical !== undefined) {
                 out.variable = edge.canonical;
             }
@@ -1539,37 +1662,20 @@ function checkFactoringEligible(
         // `[prefix..., suffixRulesPart]` with parts.length >= 2 and
         // no value expression - the implicit default no longer
         // fires and `createValue` throws "missing value for default"
-        // at finalize time.  Without a wrapper variable to
-        // synthesize a value into, factoring at this fork breaks
-        // matcher behavior whenever the parent rule relied on the
-        // implicit default.  Bail out unconditionally.
+        // at finalize time.
+        //
+        // Synthesizing an explicit value here is possible (e.g.
+        // template-literal joining the prefix tokens with the
+        // suffix wrapper-binding) but not worth doing: the implicit
+        // default fires only for unbound-StringPart-only rules,
+        // where the matcher's `matchStringPartWithoutWildcard` fast
+        // path is itself very cheap.  The wrapper would add a frame
+        // push, a wrapper-binding entry on the `valueIds` chain, and
+        // a template-literal evaluation per match - costs that
+        // typically exceed the prefix-match savings.  Bail out
+        // unconditionally; the implicit-default rules stay
+        // unfactored and keep their fast path.
         return { ok: false, reason: "no-value-implicit-default" };
-    }
-
-    // Cross-scope-ref classification.  Nested rule scope is normally
-    // fresh at the matcher level (entering a `RulesPart` resets
-    // `valueIds`).  When members are lifted into a wrapper rule's
-    // (non-tail) `suffixRulesPart`, each member's value can only see
-    // variables bound in its own `parts` - bindings in the wrapper's
-    // prefix are not visible.
-    //
-    // Tail-RulesPart entry skips the parent-frame push and inherits
-    // the parent's `valueIds` chain, so member value-exprs *can*
-    // resolve prefix-bound canonicals.  `needsTail` records whether
-    // any member's value-expr references a prefix-bound canonical -
-    // i.e. whether the non-tail wrapper would change observable
-    // behavior at this fork.
-    let needsTail = false;
-    for (const m of members) {
-        if (m.value === undefined) continue;
-        const memberBindings = collectVariableNames(m.parts);
-        for (const v of collectVariableReferences(m.value)) {
-            if (!memberBindings.has(v)) {
-                needsTail = true;
-                break;
-            }
-        }
-        if (needsTail) break;
     }
 
     // Policy: prefer tail when enabled.  Tail wrapper is observably
@@ -1577,20 +1683,44 @@ function checkFactoringEligible(
     // !needsTail forks (the inherited `valueIds` chain is unread when
     // !needsTail), produces a smaller AST (no synthesized
     // `__opt_factor_<n>` binding, no `factoredAlt.value` indirection),
-    // and saves one matcher frame push per fork.  Fall back to the
-    // non-tail wrapper only when tail is disabled.
+    // and saves one matcher frame push per fork.  Decided up-front so
+    // we can skip the cross-scope-ref scan below entirely - that scan
+    // only governs the non-tail bailout.
     if (tailFactoringEnabled) {
         return { ok: true, tail: true };
     }
 
-    // Tail disabled.  The non-tail wrapper is only safe when no
-    // member references a prefix-bound canonical (would silently
-    // resolve to a different scope after lifting).  When needsTail is
-    // true we have to bail out.
-    if (needsTail) {
+    // Cross-scope-ref classification.  Nested rule scope is normally
+    // fresh at the matcher level (entering a `RulesPart` resets
+    // `valueIds`).  When members are lifted into a wrapper rule's
+    // (non-tail) `suffixRulesPart`, each member's value can only see
+    // variables bound in its own `parts` - bindings in the wrapper's
+    // prefix are not visible.  Tail-RulesPart entry skips the parent-
+    // frame push and inherits the parent's `valueIds` chain, so member
+    // value-exprs *can* resolve prefix-bound canonicals; with tail
+    // disabled we have to bail out at any such fork.
+    if (referencesPrefixBoundCanonical(members)) {
         return { ok: false, reason: "cross-scope-ref" };
     }
     return { ok: true, tail: false };
+}
+
+/**
+ * True iff any member's value expression references a variable that
+ * isn't bound by that member's own `parts` - i.e. it relies on a
+ * binding from the surrounding scope (typically a prefix-bound
+ * canonical when called from `checkFactoringEligible`).  Non-tail
+ * factoring at such a fork would silently change scope resolution.
+ */
+function referencesPrefixBoundCanonical(members: GrammarRule[]): boolean {
+    for (const m of members) {
+        if (m.value === undefined) continue;
+        const memberBindings = collectVariableNames(m.parts);
+        for (const v of collectVariableReferences(m.value)) {
+            if (!memberBindings.has(v)) return true;
+        }
+    }
+    return false;
 }
 
 /**
@@ -1613,7 +1743,7 @@ function buildTailWrapper(
 ): GrammarRule {
     const suffixRulesPart: RulesPart = {
         type: "rules",
-        rules: members,
+        alternatives: members,
         tailCall: true,
     };
     const factoredAlt: GrammarRule = {
@@ -1647,7 +1777,7 @@ function buildNonTailWrapper(
     buildState: BuildState,
     partitionSpacing: CompiledSpacingMode | undefined,
 ): GrammarRule {
-    const suffixRulesPart: RulesPart = { type: "rules", rules: members };
+    const suffixRulesPart: RulesPart = { type: "rules", alternatives: members };
     const factoredAlt: GrammarRule = {
         parts: [...prefix, suffixRulesPart],
     };
@@ -1869,18 +1999,480 @@ function substituteValueVariables(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Optimization: dispatchify alternations
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Shared frozen empty-rules sentinel used as the `rules` (fallback)
+ * subset on dispatched `RulesPart`s with no fallback members.  Using
+ * a single identity across every empty-fallback dispatched part
+ * lets `grammarSerializer.ts`'s identity-keyed `indexFor` dedup
+ * them into one JSON slot instead of one slot per part.
+ */
+const EMPTY_FALLBACK_RULES: GrammarRule[] = Object.freeze(
+    [] as GrammarRule[],
+) as GrammarRule[];
+
+/**
+ * Classify a single rule's first part for dispatch eligibility,
+ * deriving the bucket key for an `auto`/`required`-mode partition:
+ *   - { kind: "token", token } - rule goes into `tokenMap[token]`.
+ *   - { kind: "fallback" } - rule is not dispatch-eligible; goes
+ *     to the dispatch part's `fallback` list.
+ *
+ * Bucket-key derivation depends on the partition's spacing mode:
+ *   - `required`: a separator is mandated after every token, so peek
+ *     returns the full first non-separator run.  Bucket key = the
+ *     full lowercased first literal token.
+ *   - `auto` (`undefined`): the matcher's StringPart regex implicitly
+ *     splits at the first script transition (Latin↔CJK, Latin↔digit
+ *     etc.); peek mirrors that via `leadingWordBoundaryScriptPrefix`.
+ *     Bucket key = the lowercased leading word-boundary-script prefix
+ *     of the first literal token, OR (when the WB-prefix is empty -
+ *     the literal starts with CJK, digit, punctuation, ...) the
+ *     literal's leading code point.  This first-code-point fallback
+ *     keeps CJK / Hiragana / Katakana / digit-leading rules dispatch-
+ *     eligible (one bucket per leading character).  `peekNextToken`
+ *     applies the same rule on the input side so the buckets line
+ *     up.  A literal that is empty stays in `fallback`.
+ *
+ * `optional` / `none` modes never reach this function (members in
+ * those modes are routed to `fallback` directly by
+ * `tryDispatchifyRulesPart` without classification).
+ */
+function classifyDispatchMember(
+    rule: GrammarRule,
+    mode: CompiledSpacingMode,
+): { kind: "token"; token: string } | { kind: "fallback" } {
+    const first = rule.parts[0];
+    if (first === undefined) {
+        return { kind: "fallback" };
+    }
+    if (first.type !== "string") {
+        return { kind: "fallback" };
+    }
+    // Bound first-StringPart is fine: dispatch is filter-only and
+    // each rule retains its full leading `StringPart` (including its
+    // binding), so the matcher binds the captured tokens via the
+    // rule's own `StringPart` regex on the dispatch hit - no
+    // suffix-binding injection required.  Bucket key is still derived
+    // from the literal's first token below.
+    if (first.value.length === 0) {
+        return { kind: "fallback" };
+    }
+    const literal = first.value[0].toLowerCase();
+    if (literal.length === 0) {
+        return { kind: "fallback" };
+    }
+    if (mode === "required") {
+        return { kind: "token", token: literal };
+    }
+    // auto: bucket on the leading word-boundary-script run.  When
+    // the literal starts with a non-WB-script char (CJK, digit,
+    // punctuation), fall back to bucketing on the leading code
+    // point - matches `peekNextToken`'s first-code-point fallback
+    // for inputs whose nonSeparatorRun starts with such a char.
+    const pref = leadingWordBoundaryScriptPrefix(literal);
+    if (pref.length > 0) {
+        return { kind: "token", token: pref };
+    }
+    const cp = literal.codePointAt(0)!;
+    return { kind: "token", token: String.fromCodePoint(cp) };
+}
+
+/**
+ * Try to attach a first-token dispatch index to a `RulesPart`.
+ * Returns the same part unchanged if not eligible.  When eligible,
+ * returns a new `RulesPart` whose `rules` is the *fallback subset*
+ * (members not assigned to any bucket) and whose `dispatch` is the
+ * per-mode bucket array (see `RulesPart.dispatch`).
+ *
+ * `repeat` / `optional` / `tailCall` are all preserved on the
+ * returned part.  The matcher's optional-fork block fires before
+ * the rules entry arm; `repeat` re-enters via the standard
+ * `repeatPartIndex` / `repeatStartIndex` mechanism (which re-runs
+ * the dispatch peek per iteration); `tailCall` routes the rules
+ * entry arm through the tail-entry helper instead of the normal
+ * alternation entry (no parent frame, inherits `valueIds`).  See
+ * `RulesPart.tailCall` for the structural contract that the
+ * effective member list must satisfy; `validateTailRulesParts`
+ * enforces it.  (Note: the tail contract requires every member's
+ * spacingMode to match the parent rule's, so a tail-eligible
+ * partition is naturally uniform-mode here - no special handling
+ * is needed for mixed-mode tail.)
+ *
+ * Mixed-mode partitions: members are partitioned by their own
+ * `rule.spacingMode` and a separate `tokenMap` is built for each
+ * dispatch-eligible mode (`required` and/or `undefined`/auto).  The
+ * matcher peeks once per `dispatch` entry and unions the hits.
+ * Members with `spacingMode === "optional"` or `"none"` are not
+ * peek-dispatchable (peek-by-separator would mismatch keys against
+ * unseparated input) and land in the fallback `rules` subset.
+ *
+ * Skip conditions (return original part unchanged):
+ *   - Single-rule "alternation" - nothing to dispatch.
+ *   - No member is dispatch-eligible (every member is
+ *     `optional`/`none` mode, or every dispatch-eligible member's
+ *     first part is wildcard / number / phraseSet / nested rule
+ *     etc.): every rule lands in `fallback`, dispatch adds a
+ *     useless peek + hash miss.
+ *   - Total bucket count == 1 with no fallback: the dispatch
+ *     always picks the same bucket, no filtering benefit over
+ *     the non-dispatched form.
+ */
+/**
+ * Pure-input payload produced by the dispatch transformation.  Two
+ * `RulesPart`s sharing the same input `alternatives` identity must
+ * produce the same payload (and the same array identities for the
+ * trimmed fallback and per-mode bucket arrays), so the serializer's
+ * identity-based dedup still collapses them to single JSON slots.
+ */
+type DispatchPayload = {
+    alternatives: GrammarRule[];
+    dispatch: DispatchModeBucket[];
+};
+
+/**
+ * Per-invocation memo over `computeDispatchPayload` keyed on the
+ * input `GrammarRule[]` identity.  Stores `null` for ineligible
+ * inputs so the bail-out is also cached.  Shared across the whole
+ * `dispatchifyAlternations` invocation including the top-level
+ * dispatch hoist.
+ */
+type DispatchMemo = Map<GrammarRule[], DispatchPayload | null>;
+
+function tryDispatchifyRulesPart(
+    part: RulesPart,
+    memo?: DispatchMemo,
+): RulesPart | undefined {
+    let payload: DispatchPayload | null | undefined = memo?.get(
+        part.alternatives,
+    );
+    if (payload === undefined) {
+        payload = computeDispatchPayload(part.alternatives, part.name) ?? null;
+        memo?.set(part.alternatives, payload);
+    }
+    if (payload === null) return undefined;
+
+    const out: RulesPart = {
+        type: "rules",
+        alternatives: payload.alternatives,
+        dispatch: payload.dispatch,
+    };
+    if (part.name !== undefined) out.name = part.name;
+    if (part.variable !== undefined) out.variable = part.variable;
+    if (part.optional) out.optional = true;
+    if (part.repeat) out.repeat = true;
+    if (part.tailCall) out.tailCall = true;
+    return out;
+}
+
+/**
+ * Pure-of-input dispatch computation.  Depends only on the input
+ * `alternatives` array (and the per-rule `spacingMode`s within it);
+ * outer wrapper flags do not affect the partition.  `name` is
+ * threaded in only for diagnostic logging on the bail-out paths.
+ */
+function computeDispatchPayload(
+    alternatives: GrammarRule[],
+    name: string | undefined,
+): DispatchPayload | undefined {
+    if (alternatives.length < 2) {
+        // Single-rule "alternation" - nothing to dispatch.
+        debug(`dispatch skip (single-rule) name='${name ?? "<unnamed>"}'`);
+        return undefined;
+    }
+
+    // Partition members by their own spacing mode.  Build per-mode
+    // tokenMaps in member-source order of first appearance: the
+    // first member's mode seeds perMode[0], a later member with a
+    // different eligible mode appends a new perMode entry, and so
+    // on.  Members in `optional`/`none` mode are not peek-eligible
+    // and go to fallback unconditionally.
+    type ModeBucket = {
+        spacingMode: CompiledSpacingMode;
+        tokenMap: Map<string, GrammarRule[]>;
+    };
+    const perMode: ModeBucket[] = [];
+    const fallback: GrammarRule[] = [];
+    const findMode = (mode: CompiledSpacingMode): ModeBucket | undefined => {
+        for (const m of perMode) {
+            if (m.spacingMode === mode) return m;
+        }
+        return undefined;
+    };
+    for (const rule of alternatives) {
+        const mode = rule.spacingMode;
+        if (mode === "optional" || mode === "none") {
+            // Not peek-eligible - peek's separator handling
+            // doesn't agree with what the StringPart regex would
+            // consume in these modes.
+            fallback.push(rule);
+            continue;
+        }
+        const cls = classifyDispatchMember(rule, mode);
+        if (cls.kind === "fallback") {
+            fallback.push(rule);
+            continue;
+        }
+        let bucket = findMode(mode);
+        if (bucket === undefined) {
+            bucket = { spacingMode: mode, tokenMap: new Map() };
+            perMode.push(bucket);
+        }
+        const existing = bucket.tokenMap.get(cls.token);
+        if (existing !== undefined) {
+            existing.push(rule);
+        } else {
+            bucket.tokenMap.set(cls.token, [rule]);
+        }
+    }
+
+    if (perMode.length === 0) {
+        debug(`dispatch skip (all-fallback) name='${name ?? "<unnamed>"}'`);
+        return undefined;
+    }
+    // Total token-key count: sum of `tokenMap.size` across every
+    // perMode entry.  A single token key (with no fallback) means the
+    // dispatch always picks the same single rule list, offering no
+    // filtering benefit over the original `RulesPart`.
+    let totalTokenKeys = 0;
+    for (const m of perMode) totalTokenKeys += m.tokenMap.size;
+    if (totalTokenKeys === 1 && fallback.length === 0) {
+        debug(
+            `dispatch skip (single-bucket-no-fallback) name='${name ?? "<unnamed>"}'`,
+        );
+        return undefined;
+    }
+
+    return {
+        // Canonicalize empty fallback to a shared frozen sentinel so
+        // the serializer can dedup empty-rules slots across every
+        // dispatched part: each fallback `[]` would otherwise be a
+        // fresh array identity and `indexFor([])` would mint a fresh
+        // JSON slot per dispatched part.
+        alternatives: fallback.length === 0 ? EMPTY_FALLBACK_RULES : fallback,
+        dispatch: perMode,
+    };
+}
+
+/**
+ * Walk every rule array in `rules` post-order, attempting to
+ * attach a first-token dispatch index to each `RulesPart` whose
+ * alternatives can be partitioned by first input token.  The
+ * top-level alternation is also dispatched when eligible - the
+ * result rides on the returned `dispatch` field, sitting next to
+ * the trimmed `rules` (the fallback subset).  No wrapper rule is
+ * synthesized: hoisting dispatch onto the grammar shape lets each
+ * surviving top-level alternative remain a true top-level frame
+ * with its own `spacingMode`, restoring per-rule leading-spacing
+ * semantics in mixed-mode grammars (a wrapper would impose a
+ * single uniform mode on every member).
+ *
+ * Identity-sharing of `GrammarRule[]` arrays (the dedup invariant
+ * the serializer relies on) is preserved via memoization.
+ *
+ * **Match-order note (deliberate, observable change).**  The
+ * unoptimized `RulesPart` tries members in source order.  After
+ * dispatch, on a peek-hit only the bucket members (a *subset*) are
+ * tried first, then `fallback`.  When the original source order
+ * interleaved a fallback member (e.g. wildcard-first) *before* a
+ * token-first member, that fallback is now tried after the bucket
+ * - so on input both alternatives accept, the bucket member wins
+ * where the source-order fallback would have won previously.  This
+ * is accepted as part of the dispatch optimization (the source-order
+ * promise is a casualty of first-token bucketing).
+ *
+ * Future: a `preserveSourceOrder` opt-in could bail out of
+ * dispatchification at any fork where a fallback rule appears
+ * before any token-bucket rule in source order (or, more
+ * permissively, only when the fallback's first part could overlap
+ * with a tokenMap key).  Not yet wired up - no measured need.
+ */
+export function dispatchifyAlternations(rules: GrammarRule[]): {
+    alternatives: GrammarRule[];
+    dispatch?: DispatchModeBucket[];
+} {
+    const counter = { dispatched: 0 };
+    const memo = new Map<GrammarRule[], GrammarRule[]>();
+    // Cache the dispatch transformation per input `alternatives`
+    // identity so two `RulesPart`s sharing the same alternatives
+    // array (compiler named-rule sharing) emit the same trimmed
+    // fallback array and the same `DispatchModeBucket[]` - preserving
+    // the serializer's identity-based dedup invariant.  Shared
+    // across the whole pass including the top-level hoist below.
+    const dispatchMemo: DispatchMemo = new Map();
+
+    const result = visitRulesArray(rules, counter, memo, dispatchMemo);
+
+    // Top-level dispatch: build a transient `RulesPart` over the
+    // top-level alternatives and try to dispatch it.  On success,
+    // hoist the dispatch index and the trimmed fallback subset
+    // onto the grammar shape directly - no wrapper rule synthesized.
+    const out: {
+        alternatives: GrammarRule[];
+        dispatch?: DispatchModeBucket[];
+    } = {
+        alternatives: result,
+    };
+    if (result.length >= 2) {
+        const dispatched = tryDispatchifyRulesPart(
+            {
+                type: "rules",
+                alternatives: result,
+            },
+            dispatchMemo,
+        );
+        if (dispatched?.dispatch !== undefined) {
+            counter.dispatched++;
+            out.alternatives = dispatched.alternatives;
+            out.dispatch = dispatched.dispatch;
+        }
+    }
+    if (counter.dispatched > 0) {
+        debug(
+            `dispatched ${counter.dispatched} alternations into token tables`,
+        );
+    }
+    return out;
+}
+
+function visitRulesArray(
+    rules: GrammarRule[],
+    counter: { dispatched: number },
+    memo: Map<GrammarRule[], GrammarRule[]>,
+    dispatchMemo: DispatchMemo,
+): GrammarRule[] {
+    const cached = memo.get(rules);
+    if (cached !== undefined) return cached;
+    memo.set(rules, rules);
+    let next: GrammarRule[] | undefined;
+    for (let i = 0; i < rules.length; i++) {
+        const r = visitRule(rules[i], counter, memo, dispatchMemo);
+        if (next !== undefined) {
+            next.push(r);
+        } else if (r !== rules[i]) {
+            next = rules.slice(0, i);
+            next.push(r);
+        }
+    }
+    const result = next ?? rules;
+    memo.set(rules, result);
+    return result;
+}
+
+function visitRule(
+    rule: GrammarRule,
+    counter: { dispatched: number },
+    memo: Map<GrammarRule[], GrammarRule[]>,
+    dispatchMemo: DispatchMemo,
+): GrammarRule {
+    let outParts: GrammarPart[] | undefined;
+    for (let i = 0; i < rule.parts.length; i++) {
+        const p = rule.parts[i];
+        const visited = visitPart(p, counter, memo, dispatchMemo);
+        if (outParts !== undefined) {
+            outParts.push(visited);
+        } else if (visited !== p) {
+            outParts = rule.parts.slice(0, i);
+            outParts.push(visited);
+        }
+    }
+    if (outParts === undefined) return rule;
+    return { ...rule, parts: outParts };
+}
+
+function visitPart(
+    part: GrammarPart,
+    counter: { dispatched: number },
+    memo: Map<GrammarRule[], GrammarRule[]>,
+    dispatchMemo: DispatchMemo,
+): GrammarPart {
+    if (part.type !== "rules") {
+        return part;
+    }
+    // Already-dispatched parts: recurse into bucket members and the
+    // fallback subset, then return.  We never re-dispatch (would
+    // partition only the fallback subset, which is wrong).
+    if (part.dispatch !== undefined) {
+        let dirty = false;
+        const newPerMode = part.dispatch.map((m) => {
+            const newTokenMap = new Map<string, GrammarRule[]>();
+            let bucketDirty = false;
+            for (const [tok, bucket] of m.tokenMap) {
+                const visited = visitRulesArray(
+                    bucket,
+                    counter,
+                    memo,
+                    dispatchMemo,
+                );
+                if (visited !== bucket) bucketDirty = true;
+                newTokenMap.set(tok, visited);
+            }
+            if (bucketDirty) {
+                dirty = true;
+                return { ...m, tokenMap: newTokenMap };
+            }
+            return m;
+        });
+        const innerRules = visitRulesArray(
+            part.alternatives,
+            counter,
+            memo,
+            dispatchMemo,
+        );
+        if (innerRules !== part.alternatives) dirty = true;
+        if (!dirty) return part;
+        return {
+            ...part,
+            alternatives: innerRules,
+            dispatch: newPerMode,
+        };
+    }
+    // Recurse first (post-order) so nested dispatch attempts run
+    // before the outer one decides classification.
+    const innerRules = visitRulesArray(
+        part.alternatives,
+        counter,
+        memo,
+        dispatchMemo,
+    );
+    const innerPart: RulesPart =
+        innerRules !== part.alternatives
+            ? { ...part, alternatives: innerRules }
+            : part;
+    const dispatched = tryDispatchifyRulesPart(innerPart, dispatchMemo);
+    if (dispatched !== undefined) {
+        counter.dispatched++;
+        return dispatched;
+    }
+    return innerPart;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Structural validation: RulesPart.tailCall contract
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Walk every rule in `rules` and verify that any `RulesPart` carrying
- * `tailCall: true` satisfies the contract documented on
+ * Walk every rule in `rules` and verify that any `RulesPart`
+ * carrying `tailCall: true` satisfies the contract documented on
  * `RulesPart.tailCall`:
  *
  *   - last entry in its parent rule's `parts`
  *   - parent rule has no `value` of its own
  *   - `repeat` / `optional` / `variable` all unset
- *   - `rules.length >= 2`
+ *   - effective member count >= 2.  For a non-dispatched part this
+ *     is just `rules.length`; for a dispatched part it is the
+ *     *static* sum of bucket sizes across every `dispatch` entry
+ *     plus the fallback `rules.length`.  Note this is a structural
+ *     check on the AST shape, not a runtime guarantee: at match
+ *     time the dispatch entry peeks one input token and selects a
+ *     *single* bucket (plus fallback) to form the effective
+ *     alternation list, so the runtime list size for a given
+ *     dispatch entry can be 1.  `enterTailAlternation` has its own
+ *     `rules.length > 1` guard for that case (matching
+ *     `enterRulesAlternation`'s behavior); the check here only
+ *     ensures the dispatch could ever pick more than one member.
  *   - every member's `spacingMode` matches the parent rule's
  *
  * Throws on the first violation with a message identifying the
@@ -1888,17 +2480,18 @@ function substituteValueVariables(
  * a serialized grammar from JSON (where the bytes are not produced by
  * a trusted in-process compiler) and from tests.
  *
- * Members are recursed into so that nested tail RulesParts are also
+ * Members are recursed into so that nested tail parts are also
  * validated.
  */
-export function validateTailRulesParts(rules: GrammarRule[]): void {
+export function validateTailRulesParts(
+    rules: GrammarRule[],
+    dispatch?: DispatchModeBucket[] | undefined,
+): void {
     const visited = new WeakSet<GrammarRule[]>();
     const visitRules = (rs: GrammarRule[]): void => {
         if (visited.has(rs)) return;
         visited.add(rs);
-        for (const r of rs) {
-            visitRule(r);
-        }
+        for (const r of rs) visitRule(r);
     };
     const visitRule = (rule: GrammarRule): void => {
         const parts = rule.parts;
@@ -1906,36 +2499,82 @@ export function validateTailRulesParts(rules: GrammarRule[]): void {
             const p = parts[i];
             if (p.type !== "rules") continue;
             if (p.tailCall) {
-                if (i !== parts.length - 1) {
-                    throw new Error(
-                        `Invalid tail RulesPart: must be the last part of its parent rule (name='${p.name ?? "<unnamed>"}')`,
-                    );
-                }
-                if (rule.value !== undefined) {
-                    throw new Error(
-                        `Invalid tail RulesPart: parent rule must have no value of its own (name='${p.name ?? "<unnamed>"}')`,
-                    );
-                }
-                if (p.repeat || p.optional || p.variable !== undefined) {
-                    throw new Error(
-                        `Invalid tail RulesPart: repeat/optional/variable are forbidden (name='${p.name ?? "<unnamed>"}')`,
-                    );
-                }
-                if (p.rules.length < 2) {
-                    throw new Error(
-                        `Invalid tail RulesPart: requires rules.length >= 2 (got ${p.rules.length}, name='${p.name ?? "<unnamed>"}')`,
-                    );
-                }
-                for (const m of p.rules) {
-                    if (m.spacingMode !== rule.spacingMode) {
-                        throw new Error(
-                            `Invalid tail RulesPart: every member's spacingMode must match the parent rule's (name='${p.name ?? "<unnamed>"}')`,
-                        );
+                const members = getDispatchEffectiveMembers(p);
+                checkTailContract(rule, p, i, parts.length, {
+                    members,
+                    effectiveCount: members.length,
+                });
+            }
+            if (p.dispatch !== undefined) {
+                for (const m of p.dispatch) {
+                    for (const bucket of m.tokenMap.values()) {
+                        visitRules(bucket);
                     }
                 }
             }
-            visitRules(p.rules);
+            visitRules(p.alternatives);
         }
     };
     visitRules(rules);
+    // Top-level dispatch buckets (Phase 2): walk member rules
+    // hoisted onto `grammar.dispatch` so nested tail parts inside
+    // them are also validated.  The grammar level itself cannot
+    // carry `tailCall` (only RulesPart can), so no contract check
+    // applies here - just walk the rule contents.
+    if (dispatch !== undefined) {
+        for (const m of dispatch) {
+            for (const bucket of m.tokenMap.values()) {
+                visitRules(bucket);
+            }
+        }
+    }
+}
+
+/**
+ * Shared contract checker for tail `RulesPart` (with or without a
+ * `dispatch` index).  The five clauses (last-part, no parent value,
+ * no repeat/optional/variable, effective member count >= 2, member
+ * spacingMode equality) are identical across both shapes.
+ */
+function checkTailContract(
+    rule: GrammarRule,
+    p: {
+        name?: string | undefined;
+        repeat?: boolean | undefined;
+        optional?: boolean | undefined;
+        variable?: string | undefined;
+    },
+    index: number,
+    partsLength: number,
+    effective: { members: Iterable<GrammarRule>; effectiveCount: number },
+): void {
+    const where = `(name='${p.name ?? "<unnamed>"}')`;
+    const label = `Invalid tail RulesPart`;
+    if (index !== partsLength - 1) {
+        throw new Error(
+            `${label}: must be the last part of its parent rule ${where}`,
+        );
+    }
+    if (rule.value !== undefined) {
+        throw new Error(
+            `${label}: parent rule must have no value of its own ${where}`,
+        );
+    }
+    if (p.repeat || p.optional || p.variable !== undefined) {
+        throw new Error(
+            `${label}: repeat/optional/variable are forbidden ${where}`,
+        );
+    }
+    if (effective.effectiveCount < 2) {
+        throw new Error(
+            `${label}: requires effective member count >= 2 (got ${effective.effectiveCount}) ${where}`,
+        );
+    }
+    for (const m of effective.members) {
+        if (m.spacingMode !== rule.spacingMode) {
+            throw new Error(
+                `${label}: every member's spacingMode must match the parent rule's ${where}`,
+            );
+        }
+    }
 }

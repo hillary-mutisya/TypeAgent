@@ -17,6 +17,7 @@ import {
     StringPart,
 } from "./grammarTypes.js";
 import { leadingWordBoundaryScriptPrefix } from "./spacingScripts.js";
+import { leadingNonSeparatorRun } from "./grammarMatcher.js";
 import { getDispatchEffectiveMembers } from "./dispatchHelpers.js";
 
 const debug = registerDebug("typeagent:grammar:opt");
@@ -2065,7 +2066,28 @@ function classifyDispatchMember(
         return { kind: "fallback" };
     }
     if (mode === "required") {
-        return { kind: "token", token: literal };
+        // Bucket on the leading non-separator run, mirroring what
+        // `peekNextToken` returns for required / optional / none
+        // modes.  Two consequences worth being explicit about:
+        //   1. Key alignment: using the full `literal` would cause
+        //      a key mismatch when the literal embeds a separator
+        //      char (e.g. `"d?"` buckets under `"d"` since peek
+        //      returns `"d"` for input `"d? ..."`).
+        //   2. Bucket collapse: literals like `"d?"`, `"d!"`,
+        //      `"d."` all share bucket key `"d"`, so dispatch
+        //      fan-out can be smaller than the number of distinct
+        //      first-token literals.  This is correct - peek will
+        //      route all such inputs to the same bucket, and the
+        //      member rules' StringPart regexes discriminate
+        //      among them.
+        // If the literal starts with a separator, the prefix is
+        // empty and we can't dispatch this member - send it to
+        // fallback.
+        const pref = leadingNonSeparatorRun(literal);
+        if (pref.length === 0) {
+            return { kind: "fallback" };
+        }
+        return { kind: "token", token: pref };
     }
     // auto: bucket on the leading word-boundary-script run.  When
     // the literal starts with a non-WB-script char (CJK, digit,

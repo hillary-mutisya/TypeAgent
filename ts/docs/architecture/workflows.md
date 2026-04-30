@@ -23,7 +23,7 @@ action that anyone can invoke.
 ### The core insight: saved workflows win
 
 Once a task is captured as a workflow, execution is **deterministic and fast**
-— milliseconds instead of seconds. The LLM is used once to *create* the
+— milliseconds instead of seconds. The LLM is used once to _create_ the
 workflow, not on every invocation. This is the fundamental value proposition:
 trade one-time LLM reasoning for unlimited fast reuse.
 
@@ -31,36 +31,36 @@ trade one-time LLM reasoning for unlimited fast reuse.
 
 The user-facing model is simple:
 
-| Phase | What happens |
-|-------|--------------|
+| Phase       | What happens                                                                                                                          |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | **Capture** | User demonstrates or describes a task; reasoning agent writes code against a domain API; workflow registers via `reloadAgentSchema()` |
-| **Run** | User utterance matches grammar; workflow executes deterministically |
-| **Repair** | If execution fails, reasoning agent rewrites the workflow in place |
+| **Run**     | User utterance matches grammar; workflow executes deterministically                                                                   |
+| **Repair**  | If execution fails, reasoning agent rewrites the workflow in place                                                                    |
 
 See [Common lifecycle](#common-lifecycle) for implementation details
 (five phases: Capture → Persist → Register → Execute → Feedback).
 
 ### Where workflows apply
 
-| Domain | Example | Status |
-|--------|---------|--------|
-| PowerShell scripts | *"Show my running processes"* | Implemented |
-| Web browser automation | *"Buy AAA batteries on Amazon"* | Implemented |
-| Cross-agent workflows | *"Get top 10 K-pop songs and create a playlist"* | Implemented |
-| Office macros | *"Format this spreadsheet for quarterly review"* | Planned |
-| Knowledge-base automation | *"Run the network troubleshooting guide"* | Planned |
+| Domain                    | Example                                          | Status      |
+| ------------------------- | ------------------------------------------------ | ----------- |
+| PowerShell scripts        | _"Show my running processes"_                    | Implemented |
+| Web browser automation    | _"Buy AAA batteries on Amazon"_                  | Implemented |
+| Cross-agent workflows     | _"Get top 10 K-pop songs and create a playlist"_ | Implemented |
+| Office macros             | _"Format this spreadsheet for quarterly review"_ | Planned     |
+| Knowledge-base automation | _"Run the network troubleshooting guide"_        | Planned     |
 
 ### Key concepts
 
-| Term                | Meaning                                                                                                                              |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| **Workflow**        | A parameterized, reusable automation definition that registers as a dispatchable action with grammar patterns for NL matching.       |
-| **Workflow store**  | Per-agent instance storage that persists workflow definitions, scripts, and an index file across sessions.                           |
-| **Dynamic schema**  | A runtime-generated TypeScript type definition that constrains LLM-translated parameter values to valid workflow names.              |
-| **Dynamic grammar** | Runtime-generated `.agr` rules that enable grammar matching for registered workflows.                                                |
-| **Script executor** | The sandboxed execution environment for each workflow type (PowerShell runner, WebFlow script executor, TaskFlow script executor).   |
-| **Script host**     | A sandboxed execution environment for scripts (PowerShell constrained runspace, Node.js `new Function()` sandbox).                   |
-| **Self-repair**     | Fallback to LLM reasoning when a workflow execution fails, with context about the failure to guide correction.                       |
+| Term                | Meaning                                                                                                                            |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **Workflow**        | A parameterized, reusable automation definition that registers as a dispatchable action with grammar patterns for NL matching.     |
+| **Workflow store**  | Per-agent instance storage that persists workflow definitions, scripts, and an index file across sessions.                         |
+| **Dynamic schema**  | A runtime-generated TypeScript type definition that constrains LLM-translated parameter values to valid workflow names.            |
+| **Dynamic grammar** | Runtime-generated `.agr` rules that enable grammar matching for registered workflows.                                              |
+| **Script executor** | The sandboxed execution environment for each workflow type (PowerShell runner, WebFlow script executor, TaskFlow script executor). |
+| **Script host**     | A sandboxed execution environment for scripts (PowerShell constrained runspace, Node.js `new Function()` sandbox).                 |
+| **Self-repair**     | Fallback to LLM reasoning when a workflow execution fails, with context about the failure to guide correction.                     |
 
 ### Three workflow types
 
@@ -1030,11 +1030,11 @@ All three index types share a common pattern:
 All three workflow types ship bundled sample recipes that are loaded on
 first activation:
 
-| Flow type  | Sample location                    | Seeding behavior                                                  |
-| ---------- | ---------------------------------- | ----------------------------------------------------------------- |
+| Flow type  | Sample location                    | Seeding behavior                                                      |
+| ---------- | ---------------------------------- | --------------------------------------------------------------------- |
 | PowerShell | `samples/*.recipe.json` in package | Copied to instance storage; skipped if workflow exists or was deleted |
-| TaskFlow   | `samples/*.recipe.json` in package | Same behavior                                                     |
-| WebFlow    | `samples/*.json` in package        | Same; discovered placeholders upgraded to real samples            |
+| TaskFlow   | `samples/*.recipe.json` in package | Same behavior                                                         |
+| WebFlow    | `samples/*.json` in package        | Same; discovered placeholders upgraded to real samples                |
 
 Deleted sample tracking (`deletedSamples[]` in PowerShell/TaskFlow
 indexes) prevents re-seeding flows the user has intentionally removed.
@@ -1423,7 +1423,7 @@ interface GrammarContent {
 
 1. **Saved workflows win** — Once a task is captured as a workflow,
    execution is deterministic and fast — milliseconds instead of seconds.
-   The LLM is used once to *create* the workflow, not on every invocation.
+   The LLM is used once to _create_ the workflow, not on every invocation.
    This is the fundamental value proposition: trade one-time reasoning for
    unlimited fast reuse.
 
@@ -1441,6 +1441,7 @@ interface GrammarContent {
    with context about the failure. The LLM can edit the broken script
    in-place rather than creating duplicates, preserving the grammar
    registration and user's mental model. Two properties matter:
+
    - **No duplicates** — the broken workflow is repaired, not replaced
    - **Failure context guides the LLM** — error message and hint
      converge it on a targeted fix
@@ -1464,20 +1465,20 @@ interface GrammarContent {
 
 The dynamic schema API is designed to support additional workflow types:
 
-| Domain | Use case | Sandbox approach |
-|--------|----------|------------------|
-| **Excel automation** | *"Format this spreadsheet for quarterly review"* | Office.js API with cell-range restrictions |
-| **VS Code extensions** | *"Run the TypeScript build and show errors"* | VS Code extension API with workspace-scoped access |
-| **Database queries** | *"Show customers who ordered last week"* | Parameterized SQL with read-only connections |
-| **Kubernetes management** | *"Scale the frontend deployment to 3 replicas"* | kubectl commands with namespace restrictions |
-| **Knowledge-base automation** | *"Run the network troubleshooting guide"* | Step-by-step decision tree execution |
+| Domain                        | Use case                                         | Sandbox approach                                   |
+| ----------------------------- | ------------------------------------------------ | -------------------------------------------------- |
+| **Excel automation**          | _"Format this spreadsheet for quarterly review"_ | Office.js API with cell-range restrictions         |
+| **VS Code extensions**        | _"Run the TypeScript build and show errors"_     | VS Code extension API with workspace-scoped access |
+| **Database queries**          | _"Show customers who ordered last week"_         | Parameterized SQL with read-only connections       |
+| **Kubernetes management**     | _"Scale the frontend deployment to 3 replicas"_  | kubectl commands with namespace restrictions       |
+| **Knowledge-base automation** | _"Run the network troubleshooting guide"_        | Step-by-step decision tree execution               |
 
 ### Capability roadmap
 
-| Capability | Description | Status |
-|------------|-------------|--------|
-| **Workflow namespaces** | Group workflows into named collections for better organization as the system scales | Planned |
-| **Confirmation gates** | Require user confirmation before destructive operations (delete files, send emails) | Planned |
-| **Grammar overlap detection** | Detect when new workflow patterns conflict with existing rules before registration | Planned |
-| **Workflow sharing** | Export/import workflows between users or teams | Planned |
-| **Version history** | Track workflow edits with undo capability | Planned |
+| Capability                    | Description                                                                         | Status  |
+| ----------------------------- | ----------------------------------------------------------------------------------- | ------- |
+| **Workflow namespaces**       | Group workflows into named collections for better organization as the system scales | Planned |
+| **Confirmation gates**        | Require user confirmation before destructive operations (delete files, send emails) | Planned |
+| **Grammar overlap detection** | Detect when new workflow patterns conflict with existing rules before registration  | Planned |
+| **Workflow sharing**          | Export/import workflows between users or teams                                      | Planned |
+| **Version history**           | Track workflow edits with undo capability                                           | Planned |

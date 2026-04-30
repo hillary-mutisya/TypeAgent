@@ -6,10 +6,12 @@ read [browserAgent.md](../../../../docs/architecture/browserAgent.md) first.
 ## Prerequisites & Setup
 
 **See project-level docs for general setup:**
+
 - [ts/README.md](../../../../README.md) — Node/pnpm install, `.env` configuration, running shell/CLI
 - [ts/CLAUDE.md](../../../../CLAUDE.md) — Build commands, testing, code conventions
 
 **Browser-specific requirements:**
+
 - Chrome or Edge (latest) — Extension host
 - `.env` file at `TypeAgent/ts/.env` with Azure OpenAI API keys (ask team for config)
 
@@ -103,6 +105,7 @@ npm run build:extension:dev
 
 Start the dispatcher via shell or CLI (see [ts/README.md](../../../../README.md#running)).
 Once running with the extension loaded:
+
 - Extension badge turns green (connected)
 - Side panel shows "Connected" status
 - `@browser open google.com` in the shell/CLI should open a tab
@@ -119,6 +122,7 @@ Debug like any Node.js code. Use the "Shell (Main process)" VS Code launch
 config in `TypeAgent/ts/.vscode/launch.json`, or attach to port 9229.
 
 **Debug logging:**
+
 ```bash
 DEBUG=typeagent:browser:* pnpm run cli:dev
 DEBUG=typeagent:browser:serviceWorker pnpm run cli:dev
@@ -126,6 +130,7 @@ DEBUG=typeagent:webAgent:proxy pnpm run cli:dev
 ```
 
 **Key breakpoint files:**
+
 - `browserActionHandler.mts` — Action routing and execution
 - `agentWebSocketServer.mts` — Client connections and RPC
 - `externalBrowserControlClient.mts` — Outgoing RPC calls to extension
@@ -138,6 +143,7 @@ DEBUG=typeagent:webAgent:proxy pnpm run cli:dev
 4. DevTools opens for the service worker context
 
 **Common issues:**
+
 - Service worker goes idle after 30 seconds (MV3 limitation). The WebSocket
   keep-alive (20s interval) prevents this during normal operation.
 - After extension reload, the service worker restarts and re-establishes
@@ -155,6 +161,7 @@ but have their own JavaScript scope. MAIN world scripts
 (`webTypeAgentMain.js`, `uiEventsDispatcher.js`) run in the page's context.
 
 **Common issues:**
+
 - Content script not loaded: check URL matches manifest `matches` patterns
 - RPC not responding: service worker may have restarted — extension
   auto-reinjects content scripts on RPC failure
@@ -165,6 +172,7 @@ When running the shell, the Electron main process manages browser tabs.
 Use the "Shell (Main process)" VS Code launch config.
 
 **Key files:**
+
 - `packages/shell/src/main/browserViewManager.ts` — Tab management
 - `packages/shell/src/main/browserIpc.ts` — WebSocket bridge
 - `packages/shell/src/main/inlineBrowserControl.ts` — Direct browser control
@@ -172,6 +180,7 @@ Use the "Shell (Main process)" VS Code launch config.
 ### WebSocket traffic inspection
 
 Add logging or use the `DEBUG` environment variable:
+
 ```bash
 DEBUG=typeagent:browser:* pnpm run cli:dev
 ```
@@ -219,23 +228,23 @@ See [webagent-development.md](webagent-development.md) for a step-by-step guide.
 
 ## Key File Map
 
-| What you're looking for | Where to find it |
-| ----------------------- | ---------------- |
-| Action types and schemas | `src/agent/browserActionSchema.mts` |
-| Grammar rules (NL patterns) | `src/agent/browserSchema.agr` |
-| Main action handler/router | `src/agent/browserActionHandler.mts` |
-| BrowserControl interface | `src/common/browserControl.mts` |
-| RPC type definitions | `src/common/serviceTypes.mts` |
-| WebSocket server (agent side) | `src/agent/agentWebSocketServer.mts` |
-| RPC proxy to extension | `src/agent/rpc/externalBrowserControlClient.mts` |
-| Extension service worker entry | `src/extension/serviceWorker/index.ts` |
-| WebSocket client (extension) | `src/extension/serviceWorker/websocket.ts` |
-| Extension RPC handlers | `src/extension/serviceWorker/serviceWorkerRpcHandlers.ts` |
-| Browser control server (ext) | `src/extension/serviceWorker/externalBrowserControlServer.ts` |
-| Content script entry | `src/extension/contentScript/index.ts` |
-| DOM interaction | `src/extension/contentScript/elementInteraction.ts` |
-| Recording system | `src/extension/contentScript/recording/` |
-| Knowledge extraction | `src/agent/knowledge/` |
-| WebFlow system | `src/agent/webFlows/` |
-| WebAgent framework | `src/extension/webagent/` |
-| Electron tab manager | `packages/shell/src/main/browserViewManager.ts` |
+| What you're looking for        | Where to find it                                              |
+| ------------------------------ | ------------------------------------------------------------- |
+| Action types and schemas       | `src/agent/browserActionSchema.mts`                           |
+| Grammar rules (NL patterns)    | `src/agent/browserSchema.agr`                                 |
+| Main action handler/router     | `src/agent/browserActionHandler.mts`                          |
+| BrowserControl interface       | `src/common/browserControl.mts`                               |
+| RPC type definitions           | `src/common/serviceTypes.mts`                                 |
+| WebSocket server (agent side)  | `src/agent/agentWebSocketServer.mts`                          |
+| RPC proxy to extension         | `src/agent/rpc/externalBrowserControlClient.mts`              |
+| Extension service worker entry | `src/extension/serviceWorker/index.ts`                        |
+| WebSocket client (extension)   | `src/extension/serviceWorker/websocket.ts`                    |
+| Extension RPC handlers         | `src/extension/serviceWorker/serviceWorkerRpcHandlers.ts`     |
+| Browser control server (ext)   | `src/extension/serviceWorker/externalBrowserControlServer.ts` |
+| Content script entry           | `src/extension/contentScript/index.ts`                        |
+| DOM interaction                | `src/extension/contentScript/elementInteraction.ts`           |
+| Recording system               | `src/extension/contentScript/recording/`                      |
+| Knowledge extraction           | `src/agent/knowledge/`                                        |
+| WebFlow system                 | `src/agent/webFlows/`                                         |
+| WebAgent framework             | `src/extension/webagent/`                                     |
+| Electron tab manager           | `packages/shell/src/main/browserViewManager.ts`               |

@@ -15,28 +15,28 @@ The browser agent supports six interconnected capability areas. Each
 builds on the same multi-tier RPC infrastructure but serves a different
 user need:
 
-| Capability | User need | Key components |
-| ---------- | --------- | -------------- |
-| **Browser control** | "Open this page, click that link, scroll down" | Grammar, action handler, BrowserControl interface |
-| **Knowledge discovery** | "What did I read about X?" | Extraction pipeline, website-memory index, hybrid search |
-| **WebFlows** | "Record this checkout flow and replay it later" | Recording system, script generator, executor, dynamic grammar |
-| **Action discovery** | "What can I do on this page?" | Page analysis, dynamic agent registration |
-| **WebAgents** | "Fill in 3 across with HELLO" | In-page agent framework, site-specific handlers |
-| **PDF viewing** | "Open this PDF and highlight key sections" | PDF.js viewer, annotation system, knowledge extraction |
+| Capability              | User need                                       | Key components                                                |
+| ----------------------- | ----------------------------------------------- | ------------------------------------------------------------- |
+| **Browser control**     | "Open this page, click that link, scroll down"  | Grammar, action handler, BrowserControl interface             |
+| **Knowledge discovery** | "What did I read about X?"                      | Extraction pipeline, website-memory index, hybrid search      |
+| **WebFlows**            | "Record this checkout flow and replay it later" | Recording system, script generator, executor, dynamic grammar |
+| **Action discovery**    | "What can I do on this page?"                   | Page analysis, dynamic agent registration                     |
+| **WebAgents**           | "Fill in 3 across with HELLO"                   | In-page agent framework, site-specific handlers               |
+| **PDF viewing**         | "Open this PDF and highlight key sections"      | PDF.js viewer, annotation system, knowledge extraction        |
 
 ### Action categories
 
-| Category | Actions | Schema |
-| -------- | ------- | ------ |
-| **Core Browser** | `OpenWebPage`, `CloseWebPage`, `ScrollUp/Down`, `GoBack/Forward`, `ZoomIn/Out` | `browser` |
-| **Search** | `ChangeSearchProvider`, `OpenSearchResult`, `SearchImageAction` | `browser` |
-| **Content** | `CaptureScreenshot`, `ReadPageContent`, `GetWebsiteStats` | `browser` |
-| **Lookup** | `LookupAndAnswerInternet` | `browser.lookupAndAnswer` |
-| **External** | `OpenTab`, `CloseTab`, `SwitchToTab`, `AddToBookmarks` | `browser.external` |
-| **Discovery** | `DetectPageActions`, `SummarizePage`, `RegisterPageDynamicAgent` | `browser.actionDiscovery` |
-| **WebFlows** | `ListWebFlows`, `GenerateWebFlow`, `StartGoalDrivenTask` | `browser.webFlows` |
-| **Crossword** | `EnterText`, `GetClueValue` | Dynamic (per-site) |
-| **Commerce** | `SearchForProduct`, `AddToCart`, `FindNearbyStore` | Dynamic (per-site) |
+| Category         | Actions                                                                        | Schema                    |
+| ---------------- | ------------------------------------------------------------------------------ | ------------------------- |
+| **Core Browser** | `OpenWebPage`, `CloseWebPage`, `ScrollUp/Down`, `GoBack/Forward`, `ZoomIn/Out` | `browser`                 |
+| **Search**       | `ChangeSearchProvider`, `OpenSearchResult`, `SearchImageAction`                | `browser`                 |
+| **Content**      | `CaptureScreenshot`, `ReadPageContent`, `GetWebsiteStats`                      | `browser`                 |
+| **Lookup**       | `LookupAndAnswerInternet`                                                      | `browser.lookupAndAnswer` |
+| **External**     | `OpenTab`, `CloseTab`, `SwitchToTab`, `AddToBookmarks`                         | `browser.external`        |
+| **Discovery**    | `DetectPageActions`, `SummarizePage`, `RegisterPageDynamicAgent`               | `browser.actionDiscovery` |
+| **WebFlows**     | `ListWebFlows`, `GenerateWebFlow`, `StartGoalDrivenTask`                       | `browser.webFlows`        |
+| **Crossword**    | `EnterText`, `GetClueValue`                                                    | Dynamic (per-site)        |
+| **Commerce**     | `SearchForProduct`, `AddToCart`, `FindNearbyStore`                             | Dynamic (per-site)        |
 
 ---
 
@@ -49,25 +49,25 @@ interacting with elements, and reading content.
 
 `BrowserActions` (`browserActionSchema.mts`) defines 20+ action types:
 
-| Action | Parameters | Description |
-| ------ | ---------- | ----------- |
-| `OpenWebPage` | `site: string`, `tab?: "new"\|"current"\|"existing"` | Navigate to URL or resolve site name |
-| `CloseWebPage` | — | Close current tab |
-| `CloseAllWebPages` | — | Close all tabs |
-| `ChangeTabs` | `tabDescription: string`, `tabIndex?: number` | Switch active tab |
-| `GoBack` / `GoForward` | — | History navigation |
-| `ScrollDown` / `ScrollUp` | — | Scroll page |
-| `FollowLinkByText` | `keywords: string`, `openInNewTab?: boolean` | Click link matching text |
-| `FollowLinkByPosition` | `position: number`, `openInNewTab?: boolean` | Click nth link |
-| `ZoomIn` / `ZoomOut` / `ZoomReset` | — | Zoom control |
-| `ReadPageContent` / `StopReadPageContent` | — | Text-to-speech |
-| `CaptureScreenshot` | — | Capture page as PNG |
-| `ReloadPage` | — | Refresh current page |
-| `ChangeSearchProvider` | `name: string` | Switch search engine |
-| `OpenSearchResult` | `position?`, `title?`, `url?`, `openInNewTab?` | Open previous search result |
-| `SearchImageAction` | `searchTerm`, `numImages` | Web image search |
-| `ExecuteAdHocScript` | `script`, `params?`, `timeout?` | Run inline WebFlow script |
-| `GetWebsiteStats` | `groupBy?`, `limit?` | Index statistics |
+| Action                                    | Parameters                                           | Description                          |
+| ----------------------------------------- | ---------------------------------------------------- | ------------------------------------ |
+| `OpenWebPage`                             | `site: string`, `tab?: "new"\|"current"\|"existing"` | Navigate to URL or resolve site name |
+| `CloseWebPage`                            | —                                                    | Close current tab                    |
+| `CloseAllWebPages`                        | —                                                    | Close all tabs                       |
+| `ChangeTabs`                              | `tabDescription: string`, `tabIndex?: number`        | Switch active tab                    |
+| `GoBack` / `GoForward`                    | —                                                    | History navigation                   |
+| `ScrollDown` / `ScrollUp`                 | —                                                    | Scroll page                          |
+| `FollowLinkByText`                        | `keywords: string`, `openInNewTab?: boolean`         | Click link matching text             |
+| `FollowLinkByPosition`                    | `position: number`, `openInNewTab?: boolean`         | Click nth link                       |
+| `ZoomIn` / `ZoomOut` / `ZoomReset`        | —                                                    | Zoom control                         |
+| `ReadPageContent` / `StopReadPageContent` | —                                                    | Text-to-speech                       |
+| `CaptureScreenshot`                       | —                                                    | Capture page as PNG                  |
+| `ReloadPage`                              | —                                                    | Refresh current page                 |
+| `ChangeSearchProvider`                    | `name: string`                                       | Switch search engine                 |
+| `OpenSearchResult`                        | `position?`, `title?`, `url?`, `openInNewTab?`       | Open previous search result          |
+| `SearchImageAction`                       | `searchTerm`, `numImages`                            | Web image search                     |
+| `ExecuteAdHocScript`                      | `script`, `params?`, `timeout?`                      | Run inline WebFlow script            |
+| `GetWebsiteStats`                         | `groupBy?`, `limit?`                                 | Index statistics                     |
 
 ### Grammar patterns
 
@@ -113,11 +113,13 @@ Each resolver can be enabled/disabled via `@browser resolver` commands.
 
 2. **Dispatcher** (`actionDispatcher.mts`): Grammar matcher splits input
    into two actions:
+
    - `{ actionName: "OpenWebPage", parameters: { site: "nytimes.com" } }`
    - `{ actionName: "ScrollDown", parameters: {} }`
 
 3. **Agent** (`browserActionHandler.mts`): `executeBrowserAction()` called
    for `OpenWebPage`:
+
    - `resolveWebPage("nytimes.com")` → tries resolver chain
    - Keyword resolver matches → `"https://www.nytimes.com"`
 
@@ -131,6 +133,7 @@ Each resolver can be enabled/disabled via `@browser resolver` commands.
 
 7. **Agent**: First action completes, `executeBrowserAction()` called for
    `ScrollDown`:
+
    - `browserControl.scrollDown()` → `browserControlRpc.invoke("scrollDown")`
 
 8. **Extension** (`externalBrowserControlServer.ts`): RPC handler receives
@@ -146,25 +149,26 @@ Each resolver can be enabled/disabled via `@browser resolver` commands.
 
 #### What can go wrong
 
-| Failure point | Symptom | Recovery |
-| ------------- | ------- | -------- |
-| Resolver chain fails | "Could not resolve site" error | Check resolver settings, try direct URL |
-| WebSocket disconnected | Badge turns red, action hangs | Agent auto-reconnects in 5 seconds |
-| Content script not loaded | Scroll action fails | Extension auto-injects on RPC failure |
-| Tab not active | Scroll targets wrong tab | `switchTabs()` first |
+| Failure point             | Symptom                        | Recovery                                |
+| ------------------------- | ------------------------------ | --------------------------------------- |
+| Resolver chain fails      | "Could not resolve site" error | Check resolver settings, try direct URL |
+| WebSocket disconnected    | Badge turns red, action hangs  | Agent auto-reconnects in 5 seconds      |
+| Content script not loaded | Scroll action fails            | Extension auto-injects on RPC failure   |
+| Tab not active            | Scroll targets wrong tab       | `switchTabs()` first                    |
 
 ### Content access methods
 
 The agent can read page content in three ways, each with different
 fidelity and cost:
 
-| Method | What it returns | When to use |
-| ------ | --------------- | ----------- |
-| `getPageTextContent()` | `document.body.innerText` | Quick text extraction, search result parsing |
+| Method                                                 | What it returns                | When to use                                    |
+| ------------------------------------------------------ | ------------------------------ | ---------------------------------------------- |
+| `getPageTextContent()`                                 | `document.body.innerText`      | Quick text extraction, search result parsing   |
 | `getHtmlFragments(useTimestampIds?, compressionMode?)` | DOM snapshot as fragment array | Knowledge extraction, page analysis, recording |
-| `captureScreenshot()` | Base64 PNG via CDP | Visual verification, debugging |
+| `captureScreenshot()`                                  | Base64 PNG via CDP             | Visual verification, debugging                 |
 
 The `compressionMode` parameter controls HTML fragment size:
+
 - `"None"` — Full HTML
 - `"knowledgeExtraction"` — Stripped to semantic content
 
@@ -234,12 +238,12 @@ flowchart LR
 
 ### Extraction modes
 
-| Mode | AI involvement | Output | Cost |
-| ---- | -------------- | ------ | ---- |
-| `basic` | None | Structured DOM extraction only | Free |
-| `content` | AI content analysis | Entities, relationships, summary | Medium |
-| `summary` | AI on pre-summarized content | Same as content, less input | Lower |
-| `full` | Complete AI extraction | All of the above + suggested questions | Highest |
+| Mode      | AI involvement               | Output                                 | Cost    |
+| --------- | ---------------------------- | -------------------------------------- | ------- |
+| `basic`   | None                         | Structured DOM extraction only         | Free    |
+| `content` | AI content analysis          | Entities, relationships, summary       | Medium  |
+| `summary` | AI on pre-summarized content | Same as content, less input            | Lower   |
+| `full`    | Complete AI extraction       | All of the above + suggested questions | Highest |
 
 ### Auto-indexing
 
@@ -255,12 +259,12 @@ The content script can automatically index pages as the user browses:
 
 The knowledge index supports multiple search strategies:
 
-| Strategy | Method | Use case |
-| -------- | ------ | -------- |
-| **Keyword** | `searchWebMemories(query)` | General text search across all indexed pages |
-| **Entity** | `searchByEntities(entities[])` | Find pages mentioning specific entities |
-| **Topic** | `searchByTopics(topics[])` | Find pages about specific topics |
-| **Hybrid** | `hybridSearch(query)` | Combines keyword + entity + topic for best recall |
+| Strategy    | Method                         | Use case                                          |
+| ----------- | ------------------------------ | ------------------------------------------------- |
+| **Keyword** | `searchWebMemories(query)`     | General text search across all indexed pages      |
+| **Entity**  | `searchByEntities(entities[])` | Find pages mentioning specific entities           |
+| **Topic**   | `searchByTopics(topics[])`     | Find pages about specific topics                  |
+| **Hybrid**  | `hybridSearch(query)`          | Combines keyword + entity + topic for best recall |
 
 ### Knowledge UI
 
@@ -288,6 +292,7 @@ The extension provides several views for browsing extracted knowledge:
    filter.
 
 5. **Agent** (`searchWebMemories.mts`): `hybridSearch({ query })`:
+
    - Keyword search: finds pages containing "climate change"
    - Entity search: finds pages with "climate change" entity
    - Topic search: finds pages under climate/environment topics
@@ -309,11 +314,11 @@ The extension provides several views for browsing extracted knowledge:
 
 #### What can go wrong
 
-| Failure point | Symptom | Recovery |
-| ------------- | ------- | -------- |
-| Knowledge index empty | "No results found" | User hasn't indexed any pages yet |
-| LLM timeout | Answer generation hangs | Retry, check API keys |
-| Token budget exceeded | Incomplete answer | Reduce result count, filter domains |
+| Failure point         | Symptom                 | Recovery                            |
+| --------------------- | ----------------------- | ----------------------------------- |
+| Knowledge index empty | "No results found"      | User hasn't indexed any pages yet   |
+| LLM timeout           | Answer generation hangs | Retry, check API keys               |
+| Token budget exceeded | Incomplete answer       | Reduce result count, filter domains |
 
 ---
 
@@ -373,6 +378,7 @@ flowchart TB
 The recording system captures user interactions in the content script:
 
 **Recordable actions** (`recording/actions.ts`):
+
 - `recordClick` — Element ID, coordinates, computed CSS selector, bounding box
 - `recordInput` — Text value, target element selector
 - `recordTextEntry` — Keystroke data
@@ -380,6 +386,7 @@ The recording system captures user interactions in the content script:
 - `recordNavigation` — URL changes, page unload
 
 **Recorded action structure:**
+
 ```typescript
 {
     id: number,
@@ -395,11 +402,13 @@ The recording system captures user interactions in the content script:
 ```
 
 **Capture data** (`recording/capture.ts`):
+
 - Screenshots with annotated element boundaries
 - HTML fragments with configurable compression
 - DOM state snapshots
 
 **State management** (`recording/index.ts`):
+
 - `recording` flag, `recordedActions` array, `actionIndex` counter
 - Periodic saves to Chrome storage for session resilience
 - State restoration from storage on extension reload
@@ -469,6 +478,7 @@ The `scriptExecutor.mts` runs WebFlow scripts:
 ### Dynamic grammar registration
 
 When a WebFlow is stored, the `WebFlowStore` generates:
+
 - Grammar rules from `grammarPatterns` (for NL matching)
 - TypeScript action schemas from parameter definitions (for validation)
 
@@ -478,14 +488,14 @@ invocation without static grammar changes.
 
 ### WebFlow actions
 
-| Action | Description |
-| ------ | ----------- |
-| `ListWebFlows` | List saved flows (site/global/all) |
-| `DeleteWebFlow` | Remove a flow |
-| `EditWebFlowScope` | Change flow scope (site → global or vice versa) |
-| `GenerateWebFlow` | Create flow from action trace |
-| `GenerateWebFlowFromRecording` | Create flow from recorded user steps |
-| `StartGoalDrivenTask` | Execute AI-driven workflow with reasoning agent |
+| Action                         | Description                                     |
+| ------------------------------ | ----------------------------------------------- |
+| `ListWebFlows`                 | List saved flows (site/global/all)              |
+| `DeleteWebFlow`                | Remove a flow                                   |
+| `EditWebFlowScope`             | Change flow scope (site → global or vice versa) |
+| `GenerateWebFlow`              | Create flow from action trace                   |
+| `GenerateWebFlowFromRecording` | Create flow from recorded user steps            |
+| `StartGoalDrivenTask`          | Execute AI-driven workflow with reasoning agent |
 
 ### End-to-end example: recording a checkout flow
 
@@ -525,13 +535,13 @@ invocation without static grammar changes.
 
 #### What can go wrong
 
-| Failure point | Symptom | Recovery |
-| ------------- | ------- | -------- |
-| Service worker restart mid-recording | Actions partially lost | Recording persists to chrome.storage.session; auto-restores on restart |
-| Script generation LLM fails | No WebFlow created | Retry generation, check API keys |
-| Script validation fails | "Forbidden operation" error | Review generated script, regenerate with simpler recording |
-| CSS selectors change | Replay fails to find element | Re-record flow on updated site |
-| Multi-page flow navigation | Continuation lost | Flow stores state in content script storage |
+| Failure point                        | Symptom                      | Recovery                                                               |
+| ------------------------------------ | ---------------------------- | ---------------------------------------------------------------------- |
+| Service worker restart mid-recording | Actions partially lost       | Recording persists to chrome.storage.session; auto-restores on restart |
+| Script generation LLM fails          | No WebFlow created           | Retry generation, check API keys                                       |
+| Script validation fails              | "Forbidden operation" error  | Review generated script, regenerate with simpler recording             |
+| CSS selectors change                 | Replay fails to find element | Re-record flow on updated site                                         |
+| Multi-page flow navigation           | Continuation lost            | Flow stores state in content script storage                            |
 
 ---
 
@@ -571,14 +581,14 @@ interactions and register them as actions.
 
 ### Discovery actions
 
-| Action | Description |
-| ------ | ----------- |
-| `DetectPageActions` | Analyze page and detect available actions |
-| `SummarizePage` | Generate page summary with LLM |
-| `RegisterPageDynamicAgent` | Register site-specific agent from detected actions |
-| `CreateWebFlowFromRecording` | Convert recording to reusable flow |
-| `GetWebFlowsForDomain` / `GetAllWebFlows` | List available flows |
-| `DeleteWebFlow` | Remove a flow |
+| Action                                    | Description                                        |
+| ----------------------------------------- | -------------------------------------------------- |
+| `DetectPageActions`                       | Analyze page and detect available actions          |
+| `SummarizePage`                           | Generate page summary with LLM                     |
+| `RegisterPageDynamicAgent`                | Register site-specific agent from detected actions |
+| `CreateWebFlowFromRecording`              | Convert recording to reusable flow                 |
+| `GetWebFlowsForDomain` / `GetAllWebFlows` | List available flows                               |
+| `DeleteWebFlow`                           | Remove a flow                                      |
 
 ### Dynamic agent lifecycle
 
@@ -649,28 +659,30 @@ enabling structured queries against paleontological data.
 **Supported sites:** WSJ, NYT, Universal Uclick, Seattle Times, Denver Post
 
 **Actions:**
+
 ```typescript
 type CrosswordActions = EnterText | GetClueValue;
 
 type EnterText = {
-    actionName: "enterText";
-    parameters: {
-        value: string;
-        clueNumber: number;
-        clueDirection: "across" | "down";
-    };
+  actionName: "enterText";
+  parameters: {
+    value: string;
+    clueNumber: number;
+    clueDirection: "across" | "down";
+  };
 };
 
 type GetClueValue = {
-    actionName: "getClueValue";
-    parameters: {
-        clueNumber: number;
-        clueDirection: "across" | "down";
-    };
+  actionName: "getClueValue";
+  parameters: {
+    clueNumber: number;
+    clueDirection: "across" | "down";
+  };
 };
 ```
 
 **Schema extraction** (`crosswordSchemaExtractor.mts`):
+
 - Detects crossword grid on page
 - Extracts clue numbers, text, and CSS selectors
 - Uses parallel fragment checking for efficiency
@@ -698,6 +710,7 @@ retail sites.
 #### WebFlow agent
 
 **Responsibilities:**
+
 - Caches flows locally for continuation support
 - Listens for server refresh messages to update local cache
 - Executes continuation (multi-page) flows in browser's MAIN world
@@ -724,6 +737,7 @@ Dispatcher
 ```
 
 Messages are relayed through the service worker's port protocol:
+
 - `webAgent/register` — Agent registration with name, URL, schema
 - `webAgent/disconnect` — Agent cleanup on page unload
 - All other messages — Bidirectional relay between WebAgent and dispatcher
@@ -877,40 +891,40 @@ query intent, rank results, and generate enhanced answers with follow-ups.
 
 ### Query intent detection
 
-| Intent | Example Query | Behavior |
-| ------ | ------------- | -------- |
-| `find_latest` | "What's the latest on AI?" | Prioritize recency, newest content first |
-| `find_earliest` | "When did I first read about X?" | Sort by oldest, show historical context |
-| `find_most_frequent` | "What do I read most about?" | Aggregate by topic/domain frequency |
-| `summarize` | "Summarize what I know about Y" | Synthesize across multiple pages |
-| `find_specific` | "Find the article about Z" | Precision-focused, exact matching |
+| Intent               | Example Query                    | Behavior                                 |
+| -------------------- | -------------------------------- | ---------------------------------------- |
+| `find_latest`        | "What's the latest on AI?"       | Prioritize recency, newest content first |
+| `find_earliest`      | "When did I first read about X?" | Sort by oldest, show historical context  |
+| `find_most_frequent` | "What do I read most about?"     | Aggregate by topic/domain frequency      |
+| `summarize`          | "Summarize what I know about Y"  | Synthesize across multiple pages         |
+| `find_specific`      | "Find the article about Z"       | Precision-focused, exact matching        |
 
 ### Key types
 
 ```typescript
 interface QueryAnalysis {
-    intent: { type: string; description: string };
-    entities: string[];
-    topics: string[];
-    temporalFilter?: { start?: string; end?: string };
-    confidence: number;
+  intent: { type: string; description: string };
+  entities: string[];
+  topics: string[];
+  temporalFilter?: { start?: string; end?: string };
+  confidence: number;
 }
 
 interface SearchContext {
-    totalResults: number;
-    results: Array<{ title, domain, snippet, url, visitDate }>;
-    patterns: {
-        dominantDomains: Array<{ domain: string; count: number }>;
-        timeRange: { earliest: string; latest: string };
-        topEntities: string[];
-        topTopics: string[];
-    };
+  totalResults: number;
+  results: Array<{ title; domain; snippet; url; visitDate }>;
+  patterns: {
+    dominantDomains: Array<{ domain: string; count: number }>;
+    timeRange: { earliest: string; latest: string };
+    topEntities: string[];
+    topTopics: string[];
+  };
 }
 
 interface AnswerEnhancement {
-    summary: { text: string; keyFindings: string[]; sourceSummary: string };
-    followups: Array<{ question, rationale, expectedInsight }>;
-    confidence: number;
+  summary: { text: string; keyFindings: string[]; sourceSummary: string };
+  followups: Array<{ question; rationale; expectedInsight }>;
+  confidence: number;
 }
 ```
 
@@ -921,27 +935,32 @@ interface AnswerEnhancement {
 1. **Shell**: Receives query, routes to browser agent.
 
 2. **Agent** (`search/queryAnalyzer.mts`): `QueryAnalyzer.analyze()`:
+
    - Intent: `find_specific` with temporal filter
    - Entities: `["climate change"]`
    - Temporal filter: `{ start: "2026-03-29", end: "2026-04-29" }`
 
 3. **Agent** (`searchWebMemories.mts`): `hybridSearch()` with token budget:
+
    - Keyword search: "climate change"
    - Entity search: `["climate change"]`
    - Topic search: `["climate", "environment", "science"]`
    - Results merged with unique URLs
 
 4. **Agent** (`search/utils/metadataRanker.mts`): `MetadataRanker`:
+
    - Filters by date range
    - Ranks by relevance (0.5) + recency (0.3) + quality (0.2)
    - Selects top 10 results within 64K char budget
 
 5. **Agent** (`search/utils/contextBuilder.mts`): `ContextBuilder`:
+
    - `dominantDomains`: `["nytimes.com", "bbc.com"]`
    - `timeRange`: `"2026-03-30"` to `"2026-04-25"`
    - `topEntities`: `["IPCC", "carbon emissions", "Paris Agreement"]`
 
 6. **Agent** (`search/answerGenerator.mts`): Single LLM call via TypeChat:
+
    - System prompt includes intent-specific guidance
    - Input: SearchContext + original query
    - Output: AnswerEnhancement
@@ -954,21 +973,21 @@ interface AnswerEnhancement {
 
 #### What can go wrong
 
-| Failure point | Symptom | Recovery |
-| ------------- | ------- | -------- |
-| No pages in date range | "No matching results" | Widen temporal filter |
-| QueryAnalyzer confidence low | Generic search (no intent) | Rephrase query |
-| LLM rate limit | Answer generation fails | Retry with backoff |
-| Token budget exceeded | Truncated context | Increase budget or filter domains |
+| Failure point                | Symptom                    | Recovery                          |
+| ---------------------------- | -------------------------- | --------------------------------- |
+| No pages in date range       | "No matching results"      | Widen temporal filter             |
+| QueryAnalyzer confidence low | Generic search (no intent) | Rephrase query                    |
+| LLM rate limit               | Answer generation fails    | Retry with backoff                |
+| Token budget exceeded        | Truncated context          | Increase budget or filter domains |
 
 ### Key source files
 
-| File | Purpose |
-| ---- | ------- |
-| `searchWebMemories.mts` | Primary search functions |
-| `search/queryAnalyzer.mts` | Query intent detection |
-| `search/answerGenerator.mts` | LLM-based answer generation |
-| `search/utils/metadataRanker.mts` | Result ranking |
-| `search/utils/contextBuilder.mts` | Context assembly |
-| `search/queryEnhancementAdapter.mts` | Query expansion |
-| `search/answerEnhancementAdapter.mts` | Answer formatting |
+| File                                  | Purpose                     |
+| ------------------------------------- | --------------------------- |
+| `searchWebMemories.mts`               | Primary search functions    |
+| `search/queryAnalyzer.mts`            | Query intent detection      |
+| `search/answerGenerator.mts`          | LLM-based answer generation |
+| `search/utils/metadataRanker.mts`     | Result ranking              |
+| `search/utils/contextBuilder.mts`     | Context assembly            |
+| `search/queryEnhancementAdapter.mts`  | Query expansion             |
+| `search/answerEnhancementAdapter.mts` | Answer formatting           |

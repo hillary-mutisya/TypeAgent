@@ -15,6 +15,7 @@ actions (open, click, scroll), WebAgents understand a specific site's
 structure and provide typed, high-level actions.
 
 **Built-in WebAgents:**
+
 - **Crossword** — Solve crossword puzzles (WSJ, NYT, etc.)
 - **Instacart** — Search products, manage cart, handle recipes
 - **Commerce** — Generic e-commerce automation (Amazon, Walmart, etc.)
@@ -38,25 +39,25 @@ Create `extension/webagent/recipesite/recipeSiteSchema.ts`:
 export type RecipeSiteActions = SearchRecipe | SaveRecipe | GetIngredients;
 
 export type SearchRecipe = {
-    actionName: "searchRecipe";
-    parameters: {
-        query: string;
-        cuisine?: string;
-    };
+  actionName: "searchRecipe";
+  parameters: {
+    query: string;
+    cuisine?: string;
+  };
 };
 
 export type SaveRecipe = {
-    actionName: "saveRecipe";
-    parameters: {
-        recipeName: string;
-    };
+  actionName: "saveRecipe";
+  parameters: {
+    recipeName: string;
+  };
 };
 
 export type GetIngredients = {
-    actionName: "getIngredients";
-    parameters: {
-        recipeName: string;
-    };
+  actionName: "getIngredients";
+  parameters: {
+    recipeName: string;
+  };
 };
 ```
 
@@ -71,96 +72,91 @@ Create `extension/webagent/recipesite/RecipeSiteWebAgent.ts`:
 import { WebAgentContext } from "../WebAgentContext";
 
 export class RecipeSiteWebAgent {
-    private context: WebAgentContext;
+  private context: WebAgentContext;
 
-    constructor(context: WebAgentContext) {
-        this.context = context;
-    }
+  constructor(context: WebAgentContext) {
+    this.context = context;
+  }
 
-    async handleAction(action: any): Promise<any> {
-        switch (action.actionName) {
-            case "searchRecipe":
-                return this.searchRecipe(
-                    action.parameters.query,
-                    action.parameters.cuisine,
-                );
-            case "saveRecipe":
-                return this.saveRecipe(action.parameters.recipeName);
-            case "getIngredients":
-                return this.getIngredients(action.parameters.recipeName);
-            default:
-                throw new Error(`Unknown action: ${action.actionName}`);
-        }
-    }
-
-    private async searchRecipe(
-        query: string,
-        cuisine?: string,
-    ): Promise<any> {
-        // Find the search input on the page
-        const searchInput = document.querySelector(
-            'input[name="search"], input[type="search"], #recipe-search',
+  async handleAction(action: any): Promise<any> {
+    switch (action.actionName) {
+      case "searchRecipe":
+        return this.searchRecipe(
+          action.parameters.query,
+          action.parameters.cuisine,
         );
-        if (!searchInput) {
-            throw new Error("Search input not found on page");
-        }
+      case "saveRecipe":
+        return this.saveRecipe(action.parameters.recipeName);
+      case "getIngredients":
+        return this.getIngredients(action.parameters.recipeName);
+      default:
+        throw new Error(`Unknown action: ${action.actionName}`);
+    }
+  }
 
-        // Clear and type the query
-        (searchInput as HTMLInputElement).value = "";
-        (searchInput as HTMLInputElement).value = query;
-        searchInput.dispatchEvent(new Event("input", { bubbles: true }));
-
-        // Submit the search
-        const form = searchInput.closest("form");
-        if (form) {
-            form.submit();
-        }
-
-        return { success: true, query };
+  private async searchRecipe(query: string, cuisine?: string): Promise<any> {
+    // Find the search input on the page
+    const searchInput = document.querySelector(
+      'input[name="search"], input[type="search"], #recipe-search',
+    );
+    if (!searchInput) {
+      throw new Error("Search input not found on page");
     }
 
-    private async saveRecipe(recipeName: string): Promise<any> {
-        // Find the save/favorite button near the recipe title
-        const recipeHeading = Array.from(
-            document.querySelectorAll("h1, h2"),
-        ).find((el) =>
-            el.textContent?.toLowerCase().includes(recipeName.toLowerCase()),
-        );
+    // Clear and type the query
+    (searchInput as HTMLInputElement).value = "";
+    (searchInput as HTMLInputElement).value = query;
+    searchInput.dispatchEvent(new Event("input", { bubbles: true }));
 
-        if (!recipeHeading) {
-            throw new Error(`Recipe "${recipeName}" not found on page`);
-        }
-
-        const saveButton = recipeHeading
-            .closest("article, section, .recipe-card")
-            ?.querySelector(
-                'button[aria-label*="save"], button[aria-label*="favorite"], .save-btn',
-            );
-
-        if (saveButton) {
-            (saveButton as HTMLElement).click();
-            return { success: true, recipeName };
-        }
-
-        throw new Error(`Save button not found for "${recipeName}"`);
+    // Submit the search
+    const form = searchInput.closest("form");
+    if (form) {
+      form.submit();
     }
 
-    private async getIngredients(recipeName: string): Promise<any> {
-        // Extract ingredients list from page
-        const ingredientsList = document.querySelector(
-            '.ingredients, [class*="ingredient"], ul[aria-label*="ingredient"]',
-        );
+    return { success: true, query };
+  }
 
-        if (!ingredientsList) {
-            throw new Error("Ingredients list not found");
-        }
+  private async saveRecipe(recipeName: string): Promise<any> {
+    // Find the save/favorite button near the recipe title
+    const recipeHeading = Array.from(document.querySelectorAll("h1, h2")).find(
+      (el) => el.textContent?.toLowerCase().includes(recipeName.toLowerCase()),
+    );
 
-        const ingredients = Array.from(
-            ingredientsList.querySelectorAll("li"),
-        ).map((li) => li.textContent?.trim());
-
-        return { recipeName, ingredients };
+    if (!recipeHeading) {
+      throw new Error(`Recipe "${recipeName}" not found on page`);
     }
+
+    const saveButton = recipeHeading
+      .closest("article, section, .recipe-card")
+      ?.querySelector(
+        'button[aria-label*="save"], button[aria-label*="favorite"], .save-btn',
+      );
+
+    if (saveButton) {
+      (saveButton as HTMLElement).click();
+      return { success: true, recipeName };
+    }
+
+    throw new Error(`Save button not found for "${recipeName}"`);
+  }
+
+  private async getIngredients(recipeName: string): Promise<any> {
+    // Extract ingredients list from page
+    const ingredientsList = document.querySelector(
+      '.ingredients, [class*="ingredient"], ul[aria-label*="ingredient"]',
+    );
+
+    if (!ingredientsList) {
+      throw new Error("Ingredients list not found");
+    }
+
+    const ingredients = Array.from(ingredientsList.querySelectorAll("li")).map(
+      (li) => li.textContent?.trim(),
+    );
+
+    return { recipeName, ingredients };
+  }
 }
 ```
 
@@ -178,27 +174,27 @@ import { WebAgentContext } from "../webagent/WebAgentContext";
 const AGENT_NAME = "browser.recipesite";
 
 function initialize() {
-    const context = new WebAgentContext(AGENT_NAME);
+  const context = new WebAgentContext(AGENT_NAME);
 
-    const agent = new RecipeSiteWebAgent(context);
+  const agent = new RecipeSiteWebAgent(context);
 
-    // Register with the dispatcher
-    context.register({
-        name: AGENT_NAME,
-        description: "Recipe site assistant",
-        schema: {
-            // The action types the agent handles
-            actionTypes: ["searchRecipe", "saveRecipe", "getIngredients"],
-        },
-        handler: (action: any) => agent.handleAction(action),
-    });
+  // Register with the dispatcher
+  context.register({
+    name: AGENT_NAME,
+    description: "Recipe site assistant",
+    schema: {
+      // The action types the agent handles
+      actionTypes: ["searchRecipe", "saveRecipe", "getIngredients"],
+    },
+    handler: (action: any) => agent.handleAction(action),
+  });
 }
 
 // Initialize when DOM is ready
 if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initialize);
+  document.addEventListener("DOMContentLoaded", initialize);
 } else {
-    initialize();
+  initialize();
 }
 ```
 
@@ -230,18 +226,18 @@ Add URL patterns to `src/extension/manifest.json`:
 
 ```json
 {
-    "content_scripts": [
-        {
-            "matches": [
-                "https://www.allrecipes.com/*",
-                "https://www.food.com/*",
-                "https://cooking.nytimes.com/*"
-            ],
-            "js": ["sites/recipesite.js"],
-            "world": "MAIN",
-            "run_at": "document_idle"
-        }
-    ]
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.allrecipes.com/*",
+        "https://www.food.com/*",
+        "https://cooking.nytimes.com/*"
+      ],
+      "js": ["sites/recipesite.js"],
+      "world": "MAIN",
+      "run_at": "document_idle"
+    }
+  ]
 }
 ```
 
@@ -283,6 +279,7 @@ Dispatcher
 ```
 
 When a user says "search for chocolate cake recipe":
+
 ```
 Dispatcher matches grammar → { actionName: "searchRecipe", parameters: { query: "chocolate cake" } }
   ↓ Routes to dynamic agent "browser.recipesite"
@@ -299,12 +296,12 @@ RecipeSiteWebAgent.handleAction()
 The WebAgent connects via `chrome.runtime.connect({ name: "typeagent" })`.
 Messages use these methods:
 
-| Method | Direction | Purpose |
-| ------ | --------- | ------- |
-| `webAgent/register` | WebAgent → Dispatcher | Register agent with name, schema, grammar |
-| `webAgent/disconnect` | WebAgent → Dispatcher | Deregister on page unload |
-| (action name) | Dispatcher → WebAgent | Execute an action |
-| (response) | WebAgent → Dispatcher | Return action result |
+| Method                | Direction             | Purpose                                   |
+| --------------------- | --------------------- | ----------------------------------------- |
+| `webAgent/register`   | WebAgent → Dispatcher | Register agent with name, schema, grammar |
+| `webAgent/disconnect` | WebAgent → Dispatcher | Deregister on page unload                 |
+| (action name)         | Dispatcher → WebAgent | Execute an action                         |
+| (response)            | WebAgent → Dispatcher | Return action result                      |
 
 ---
 
@@ -324,6 +321,7 @@ The crossword agent demonstrates several advanced patterns:
   delays to detect when the crossword puzzle is loaded
 
 Key files:
+
 - `extension/webagent/crossword/CrosswordWebAgent.ts`
 - `agent/crosswordSchemaExtractor.mts`
 
@@ -339,6 +337,7 @@ The Instacart agent demonstrates component-based page interaction:
   recipes, store selection
 
 Key files:
+
 - `extension/webagent/instacart/InstacartWebAgent.ts`
 
 ### WebFlow agent patterns
@@ -353,6 +352,7 @@ The WebFlow agent bridges server-side flows with in-page execution:
   cross-navigation flows
 
 Key files:
+
 - `extension/webagent/webflow/WebFlowAgent.ts`
 - `extension/webagent/webflow/webFlowBrowserAdapter.ts`
 

@@ -65,11 +65,13 @@ redirect users to the custom PDF viewer instead of the browser's built-in
 PDF viewer.
 
 **Detection triggers:**
+
 - Link clicks ending in `.pdf`
 - Direct navigation to PDF URLs
 - PDF content-type responses
 
 **Interception flow:**
+
 ```
 1. User clicks PDF link or navigates to PDF URL
 2. pdfInterceptor checks WebSocket connection status
@@ -85,9 +87,11 @@ experiences when the agent is offline.
 ## PDF Viewer Components
 
 ### pdfViewer.ts
+
 Main PDF rendering using PDF.js library (`pdfjs-dist`).
 
 **Capabilities:**
+
 - Multi-page document rendering
 - Page navigation (scroll, jump to page)
 - Zoom controls
@@ -95,23 +99,28 @@ Main PDF rendering using PDF.js library (`pdfjs-dist`).
 - Annotation layer overlay
 
 ### annotationManager.ts
+
 Manages PDF annotations stored separately from the document.
 
 **Annotation types:**
+
 - Highlights (text selection highlights)
 - Notes (point annotations with text)
 - Rectangles (area highlights)
 
 **Operations:**
+
 - `createAnnotation(type, position, content)`
 - `updateAnnotation(id, changes)`
 - `deleteAnnotation(id)`
 - `getAnnotationsForPage(pageNumber)`
 
 ### textSelectionManager.ts
+
 Handles text selection and conversion to annotations.
 
 **Flow:**
+
 ```
 1. User selects text in PDF
 2. textSelectionManager captures selection range
@@ -120,9 +129,11 @@ Handles text selection and conversion to annotations.
 ```
 
 ### pdfJSHighlightManager.ts
+
 Renders highlight annotations using PDF.js highlight plugin.
 
 **Features:**
+
 - Color-coded highlights
 - Hover tooltips
 - Click-to-edit functionality
@@ -130,35 +141,40 @@ Renders highlight annotations using PDF.js highlight plugin.
 ## PDF Server
 
 ### Express Server Setup
+
 The PDF server runs as part of the browser agent's view server
 (`views/server/server.mts`).
 
 **Configuration:**
+
 - CORS enabled for extension origin
 - Rate limiting via `express-rate-limit`
 - SSE support for real-time annotation updates
 
 ### REST API Endpoints
 
-| Method | Endpoint | Purpose |
-| ------ | -------- | ------- |
-| GET | `/pdf/document/:docId` | Get document metadata |
-| GET | `/pdf/document/:docId/annotations` | List annotations |
-| POST | `/pdf/document/:docId/annotations` | Create annotation |
-| PUT | `/pdf/document/:docId/annotations/:id` | Update annotation |
-| DELETE | `/pdf/document/:docId/annotations/:id` | Delete annotation |
-| GET | `/pdf/url-mapping` | Get document ID for URL |
-| POST | `/pdf/url-mapping` | Create URL → document mapping |
+| Method | Endpoint                               | Purpose                       |
+| ------ | -------------------------------------- | ----------------------------- |
+| GET    | `/pdf/document/:docId`                 | Get document metadata         |
+| GET    | `/pdf/document/:docId/annotations`     | List annotations              |
+| POST   | `/pdf/document/:docId/annotations`     | Create annotation             |
+| PUT    | `/pdf/document/:docId/annotations/:id` | Update annotation             |
+| DELETE | `/pdf/document/:docId/annotations/:id` | Delete annotation             |
+| GET    | `/pdf/url-mapping`                     | Get document ID for URL       |
+| POST   | `/pdf/url-mapping`                     | Create URL → document mapping |
 
 ### SSE Manager
+
 Real-time updates for collaborative annotation (future feature).
 
 **Events:**
+
 - `annotation:created` — New annotation added
 - `annotation:updated` — Annotation modified
 - `annotation:deleted` — Annotation removed
 
 ### URL-Document Mapping Service
+
 Maps PDF URLs to stable document IDs for annotation storage.
 
 **Purpose:**
@@ -185,6 +201,7 @@ content hash or canonical URL.
 ```
 
 **Annotation file format:**
+
 ```json
 {
   "id": "highlight_001",
@@ -211,6 +228,7 @@ content hash or canonical URL.
 PDF content can be extracted and indexed into the knowledge system.
 
 **Extraction flow:**
+
 ```
 1. PDF opened in viewer
 2. User triggers knowledge extraction (or auto-indexing enabled)
@@ -221,6 +239,7 @@ PDF content can be extracted and indexed into the knowledge system.
 ```
 
 **Searchable metadata:**
+
 - Document title (from PDF metadata)
 - Full text content
 - User annotations and notes
@@ -228,25 +247,25 @@ PDF content can be extracted and indexed into the knowledge system.
 
 ## Key Source Files
 
-| File | Location | Purpose |
-| ---- | -------- | ------- |
-| `pdfInterceptor.ts` | `extension/contentScript/` | PDF link/navigation interception |
-| `pdfView.html` | `extension/views/` | PDF viewer HTML shell |
-| `pdfViewer.ts` | `views/client/pdf/` | PDF.js rendering |
-| `annotationManager.ts` | `views/client/pdf/` | Annotation CRUD |
-| `textSelectionManager.ts` | `views/client/pdf/` | Text selection handling |
-| `pdfJSHighlightManager.ts` | `views/client/pdf/` | Highlight rendering |
-| `pdfApiService.ts` | `views/client/pdf/` | REST API client |
-| `pdfSSEClient.ts` | `views/client/pdf/` | SSE client for updates |
-| `server.mts` | `views/server/` | Express server entry |
-| `pdfRoutes.ts` | `views/server/features/pdf/` | REST endpoints |
-| `pdfService.ts` | `views/server/features/pdf/` | PDF processing logic |
-| `urlDocumentMappingService.ts` | `views/server/features/pdf/` | URL mapping service |
+| File                           | Location                     | Purpose                          |
+| ------------------------------ | ---------------------------- | -------------------------------- |
+| `pdfInterceptor.ts`            | `extension/contentScript/`   | PDF link/navigation interception |
+| `pdfView.html`                 | `extension/views/`           | PDF viewer HTML shell            |
+| `pdfViewer.ts`                 | `views/client/pdf/`          | PDF.js rendering                 |
+| `annotationManager.ts`         | `views/client/pdf/`          | Annotation CRUD                  |
+| `textSelectionManager.ts`      | `views/client/pdf/`          | Text selection handling          |
+| `pdfJSHighlightManager.ts`     | `views/client/pdf/`          | Highlight rendering              |
+| `pdfApiService.ts`             | `views/client/pdf/`          | REST API client                  |
+| `pdfSSEClient.ts`              | `views/client/pdf/`          | SSE client for updates           |
+| `server.mts`                   | `views/server/`              | Express server entry             |
+| `pdfRoutes.ts`                 | `views/server/features/pdf/` | REST endpoints                   |
+| `pdfService.ts`                | `views/server/features/pdf/` | PDF processing logic             |
+| `urlDocumentMappingService.ts` | `views/server/features/pdf/` | URL mapping service              |
 
 ## Dependencies
 
-| Package | Purpose |
-| ------- | ------- |
-| `pdfjs-dist` | PDF rendering engine |
-| `express` | HTTP server |
-| `express-rate-limit` | API rate limiting |
+| Package              | Purpose              |
+| -------------------- | -------------------- |
+| `pdfjs-dist`         | PDF rendering engine |
+| `express`            | HTTP server          |
+| `express-rate-limit` | API rate limiting    |

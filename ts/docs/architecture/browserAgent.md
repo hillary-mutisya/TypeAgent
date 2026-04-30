@@ -19,10 +19,10 @@ and three communication transports.
 
 The browser agent operates in two distinct modes:
 
-| Mode | Backend | Use case |
-| ---- | ------- | -------- |
+| Mode                      | Backend                                           | Use case                                                   |
+| ------------------------- | ------------------------------------------------- | ---------------------------------------------------------- |
 | **External Browser Mode** | Chrome/Edge extension communicating via WebSocket | Standalone browser use, works with user's existing browser |
-| **Inline Browser Mode** | Electron BrowserView embedded in TypeAgent Shell | Integrated experience with direct IPC control |
+| **Inline Browser Mode**   | Electron BrowserView embedded in TypeAgent Shell  | Integrated experience with direct IPC control              |
 
 Both modes implement the same `BrowserControl` interface, making the agent
 code backend-agnostic. The agent automatically selects the active backend
@@ -66,14 +66,14 @@ New tab opens at nytimes.com
 
 ### Key concepts
 
-| Term | Meaning |
-| ---- | ------- |
-| **Browser agent** | The Node.js `AppAgent` implementation that handles browser-related actions. Runs inside the dispatcher process. |
-| **Extension** | A Chrome MV3 extension with a service worker, content scripts, and side panel UI. Connects to the agent via WebSocket. |
-| **Electron host** | The TypeAgent shell's main process, which can embed browser tabs as `WebContentsView` instances and control them directly. |
+| Term               | Meaning                                                                                                                                                          |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Browser agent**  | The Node.js `AppAgent` implementation that handles browser-related actions. Runs inside the dispatcher process.                                                  |
+| **Extension**      | A Chrome MV3 extension with a service worker, content scripts, and side panel UI. Connects to the agent via WebSocket.                                           |
+| **Electron host**  | The TypeAgent shell's main process, which can embed browser tabs as `WebContentsView` instances and control them directly.                                       |
 | **BrowserControl** | The shared TypeScript interface (`browserControl.mts`) that both the extension and Electron host implement. All browser automation flows through this interface. |
-| **WebFlow** | A recorded, parameterized browser automation script that can be replayed with different inputs. |
-| **WebAgent** | A site-specific agent (crossword, Instacart, commerce) that runs inside the browser page and registers with the dispatcher at runtime. |
+| **WebFlow**        | A recorded, parameterized browser automation script that can be replayed with different inputs.                                                                  |
+| **WebAgent**       | A site-specific agent (crossword, Instacart, commerce) that runs inside the browser page and registers with the dispatcher at runtime.                           |
 
 ---
 
@@ -289,12 +289,12 @@ graph TB
 
 ### Process model
 
-| Process | Technology | Role |
-| ------- | ---------- | ---- |
-| **Dispatcher** | Node.js | Runs the browser agent handler, WebSocket server, knowledge index, and WebFlow store. All LLM calls originate here. |
-| **Extension service worker** | Chrome MV3 service worker (ES module) | Maintains WebSocket connection to agent, implements browser control RPC, manages tabs and recording state via Chrome APIs. Wakes on events, no persistent state in memory. |
-| **Content script** | Chrome content script (isolated world) + MAIN world scripts | Runs per-tab. Handles DOM interaction, event capture, recording, auto-indexing, SPA navigation detection, PDF interception, and WebAgent runtime. |
-| **Electron main** | Electron main process | Manages `WebContentsView` instances as browser tabs, provides direct browser control via `executeJavaScript()` and IPC-based content script RPC, handles CDP fingerprint masking. |
+| Process                      | Technology                                                  | Role                                                                                                                                                                              |
+| ---------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Dispatcher**               | Node.js                                                     | Runs the browser agent handler, WebSocket server, knowledge index, and WebFlow store. All LLM calls originate here.                                                               |
+| **Extension service worker** | Chrome MV3 service worker (ES module)                       | Maintains WebSocket connection to agent, implements browser control RPC, manages tabs and recording state via Chrome APIs. Wakes on events, no persistent state in memory.        |
+| **Content script**           | Chrome content script (isolated world) + MAIN world scripts | Runs per-tab. Handles DOM interaction, event capture, recording, auto-indexing, SPA navigation detection, PDF interception, and WebAgent runtime.                                 |
+| **Electron main**            | Electron main process                                       | Manages `WebContentsView` instances as browser tabs, provides direct browser control via `executeJavaScript()` and IPC-based content script RPC, handles CDP fingerprint masking. |
 
 The extension and Electron host are **alternative browser control backends**.
 The agent selects the active client based on availability and preference
@@ -308,13 +308,13 @@ backend-agnostic.
 
 The browser agent registers with the dispatcher via `manifest.json`:
 
-| Schema name | Type | Default | Purpose |
-| ----------- | ---- | ------- | ------- |
-| `browser` | primary | enabled | Core browser actions (open, close, navigate, scroll, zoom, screenshot, search) |
-| `browser.lookupAndAnswer` | injected | enabled | Web search and Q&A using page content |
-| `browser.external` | transient | disabled | External browser window control |
-| `browser.actionDiscovery` | transient | disabled | Page action detection and dynamic agent registration |
-| `browser.webFlows` | regular | enabled | WebFlow management (list, delete, edit, generate, execute) |
+| Schema name               | Type      | Default  | Purpose                                                                        |
+| ------------------------- | --------- | -------- | ------------------------------------------------------------------------------ |
+| `browser`                 | primary   | enabled  | Core browser actions (open, close, navigate, scroll, zoom, screenshot, search) |
+| `browser.lookupAndAnswer` | injected  | enabled  | Web search and Q&A using page content                                          |
+| `browser.external`        | transient | disabled | External browser window control                                                |
+| `browser.actionDiscovery` | transient | disabled | Page action detection and dynamic agent registration                           |
+| `browser.webFlows`        | regular   | enabled  | WebFlow management (list, delete, edit, generate, execute)                     |
 
 Each sub-schema has its own action types, grammar rules, and handler. The
 dispatcher routes actions to the correct handler based on the schema name
@@ -454,6 +454,7 @@ backend-agnostic.
 ### BrowserControlInvokeFunctions (awaited calls)
 
 **Navigation & page control:**
+
 - `openWebPage(url, options?)` — Navigate to URL, optionally in new tab
 - `closeWebPage()` / `closeAllWebPages()` — Close tabs
 - `goBack()` / `goForward()` / `reload()` — History navigation
@@ -461,12 +462,14 @@ backend-agnostic.
 - `search(query?, sites?, provider?, options?)` — Execute search
 
 **Content access:**
+
 - `getPageTextContent()` — Extract visible text (innerText)
 - `getHtmlFragments(useTimestampIds?, compressionMode?)` — DOM snapshot
 - `captureScreenshot()` — Base64 PNG via CDP
 - `readPageContent()` / `stopReadPageContent()` — Text-to-speech
 
 **Element interaction:**
+
 - `clickOn(cssSelector)` — Click element
 - `setDropdown(cssSelector, optionLabel)` — Set select value
 - `enterTextIn(textValue, cssSelector?, submitForm?)` — Type text
@@ -474,18 +477,22 @@ backend-agnostic.
 - `followLinkByPosition(position, openInNewTab?)` — Click nth link
 
 **Page lifecycle:**
+
 - `awaitPageLoad(timeout?)` — Wait for navigation to complete
 - `awaitPageInteraction(timeout?)` — Wait for user action
 
 **View control:**
+
 - `scrollUp()` / `scrollDown()` — Scroll page
 - `zoomIn()` / `zoomOut()` / `zoomReset()` — Zoom control
 
 **Settings:**
+
 - `getBrowserSettings()` — Returns `{ autoIndexing, extractionMode }`
 - `getAutoIndexSetting()` — Returns boolean
 
 **Extensibility:**
+
 - `runBrowserAction(actionName, parameters, schemaName?)` — Execute named action
 
 ### BrowserControlCallFunctions (fire-and-forget)
@@ -501,41 +508,41 @@ runtime state:
 
 ```typescript
 interface BrowserActionContext {
-    // Browser control backends
-    clientBrowserControl?: BrowserControl;       // Electron direct control
-    externalBrowserControl?: ExternalBrowserClient; // Extension RPC proxy
-    browserControl?: BrowserControl;             // Active control (selected)
+  // Browser control backends
+  clientBrowserControl?: BrowserControl; // Electron direct control
+  externalBrowserControl?: ExternalBrowserClient; // Extension RPC proxy
+  browserControl?: BrowserControl; // Active control (selected)
 
-    // Client management
-    useExternalBrowserControl: boolean;
-    preferredClientType: "extension" | "electron";
-    agentWebSocketServer?: AgentWebSocketServer;
+  // Client management
+  useExternalBrowserControl: boolean;
+  preferredClientType: "extension" | "electron";
+  agentWebSocketServer?: AgentWebSocketServer;
 
-    // Knowledge subsystem
-    index?: any;                    // Website memory index
-    websiteCollection?: any;        // Indexed website collection
+  // Knowledge subsystem
+  index?: any; // Website memory index
+  websiteCollection?: any; // Indexed website collection
 
-    // WebFlow subsystem
-    webFlowStore?: WebFlowStore;
+  // WebFlow subsystem
+  webFlowStore?: WebFlowStore;
 
-    // URL resolution
-    resolverSettings: {
-        searchResolver: boolean;
-        keywordResolver: boolean;
-        wikipediaResolver: boolean;
-        historyResolver: boolean;
-    };
+  // URL resolution
+  resolverSettings: {
+    searchResolver: boolean;
+    keywordResolver: boolean;
+    wikipediaResolver: boolean;
+    historyResolver: boolean;
+  };
 
-    // Search
-    searchProviders: SearchProvider[];   // Bing, Google, Yahoo, DuckDuckGo
-    activeSearchProvider: SearchProvider;
+  // Search
+  searchProviders: SearchProvider[]; // Bing, Google, Yahoo, DuckDuckGo
+  activeSearchProvider: SearchProvider;
 
-    // Utilities
-    localHostPort: number;
-    tabTitleIndex?: any;            // For tab switching by description
-    viewProcess?: ChildProcess;     // Spawned browser process
-    browserProcess?: ChildProcess;
-    fuzzyMatchingModel?: any;       // For entity resolution
+  // Utilities
+  localHostPort: number;
+  tabTitleIndex?: any; // For tab switching by description
+  viewProcess?: ChildProcess; // Spawned browser process
+  browserProcess?: ChildProcess;
+  fuzzyMatchingModel?: any; // For entity resolution
 }
 ```
 
@@ -546,6 +553,7 @@ interface BrowserActionContext {
 
 2. **`updateBrowserContext(enable, context, schemaName)`** — Called when a
    schema is enabled/disabled. On first enable:
+
    - Initializes `WebFlowStore` (lazy, shared promise to prevent concurrent init)
    - Loads website index from disk
    - Creates `AgentWebSocketServer` on port 8081
@@ -568,18 +576,19 @@ Electron clients simultaneously.
 
 ```typescript
 interface BrowserClient {
-    id: string;
-    type: "extension" | "electron";
-    socket: WebSocket;
-    connectedAt: Date;
-    lastActivity: Date;
-    channelProvider?: ChannelProviderAdapter;
-    agentRpc?: RpcProxy<BrowserAgentInvokeFunctions>;
-    browserControlRpc?: RpcProxy<BrowserControlInvokeFunctions>;
+  id: string;
+  type: "extension" | "electron";
+  socket: WebSocket;
+  connectedAt: Date;
+  lastActivity: Date;
+  channelProvider?: ChannelProviderAdapter;
+  agentRpc?: RpcProxy<BrowserAgentInvokeFunctions>;
+  browserControlRpc?: RpcProxy<BrowserControlInvokeFunctions>;
 }
 ```
 
 The server selects the **active client** based on priority:
+
 1. Electron client (preferred when the shell is running)
 2. Extension client (standalone browser use)
 3. Any connected client (fallback)
@@ -637,25 +646,25 @@ can cause confusing behavior in another.
 
 ### Key in-memory state (Tier 1)
 
-| Process | State | Purpose | Lifetime |
-| ------- | ----- | ------- | -------- |
-| **Agent** | `extractionCache` | Prevents duplicate parallel extractions | 10-min stale cleanup |
-| **Agent** | `WebSocket clients` | Connected extension/Electron clients | Until client disconnects |
-| **Agent** | `WebFlowStore` (loaded) | In-memory index + flow cache | Session, written to disk on save |
-| **Service worker** | Content script RPC map | Per-tab RPC connections | Until tab closes |
-| **Service worker** | Analytics cache | Dashboard data | 5-min TTL |
-| **Content script** | Recording state | Active recording data | Tab lifetime, synced to session storage |
-| **Electron** | Browser tabs map | Active `WebContentsView` instances | Until tab closed |
+| Process            | State                   | Purpose                                 | Lifetime                                |
+| ------------------ | ----------------------- | --------------------------------------- | --------------------------------------- |
+| **Agent**          | `extractionCache`       | Prevents duplicate parallel extractions | 10-min stale cleanup                    |
+| **Agent**          | `WebSocket clients`     | Connected extension/Electron clients    | Until client disconnects                |
+| **Agent**          | `WebFlowStore` (loaded) | In-memory index + flow cache            | Session, written to disk on save        |
+| **Service worker** | Content script RPC map  | Per-tab RPC connections                 | Until tab closes                        |
+| **Service worker** | Analytics cache         | Dashboard data                          | 5-min TTL                               |
+| **Content script** | Recording state         | Active recording data                   | Tab lifetime, synced to session storage |
+| **Electron**       | Browser tabs map        | Active `WebContentsView` instances      | Until tab closed                        |
 
 ### State recovery on restart
 
-| Component restart | What's lost | What's recovered | Recovery mechanism |
-| ----------------- | ----------- | ---------------- | ------------------ |
-| **Agent process** | All in-memory caches, WebSocket clients | Knowledge index, WebFlow store, settings | Loaded from disk on `updateBrowserContext()` |
-| **Service worker** | RPC map, navigation dedup, callbacks | Recording state, settings | chrome.storage.session, chrome.storage.sync |
-| **Content script** | DOM element IDs, module variables | Recording state (if active) | `restoreRecordingStateFromStorage()` |
-| **Electron shell** | Tab map, message queue | Window geometry, active tab | `shellSettings.json` on startup |
-| **Browser restart** | All chrome.storage.session data | chrome.storage.sync/local, all disk data | Extension re-initializes, agent reconnects |
+| Component restart   | What's lost                             | What's recovered                         | Recovery mechanism                           |
+| ------------------- | --------------------------------------- | ---------------------------------------- | -------------------------------------------- |
+| **Agent process**   | All in-memory caches, WebSocket clients | Knowledge index, WebFlow store, settings | Loaded from disk on `updateBrowserContext()` |
+| **Service worker**  | RPC map, navigation dedup, callbacks    | Recording state, settings                | chrome.storage.session, chrome.storage.sync  |
+| **Content script**  | DOM element IDs, module variables       | Recording state (if active)              | `restoreRecordingStateFromStorage()`         |
+| **Electron shell**  | Tab map, message queue                  | Window geometry, active tab              | `shellSettings.json` on startup              |
+| **Browser restart** | All chrome.storage.session data         | chrome.storage.sync/local, all disk data | Extension re-initializes, agent reconnects   |
 
 ---
 
@@ -727,6 +736,7 @@ WebFlows that follow a fixed script, the reasoning agent can adapt to
 page variations and make decisions in real-time.
 
 **Architecture:**
+
 ```
 User goal: "Find the cheapest flight from Seattle to NYC next week"
     ↓
@@ -750,48 +760,51 @@ BrowserReasoningTrace (recorded steps for debugging/replay)
 | `webFlowToolAdapter.mts` | Adapts `WebFlowBrowserAPI` as tools for the reasoning model |
 
 **Configuration:**
+
 ```typescript
 interface BrowserReasoningConfig {
-    goal: string;              // Natural language goal
-    maxSteps?: number;         // Limit iterations (default: 20)
-    timeout?: number;          // Max execution time
-    saveTrace?: boolean;       // Record steps for debugging
-    screenshotOnStep?: boolean; // Capture state at each step
+  goal: string; // Natural language goal
+  maxSteps?: number; // Limit iterations (default: 20)
+  timeout?: number; // Max execution time
+  saveTrace?: boolean; // Record steps for debugging
+  screenshotOnStep?: boolean; // Capture state at each step
 }
 ```
 
 **Invocation:**
+
 ```
 @browser actions goal "order a latte from the nearest Starbucks"
 ```
+
 or via the `StartGoalDrivenTask` action in the `browser.webFlows` schema.
 
 ---
 
 ## Key source files
 
-| File | Package | Role |
-| ---- | ------- | ---- |
-| `browserActionHandler.mts` | `agents/browser` | Main action handler, context management, action routing |
-| `browserActionSchema.mts` | `agents/browser` | `BrowserActions` union type (20+ action types) |
-| `browserSchema.agr` | `agents/browser` | Grammar rules for core browser actions |
-| `manifest.json` | `agents/browser` | Agent manifest with sub-schemas |
-| `browserControl.mts` | `agents/browser/common` | `BrowserControl` interface definition |
-| `serviceTypes.mts` | `agents/browser/common` | RPC function type definitions (3 function groups) |
-| `agentWebSocketServer.mts` | `agents/browser` | WebSocket server, client management |
-| `externalBrowserControlClient.mts` | `agents/browser` | RPC proxy wrapping extension's BrowserControl |
-| `externalBrowserControlServer.ts` | `agents/browser/extension` | Extension-side RPC server implementing BrowserControl |
-| `serviceWorker/index.ts` | `agents/browser/extension` | Service worker entry, event listeners, initialization |
-| `serviceWorker/websocket.ts` | `agents/browser/extension` | WebSocket connection, channel setup, keep-alive |
-| `contentScript/index.ts` | `agents/browser/extension` | Content script entry, SPA detection, PDF interception |
-| `browserViewManager.ts` | `shell` | Electron tab management, CDP setup |
-| `browserIpc.ts` | `shell` | Electron WebSocket bridge to agent |
-| `inlineBrowserControl.ts` | `shell` | Electron BrowserControl implementation |
-| `webFlows/reasoning/browserReasoningAgent.mts` | `agents/browser` | AI reasoning agent for goal-driven tasks |
-| `webFlows/webFlowBrowserApi.mts` | `agents/browser` | Browser API for WebFlow/reasoning execution |
-| `search/answerGenerator.mts` | `agents/browser` | Enhanced answer generation with follow-ups |
-| `knowledge/actions/analyticsActions.mts` | `agents/browser` | Knowledge extraction analytics |
-| `views/server/server.mts` | `agents/browser` | Express server for PDF viewer and views |
+| File                                           | Package                    | Role                                                    |
+| ---------------------------------------------- | -------------------------- | ------------------------------------------------------- |
+| `browserActionHandler.mts`                     | `agents/browser`           | Main action handler, context management, action routing |
+| `browserActionSchema.mts`                      | `agents/browser`           | `BrowserActions` union type (20+ action types)          |
+| `browserSchema.agr`                            | `agents/browser`           | Grammar rules for core browser actions                  |
+| `manifest.json`                                | `agents/browser`           | Agent manifest with sub-schemas                         |
+| `browserControl.mts`                           | `agents/browser/common`    | `BrowserControl` interface definition                   |
+| `serviceTypes.mts`                             | `agents/browser/common`    | RPC function type definitions (3 function groups)       |
+| `agentWebSocketServer.mts`                     | `agents/browser`           | WebSocket server, client management                     |
+| `externalBrowserControlClient.mts`             | `agents/browser`           | RPC proxy wrapping extension's BrowserControl           |
+| `externalBrowserControlServer.ts`              | `agents/browser/extension` | Extension-side RPC server implementing BrowserControl   |
+| `serviceWorker/index.ts`                       | `agents/browser/extension` | Service worker entry, event listeners, initialization   |
+| `serviceWorker/websocket.ts`                   | `agents/browser/extension` | WebSocket connection, channel setup, keep-alive         |
+| `contentScript/index.ts`                       | `agents/browser/extension` | Content script entry, SPA detection, PDF interception   |
+| `browserViewManager.ts`                        | `shell`                    | Electron tab management, CDP setup                      |
+| `browserIpc.ts`                                | `shell`                    | Electron WebSocket bridge to agent                      |
+| `inlineBrowserControl.ts`                      | `shell`                    | Electron BrowserControl implementation                  |
+| `webFlows/reasoning/browserReasoningAgent.mts` | `agents/browser`           | AI reasoning agent for goal-driven tasks                |
+| `webFlows/webFlowBrowserApi.mts`               | `agents/browser`           | Browser API for WebFlow/reasoning execution             |
+| `search/answerGenerator.mts`                   | `agents/browser`           | Enhanced answer generation with follow-ups              |
+| `knowledge/actions/analyticsActions.mts`       | `agents/browser`           | Knowledge extraction analytics                          |
+| `views/server/server.mts`                      | `agents/browser`           | Express server for PDF viewer and views                 |
 
 ---
 
@@ -800,15 +813,15 @@ or via the `StartGoalDrivenTask` action in the `browser.webFlows` schema.
 The browser agent contains several subsystems. End-to-end scenario traces
 for each are documented in `browserScenarios.md`:
 
-| Subsystem | Source location | Scenario |
-| --------- | --------------- | -------- |
-| **Knowledge extraction** | `agent/knowledge/`, `agent/indexing/` | Scenario 2: Knowledge discovery |
-| **Search & answer generation** | `agent/search/` | Scenario 7: Search & answer |
-| **WebFlow recording/execution** | `agent/webFlows/`, `extension/contentScript/recording/` | Scenario 3: WebFlows |
-| **Goal-driven automation** | `agent/webFlows/reasoning/` | Scenario 3: WebFlows (goal-driven) |
-| **Action discovery** | `agent/discovery/` | Scenario 4: Action discovery |
-| **WebAgent framework** | `extension/webagent/` | Scenario 5: WebAgents |
-| **PDF viewing/annotation** | `views/server/features/pdf/`, `views/client/pdf/` | Scenario 6: PDF viewing |
-| **Side panel UI** | `extension/views/` | (UI implementation) |
+| Subsystem                       | Source location                                         | Scenario                           |
+| ------------------------------- | ------------------------------------------------------- | ---------------------------------- |
+| **Knowledge extraction**        | `agent/knowledge/`, `agent/indexing/`                   | Scenario 2: Knowledge discovery    |
+| **Search & answer generation**  | `agent/search/`                                         | Scenario 7: Search & answer        |
+| **WebFlow recording/execution** | `agent/webFlows/`, `extension/contentScript/recording/` | Scenario 3: WebFlows               |
+| **Goal-driven automation**      | `agent/webFlows/reasoning/`                             | Scenario 3: WebFlows (goal-driven) |
+| **Action discovery**            | `agent/discovery/`                                      | Scenario 4: Action discovery       |
+| **WebAgent framework**          | `extension/webagent/`                                   | Scenario 5: WebAgents              |
+| **PDF viewing/annotation**      | `views/server/features/pdf/`, `views/client/pdf/`       | Scenario 6: PDF viewing            |
+| **Side panel UI**               | `extension/views/`                                      | (UI implementation)                |
 
 For feature-level documentation (not architecture), see `packages/agents/browser/docs/`.

@@ -236,32 +236,39 @@ export function ChatMessage({ message, isActiveRequest }: Props) {
                 display: "flex",
                 flexDirection: "column",
                 alignItems: isUser ? "flex-end" : "flex-start",
-                marginBottom: "16px",
+                marginBottom: "20px",
+                animation: "fadeIn 0.2s ease-out",
             }}
         >
             {!isUser && message.source && (
                 <div
                     style={{
-                        fontSize: "12px",
+                        fontSize: "11px",
                         color: "var(--muted-foreground)",
-                        marginBottom: "4px",
+                        marginBottom: "6px",
                         display: "flex",
                         alignItems: "center",
-                        gap: "4px",
+                        gap: "6px",
+                        fontWeight: 500,
                     }}
                 >
-                    {message.sourceIcon && <span>{message.sourceIcon}</span>}
+                    {message.sourceIcon && (
+                        <span style={{ fontSize: "14px" }}>{message.sourceIcon}</span>
+                    )}
                     <span>{message.source}</span>
                 </div>
             )}
             <div
                 style={{
-                    maxWidth: "80%",
-                    padding: "12px 16px",
-                    borderRadius: "var(--radius)",
+                    maxWidth: isUser ? "75%" : "85%",
+                    padding: isUser ? "10px 14px" : "14px 18px",
+                    borderRadius: isUser
+                        ? "var(--radius-lg) var(--radius-lg) 4px var(--radius-lg)"
+                        : "var(--radius-lg) var(--radius-lg) var(--radius-lg) 4px",
                     backgroundColor: isUser ? "var(--primary)" : "var(--muted)",
                     color: isUser ? "var(--primary-foreground)" : "var(--foreground)",
                     wordBreak: "break-word",
+                    boxShadow: isUser ? "var(--shadow-sm)" : "none",
                 }}
                 className={isUser ? undefined : "markdown-content"}
             >
@@ -270,11 +277,12 @@ export function ChatMessage({ message, isActiveRequest }: Props) {
                     <span
                         style={{
                             display: "inline-block",
-                            width: "8px",
-                            height: "16px",
-                            backgroundColor: "currentColor",
+                            width: "2px",
+                            height: "14px",
+                            backgroundColor: "var(--primary)",
                             marginLeft: "2px",
                             animation: "blink 1s infinite",
+                            verticalAlign: "text-bottom",
                         }}
                     />
                 )}
@@ -282,16 +290,18 @@ export function ChatMessage({ message, isActiveRequest }: Props) {
             {message.metrics && (
                 <div
                     style={{
-                        fontSize: "11px",
+                        fontSize: "10px",
                         color: "var(--muted-foreground)",
-                        marginTop: "4px",
+                        marginTop: "6px",
+                        display: "flex",
+                        gap: "12px",
                     }}
                 >
                     {message.metrics.duration && (
                         <span>{(message.metrics.duration / 1000).toFixed(1)}s</span>
                     )}
                     {message.metrics.tokens && (
-                        <span style={{ marginLeft: "8px" }}>
+                        <span>
                             {message.metrics.tokens.prompt + message.metrics.tokens.completion} tokens
                         </span>
                     )}

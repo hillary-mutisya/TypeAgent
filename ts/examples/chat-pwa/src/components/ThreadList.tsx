@@ -10,6 +10,7 @@ type Props = {
     onSelect: (conversationId: string) => void;
     onCreate: (name: string) => void;
     onRefresh: () => void;
+    collapsed?: boolean;
 };
 
 export function ThreadList({
@@ -18,6 +19,7 @@ export function ThreadList({
     onSelect,
     onCreate,
     onRefresh,
+    collapsed = false,
 }: Props) {
     const [isCreating, setIsCreating] = useState(false);
     const [newName, setNewName] = useState("");
@@ -33,35 +35,57 @@ export function ThreadList({
     return (
         <div
             style={{
-                width: "280px",
-                borderRight: "1px solid var(--border)",
+                width: collapsed ? "0px" : "260px",
+                minWidth: collapsed ? "0px" : "260px",
                 display: "flex",
                 flexDirection: "column",
                 backgroundColor: "var(--muted)",
+                transition: "width 0.2s ease, min-width 0.2s ease",
+                flexShrink: 0,
+                overflow: "hidden",
             }}
         >
             {/* Header */}
             <div
                 style={{
-                    padding: "16px",
-                    borderBottom: "1px solid var(--border)",
+                    padding: "16px 16px 12px",
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
                 }}
             >
-                <h2 style={{ fontSize: "16px", fontWeight: 600 }}>Conversations</h2>
-                <div style={{ display: "flex", gap: "8px" }}>
+                <h2
+                    style={{
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        color: "var(--muted-foreground)",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.5px",
+                    }}
+                >
+                    Conversations
+                </h2>
+                <div style={{ display: "flex", gap: "4px" }}>
                     <button
                         onClick={onRefresh}
                         title="Refresh"
                         style={{
-                            padding: "4px 8px",
+                            padding: "6px 8px",
                             borderRadius: "var(--radius)",
-                            border: "1px solid var(--border)",
-                            backgroundColor: "var(--background)",
+                            border: "none",
+                            backgroundColor: "transparent",
                             cursor: "pointer",
                             fontSize: "14px",
+                            color: "var(--muted-foreground)",
+                            transition: "all 0.15s",
+                        }}
+                        onMouseOver={(e) => {
+                            e.currentTarget.style.backgroundColor = "var(--background)";
+                            e.currentTarget.style.color = "var(--foreground)";
+                        }}
+                        onMouseOut={(e) => {
+                            e.currentTarget.style.backgroundColor = "transparent";
+                            e.currentTarget.style.color = "var(--muted-foreground)";
                         }}
                     >
                         ↻
@@ -70,16 +94,24 @@ export function ThreadList({
                         onClick={() => setIsCreating(true)}
                         title="New conversation"
                         style={{
-                            padding: "4px 8px",
+                            padding: "6px 10px",
                             borderRadius: "var(--radius)",
                             border: "none",
                             backgroundColor: "var(--primary)",
                             color: "var(--primary-foreground)",
                             cursor: "pointer",
-                            fontSize: "14px",
+                            fontSize: "13px",
+                            fontWeight: 500,
+                            transition: "all 0.15s",
+                        }}
+                        onMouseOver={(e) => {
+                            e.currentTarget.style.backgroundColor = "var(--primary-hover)";
+                        }}
+                        onMouseOut={(e) => {
+                            e.currentTarget.style.backgroundColor = "var(--primary)";
                         }}
                     >
-                        +
+                        + New
                     </button>
                 </div>
             </div>
@@ -88,8 +120,7 @@ export function ThreadList({
             {isCreating && (
                 <div
                     style={{
-                        padding: "8px 16px",
-                        borderBottom: "1px solid var(--border)",
+                        padding: "8px 16px 16px",
                         display: "flex",
                         gap: "8px",
                     }}
@@ -109,22 +140,25 @@ export function ThreadList({
                         autoFocus
                         style={{
                             flex: 1,
-                            padding: "8px",
+                            padding: "10px 12px",
                             borderRadius: "var(--radius)",
                             border: "1px solid var(--border)",
                             fontSize: "13px",
+                            backgroundColor: "var(--background)",
+                            outline: "none",
                         }}
                     />
                     <button
                         onClick={handleCreate}
                         style={{
-                            padding: "8px 12px",
+                            padding: "10px 14px",
                             borderRadius: "var(--radius)",
                             border: "none",
                             backgroundColor: "var(--primary)",
                             color: "var(--primary-foreground)",
                             cursor: "pointer",
                             fontSize: "13px",
+                            fontWeight: 500,
                         }}
                     >
                         Create
@@ -133,64 +167,84 @@ export function ThreadList({
             )}
 
             {/* Conversation list */}
-            <div style={{ flex: 1, overflowY: "auto" }}>
+            <div style={{ flex: 1, overflowY: "auto", padding: "0 8px" }}>
                 {conversations.length === 0 ? (
                     <div
                         style={{
-                            padding: "16px",
+                            padding: "24px 16px",
                             color: "var(--muted-foreground)",
-                            fontSize: "14px",
+                            fontSize: "13px",
                             textAlign: "center",
                         }}
                     >
                         No conversations yet
                     </div>
                 ) : (
-                    conversations.map((conv) => (
-                        <button
-                            key={conv.conversationId}
-                            onClick={() => onSelect(conv.conversationId)}
-                            style={{
-                                width: "100%",
-                                padding: "12px 16px",
-                                border: "none",
-                                borderBottom: "1px solid var(--border)",
-                                backgroundColor:
-                                    conv.conversationId === currentConversationId
-                                        ? "var(--background)"
-                                        : "transparent",
-                                cursor: "pointer",
-                                textAlign: "left",
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: "4px",
-                            }}
-                        >
-                            <span
+                    conversations.map((conv) => {
+                        const isActive = conv.conversationId === currentConversationId;
+                        return (
+                            <button
+                                key={conv.conversationId}
+                                onClick={() => onSelect(conv.conversationId)}
                                 style={{
-                                    fontWeight:
-                                        conv.conversationId === currentConversationId ? 600 : 400,
-                                    color: "var(--foreground)",
-                                    fontSize: "14px",
+                                    width: "100%",
+                                    padding: "10px 12px",
+                                    border: "none",
+                                    borderRadius: "var(--radius)",
+                                    backgroundColor: isActive ? "var(--background)" : "transparent",
+                                    boxShadow: isActive ? "var(--shadow-sm)" : "none",
+                                    cursor: "pointer",
+                                    textAlign: "left",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "2px",
+                                    marginBottom: "2px",
+                                    transition: "all 0.15s",
+                                }}
+                                onMouseOver={(e) => {
+                                    if (!isActive) {
+                                        e.currentTarget.style.backgroundColor = "var(--background)";
+                                    }
+                                }}
+                                onMouseOut={(e) => {
+                                    if (!isActive) {
+                                        e.currentTarget.style.backgroundColor = "transparent";
+                                    }
                                 }}
                             >
-                                {conv.name}
-                            </span>
-                            <span
-                                style={{
-                                    fontSize: "12px",
-                                    color: "var(--muted-foreground)",
-                                }}
-                            >
-                                {new Date(conv.createdAt).toLocaleDateString()}
-                                {conv.clientCount > 0 && (
-                                    <span style={{ marginLeft: "8px" }}>
-                                        {conv.clientCount} connected
-                                    </span>
-                                )}
-                            </span>
-                        </button>
-                    ))
+                                <span
+                                    style={{
+                                        fontWeight: isActive ? 600 : 400,
+                                        color: "var(--foreground)",
+                                        fontSize: "13px",
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        whiteSpace: "nowrap",
+                                    }}
+                                >
+                                    {conv.name}
+                                </span>
+                                <span
+                                    style={{
+                                        fontSize: "11px",
+                                        color: "var(--muted-foreground)",
+                                    }}
+                                >
+                                    {new Date(conv.createdAt).toLocaleDateString()}
+                                    {conv.clientCount > 0 && (
+                                        <span
+                                            style={{
+                                                marginLeft: "8px",
+                                                color: "var(--success)",
+                                            }}
+                                        >
+                                            {conv.clientCount} online
+                                        </span>
+                                    )}
+                                </span>
+                            </button>
+                        );
+                    })
                 )}
             </div>
         </div>

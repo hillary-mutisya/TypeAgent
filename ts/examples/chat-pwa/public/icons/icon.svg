@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2563eb"/>
+      <stop offset="100%" style="stop-color:#1d4ed8"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+  <g fill="#ffffff">
+    <!-- T shape -->
+    <rect x="120" y="140" width="160" height="32" rx="8"/>
+    <rect x="184" y="140" width="32" height="180" rx="8"/>
+    <!-- A shape -->
+    <path d="M340 320 L380 140 L420 140 L460 320 L428 320 L418 280 L382 280 L372 320 Z M390 252 L410 252 L400 200 Z"/>
+    <!-- Chat bubble indicator -->
+    <circle cx="400" cy="380" r="60" fill="rgba(255,255,255,0.2)"/>
+    <circle cx="370" cy="380" r="8"/>
+    <circle cx="400" cy="380" r="8"/>
+    <circle cx="430" cy="380" r="8"/>
+  </g>
+</svg>

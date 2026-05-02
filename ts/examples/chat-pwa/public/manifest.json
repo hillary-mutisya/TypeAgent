@@ -1,0 +1,40 @@
+{
+    "name": "TypeAgent Chat",
+    "short_name": "TypeAgent",
+    "description": "AI-powered chat assistant with TypeAgent",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#2563eb",
+    "orientation": "portrait-primary",
+    "scope": "/",
+    "icons": [
+        {
+            "src": "/icons/icon.svg",
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "any"
+        },
+        {
+            "src": "/icons/icon.svg",
+            "sizes": "512x512",
+            "type": "image/svg+xml",
+            "purpose": "maskable"
+        }
+    ],
+    "categories": ["productivity", "utilities"],
+    "shortcuts": [
+        {
+            "name": "New Conversation",
+            "short_name": "New Chat",
+            "description": "Start a new conversation",
+            "url": "/?action=new",
+            "icons": [
+                {
+                    "src": "/icons/icon.svg",
+                    "sizes": "any"
+                }
+            ]
+        }
+    ]
+}

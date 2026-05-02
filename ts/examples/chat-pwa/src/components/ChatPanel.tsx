@@ -152,19 +152,49 @@ export function ChatPanel({
                 style={{
                     flex: 1,
                     overflowY: "auto",
-                    padding: "16px",
+                    padding: "24px",
                 }}
             >
                 {messages.length === 0 && isConnected && (
                     <div
                         style={{
-                            textAlign: "center",
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            height: "100%",
                             color: "var(--muted-foreground)",
-                            marginTop: "40px",
+                            textAlign: "center",
                         }}
                     >
-                        <h2 style={{ marginBottom: "8px" }}>TypeAgent Chat</h2>
-                        <p>Send a message to get started</p>
+                        <div
+                            style={{
+                                width: "48px",
+                                height: "48px",
+                                borderRadius: "var(--radius-lg)",
+                                backgroundColor: "var(--muted)",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                marginBottom: "16px",
+                                fontSize: "24px",
+                            }}
+                        >
+                            TA
+                        </div>
+                        <h2
+                            style={{
+                                marginBottom: "8px",
+                                fontSize: "18px",
+                                fontWeight: 600,
+                                color: "var(--foreground)",
+                            }}
+                        >
+                            TypeAgent Chat
+                        </h2>
+                        <p style={{ fontSize: "14px", maxWidth: "300px", lineHeight: 1.5 }}>
+                            Send a message to get started. Use @ for agent commands.
+                        </p>
                     </div>
                 )}
 
@@ -182,24 +212,27 @@ export function ChatPanel({
                         style={{
                             display: "flex",
                             alignItems: "center",
-                            gap: "8px",
-                            padding: "8px 12px",
+                            gap: "10px",
+                            padding: "12px 16px",
                             color: "var(--muted-foreground)",
-                            fontSize: "14px",
+                            fontSize: "13px",
+                            backgroundColor: "var(--muted)",
+                            borderRadius: "var(--radius)",
+                            marginBottom: "16px",
                         }}
                     >
                         <span
                             style={{
                                 display: "inline-block",
-                                width: "12px",
-                                height: "12px",
-                                border: "2px solid var(--muted-foreground)",
+                                width: "14px",
+                                height: "14px",
+                                border: "2px solid var(--primary)",
                                 borderTopColor: "transparent",
                                 borderRadius: "50%",
-                                animation: "spin 1s linear infinite",
+                                animation: "spin 0.8s linear infinite",
                             }}
                         />
-                        <span>{statusMessage}</span>
+                        <span style={{ fontWeight: 500 }}>{statusMessage}</span>
                     </div>
                 )}
 
@@ -291,10 +324,12 @@ export function ChatPanel({
             {error && (
                 <div
                     style={{
-                        padding: "8px 16px",
-                        backgroundColor: "#fef2f2",
-                        color: "#dc2626",
-                        borderTop: "1px solid #fecaca",
+                        padding: "12px 24px",
+                        backgroundColor: "rgba(239, 68, 68, 0.1)",
+                        color: "var(--error)",
+                        borderTop: "1px solid rgba(239, 68, 68, 0.2)",
+                        fontSize: "13px",
+                        fontWeight: 500,
                     }}
                 >
                     {error}
@@ -306,10 +341,11 @@ export function ChatPanel({
                 onSubmit={handleSubmit}
                 style={{
                     borderTop: "1px solid var(--border)",
-                    padding: "16px",
+                    padding: "16px 24px",
                     display: "flex",
-                    gap: "8px",
+                    gap: "12px",
                     position: "relative",
+                    backgroundColor: "var(--background)",
                 }}
             >
                 <div style={{ flex: 1, position: "relative" }}>
@@ -331,10 +367,22 @@ export function ChatPanel({
                         style={{
                             width: "100%",
                             padding: "12px 16px",
-                            borderRadius: "var(--radius)",
+                            borderRadius: "var(--radius-lg)",
                             border: "1px solid var(--border)",
                             fontSize: "14px",
                             outline: "none",
+                            backgroundColor: "var(--muted)",
+                            transition: "all 0.15s",
+                        }}
+                        onFocus={(e) => {
+                            e.currentTarget.style.borderColor = "var(--primary)";
+                            e.currentTarget.style.backgroundColor = "var(--background)";
+                            e.currentTarget.style.boxShadow = "0 0 0 3px rgba(37, 99, 235, 0.1)";
+                        }}
+                        onBlurCapture={(e) => {
+                            e.currentTarget.style.borderColor = "var(--border)";
+                            e.currentTarget.style.backgroundColor = "var(--muted)";
+                            e.currentTarget.style.boxShadow = "none";
                         }}
                     />
 
@@ -346,12 +394,12 @@ export function ChatPanel({
                                 bottom: "100%",
                                 left: 0,
                                 right: 0,
-                                marginBottom: "4px",
+                                marginBottom: "8px",
                                 backgroundColor: "var(--background)",
                                 border: "1px solid var(--border)",
-                                borderRadius: "var(--radius)",
-                                boxShadow: "0 -4px 12px rgba(0, 0, 0, 0.1)",
-                                maxHeight: "200px",
+                                borderRadius: "var(--radius-lg)",
+                                boxShadow: "var(--shadow-lg)",
+                                maxHeight: "220px",
                                 overflowY: "auto",
                                 zIndex: 100,
                             }}
@@ -361,18 +409,19 @@ export function ChatPanel({
                                     key={completion}
                                     onClick={() => selectCompletion(completion)}
                                     style={{
-                                        padding: "10px 16px",
+                                        padding: "10px 14px",
                                         cursor: "pointer",
                                         backgroundColor:
                                             idx === selectedCompletion
-                                                ? "var(--accent)"
+                                                ? "var(--muted)"
                                                 : "transparent",
-                                        borderBottom:
-                                            idx < completions.length - 1
-                                                ? "1px solid var(--border)"
-                                                : "none",
-                                        fontSize: "14px",
+                                        fontSize: "13px",
                                         fontFamily: "monospace",
+                                        color:
+                                            idx === selectedCompletion
+                                                ? "var(--primary)"
+                                                : "var(--foreground)",
+                                        transition: "all 0.1s",
                                     }}
                                     onMouseEnter={() => setSelectedCompletion(idx)}
                                 >
@@ -387,13 +436,15 @@ export function ChatPanel({
                         type="button"
                         onClick={onCancelCommand}
                         style={{
-                            padding: "12px 24px",
-                            borderRadius: "var(--radius)",
+                            padding: "12px 20px",
+                            borderRadius: "var(--radius-lg)",
                             border: "none",
-                            backgroundColor: "#dc2626",
+                            backgroundColor: "var(--error)",
                             color: "white",
                             cursor: "pointer",
                             fontSize: "14px",
+                            fontWeight: 500,
+                            transition: "all 0.15s",
                         }}
                     >
                         Cancel
@@ -403,8 +454,8 @@ export function ChatPanel({
                         type="submit"
                         disabled={!isConnected || !input.trim() || !!pendingQuestion}
                         style={{
-                            padding: "12px 24px",
-                            borderRadius: "var(--radius)",
+                            padding: "12px 20px",
+                            borderRadius: "var(--radius-lg)",
                             border: "none",
                             backgroundColor: "var(--primary)",
                             color: "var(--primary-foreground)",
@@ -414,6 +465,8 @@ export function ChatPanel({
                                     : "not-allowed",
                             opacity: isConnected && input.trim() && !pendingQuestion ? 1 : 0.5,
                             fontSize: "14px",
+                            fontWeight: 500,
+                            transition: "all 0.15s",
                         }}
                     >
                         Send

@@ -16,12 +16,12 @@ export function ToolCallBlock({ toolName, input, output, defaultOpen = false }: 
     return (
         <div
             style={{
-                backgroundColor: "rgba(34, 197, 94, 0.05)",
-                border: "1px solid rgba(34, 197, 94, 0.2)",
+                backgroundColor: "rgba(16, 185, 129, 0.04)",
+                border: "1px solid rgba(16, 185, 129, 0.15)",
                 borderRadius: "var(--radius)",
                 marginBottom: "8px",
                 overflow: "hidden",
-                fontSize: "13px",
+                fontSize: "12px",
             }}
         >
             <button
@@ -35,57 +35,78 @@ export function ToolCallBlock({ toolName, input, output, defaultOpen = false }: 
                     border: "none",
                     backgroundColor: "transparent",
                     cursor: "pointer",
-                    color: "#16a34a",
+                    color: "var(--success)",
                     fontWeight: 500,
                     textAlign: "left",
+                    transition: "background-color 0.15s",
+                }}
+                onMouseOver={(e) => {
+                    e.currentTarget.style.backgroundColor = "rgba(16, 185, 129, 0.05)";
+                }}
+                onMouseOut={(e) => {
+                    e.currentTarget.style.backgroundColor = "transparent";
                 }}
             >
                 <span
                     style={{
-                        display: "inline-block",
-                        transition: "transform 0.2s",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: "16px",
+                        height: "16px",
+                        fontSize: "8px",
+                        transition: "transform 0.15s",
                         transform: isOpen ? "rotate(90deg)" : "rotate(0deg)",
-                        fontSize: "10px",
                     }}
                 >
                     ▶
                 </span>
-                <span style={{ fontSize: "14px" }}>🔧</span>
-                <span style={{ fontFamily: "monospace" }}>{toolName}</span>
+                <span
+                    style={{
+                        fontFamily: '"SF Mono", "Consolas", "Monaco", monospace',
+                        fontSize: "12px",
+                    }}
+                >
+                    {toolName}
+                </span>
                 {(input || output) && !isOpen && (
                     <span
                         style={{
                             marginLeft: "auto",
                             color: "var(--muted-foreground)",
                             fontSize: "11px",
-                            maxWidth: "300px",
+                            maxWidth: "280px",
                             overflow: "hidden",
                             textOverflow: "ellipsis",
                             whiteSpace: "nowrap",
-                            fontFamily: "monospace",
+                            fontFamily: '"SF Mono", "Consolas", "Monaco", monospace',
+                            opacity: 0.7,
                         }}
                     >
-                        {input ? `{ ${input.slice(0, 40)}${input.length > 40 ? "..." : ""} }` : ""}
-                        {output ? ` → ${output.slice(0, 30)}${output.length > 30 ? "..." : ""}` : ""}
+                        {input ? input.slice(0, 35) + (input.length > 35 ? "..." : "") : ""}
+                        {output ? ` → ${output.slice(0, 25)}${output.length > 25 ? "..." : ""}` : ""}
                     </span>
                 )}
             </button>
             {isOpen && (
                 <div
                     style={{
-                        padding: "0 12px 12px 12px",
-                        fontSize: "12px",
-                        fontFamily: "monospace",
+                        padding: "0 12px 12px 36px",
+                        fontSize: "11px",
+                        fontFamily: '"SF Mono", "Consolas", "Monaco", monospace',
                     }}
                 >
                     {input && (
-                        <div style={{ marginBottom: "8px" }}>
+                        <div style={{ marginBottom: "10px" }}>
                             <div
                                 style={{
                                     color: "var(--muted-foreground)",
                                     marginBottom: "4px",
-                                    fontSize: "11px",
+                                    fontSize: "10px",
+                                    fontWeight: 600,
                                     textTransform: "uppercase",
+                                    letterSpacing: "0.5px",
+                                    fontFamily: "inherit",
                                 }}
                             >
                                 Input
@@ -93,12 +114,13 @@ export function ToolCallBlock({ toolName, input, output, defaultOpen = false }: 
                             <div
                                 style={{
                                     backgroundColor: "var(--background)",
-                                    padding: "8px",
-                                    borderRadius: "4px",
+                                    padding: "10px 12px",
+                                    borderRadius: "6px",
                                     whiteSpace: "pre-wrap",
                                     wordBreak: "break-all",
-                                    maxHeight: "150px",
+                                    maxHeight: "120px",
                                     overflowY: "auto",
+                                    lineHeight: 1.5,
                                 }}
                             >
                                 {input}
@@ -111,8 +133,11 @@ export function ToolCallBlock({ toolName, input, output, defaultOpen = false }: 
                                 style={{
                                     color: "var(--muted-foreground)",
                                     marginBottom: "4px",
-                                    fontSize: "11px",
+                                    fontSize: "10px",
+                                    fontWeight: 600,
                                     textTransform: "uppercase",
+                                    letterSpacing: "0.5px",
+                                    fontFamily: "inherit",
                                 }}
                             >
                                 Output
@@ -120,12 +145,13 @@ export function ToolCallBlock({ toolName, input, output, defaultOpen = false }: 
                             <div
                                 style={{
                                     backgroundColor: "var(--background)",
-                                    padding: "8px",
-                                    borderRadius: "4px",
+                                    padding: "10px 12px",
+                                    borderRadius: "6px",
                                     whiteSpace: "pre-wrap",
                                     wordBreak: "break-all",
-                                    maxHeight: "150px",
+                                    maxHeight: "120px",
                                     overflowY: "auto",
+                                    lineHeight: 1.5,
                                 }}
                             >
                                 {output}

@@ -12,6 +12,14 @@ import { UpdatePrompt } from "./components/UpdatePrompt";
 
 const MOBILE_BREAKPOINT = 768;
 
+const THEME_COLORS: Record<string, { light: string; dark: string }> = {
+    default: { light: "#f8fafc", dark: "#1e293b" },
+    nord: { light: "#e5e9f0", dark: "#3b4252" },
+    zenburn: { light: "#ede6dc", dark: "#4f4f4f" },
+    rose: { light: "#fdf2f4", dark: "#292524" },
+    forest: { light: "#ecf5ec", dark: "#243524" },
+};
+
 export function App() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
@@ -40,6 +48,27 @@ export function App() {
         document.documentElement.setAttribute("data-scheme", colorScheme);
         localStorage.setItem("colorScheme", colorScheme);
     }, [colorScheme]);
+
+    // Update PWA theme-color meta tag
+    useEffect(() => {
+        const colors = THEME_COLORS[colorScheme] || THEME_COLORS.default;
+        const themeColor = theme === "dark" ? colors.dark : colors.light;
+
+        // Update or create theme-color meta tag
+        let metaThemeColor = document.querySelector('meta[name="theme-color"]');
+        if (!metaThemeColor) {
+            metaThemeColor = document.createElement("meta");
+            metaThemeColor.setAttribute("name", "theme-color");
+            document.head.appendChild(metaThemeColor);
+        }
+        metaThemeColor.setAttribute("content", themeColor);
+
+        // Also update msapplication-TileColor
+        let metaTileColor = document.querySelector('meta[name="msapplication-TileColor"]');
+        if (metaTileColor) {
+            metaTileColor.setAttribute("content", themeColor);
+        }
+    }, [theme, colorScheme]);
 
     useEffect(() => {
         const handleResize = () => {

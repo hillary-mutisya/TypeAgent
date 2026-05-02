@@ -13,6 +13,7 @@ export function App() {
         conversations,
         currentConversation,
         isProcessing,
+        statusMessage,
         pendingQuestion,
         error,
         connect,
@@ -22,6 +23,7 @@ export function App() {
         switchConversation,
         createConversation,
         refreshConversations,
+        getCompletions,
     } = useTypeAgent();
 
     useEffect(() => {
@@ -100,11 +102,13 @@ export function App() {
                         messages={messages}
                         connectionState={connectionState}
                         isProcessing={isProcessing}
+                        statusMessage={statusMessage}
                         pendingQuestion={pendingQuestion}
                         error={error}
                         onSendMessage={sendMessage}
                         onCancelCommand={cancelCommand}
                         onAnswerQuestion={answerQuestion}
+                        onGetCompletions={getCompletions}
                     />
                 </div>
             </div>

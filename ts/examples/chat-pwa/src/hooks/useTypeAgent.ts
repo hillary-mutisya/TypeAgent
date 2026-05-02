@@ -95,6 +95,7 @@ export function useTypeAgent(serverUrl: string = "ws://localhost:8999") {
     } | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [pendingQuestion, setPendingQuestion] = useState<PendingQuestion | null>(null);
+    const [statusMessage, setStatusMessage] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const currentRequestIdRef = useRef<string | null>(null);
 
@@ -108,6 +109,9 @@ export function useTypeAgent(serverUrl: string = "ws://localhost:8999") {
     const handleSetDisplay = useCallback((message: IAgentMessage) => {
         const { text, type } = extractContent(message.message);
         const msgId = message.requestId.requestId;
+
+        // Clear status message when real content arrives
+        setStatusMessage(null);
 
         setMessages((prev) => {
             // Find existing message with same requestId
@@ -146,13 +150,19 @@ export function useTypeAgent(serverUrl: string = "ws://localhost:8999") {
 
     const handleAppendDisplay = useCallback(
         (message: IAgentMessage, mode: DisplayAppendMode) => {
-            const { text, type } = extractContent(message.message);
+            const { text } = extractContent(message.message);
             const msgId = message.requestId.requestId;
 
             if (mode === "temporary") {
-                // Temporary messages are status updates, we could show these differently
+                // Show temporary messages as status indicators
+                setStatusMessage(text);
                 return;
             }
+
+            // Clear status when non-temporary content arrives
+            setStatusMessage(null);
+
+            const { type } = extractContent(message.message);
 
             setMessages((prev) => {
                 const existingIdx = prev.findIndex(
@@ -371,6 +381,7 @@ export function useTypeAgent(serverUrl: string = "ws://localhost:8999") {
             ]);
 
             setIsProcessing(true);
+            setStatusMessage(null);
             setError(null);
 
             try {
@@ -379,6 +390,7 @@ export function useTypeAgent(serverUrl: string = "ws://localhost:8999") {
                 setError(e instanceof Error ? e.message : "Command failed");
             } finally {
                 setIsProcessing(false);
+                setStatusMessage(null);
                 currentRequestIdRef.current = null;
             }
         },
@@ -538,6 +550,18 @@ export function useTypeAgent(serverUrl: string = "ws://localhost:8999") {
         }
     }, []);
 
+    const getCompletions = useCallback(async (prefix: string): Promise<string[]> => {
+        const conn = connectionRef.current;
+        if (!conn || connectionState !== "connected") return [];
+
+        try {
+            return await conn.getCommandCompletion(prefix);
+        } catch (e) {
+            console.error("Failed to get completions:", e);
+            return [];
+        }
+    }, [connectionState]);
+
     // Only close on actual unmount, not React StrictMode double-render
     useEffect(() => {
         const connection = connectionRef.current;
@@ -556,6 +580,7 @@ export function useTypeAgent(serverUrl: string = "ws://localhost:8999") {
         conversations,
         currentConversation,
         isProcessing,
+        statusMessage,
         pendingQuestion,
         error,
         connect,
@@ -565,5 +590,6 @@ export function useTypeAgent(serverUrl: string = "ws://localhost:8999") {
         switchConversation,
         createConversation,
         refreshConversations,
+        getCompletions,
     };
 }

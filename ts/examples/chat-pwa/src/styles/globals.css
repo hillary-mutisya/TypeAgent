@@ -45,6 +45,11 @@ body {
     51%, 100% { opacity: 0; }
 }
 
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
 /* Markdown content styles */
 .markdown-content {
     line-height: 1.6;

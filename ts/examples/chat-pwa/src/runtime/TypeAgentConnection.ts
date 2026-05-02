@@ -244,6 +244,47 @@ export class TypeAgentConnection {
         });
     }
 
+    async getCommandCompletion(prefix: string): Promise<string[]> {
+        if (!this.currentConversationId) {
+            throw new Error("Not connected to a conversation");
+        }
+
+        const dispatcherChannel = getDispatcherChannelName(this.currentConversationId);
+
+        // API returns CommandCompletionResult with completions: CompletionGroup[]
+        // Each CompletionGroup has { name, completions: string[], ... }
+        type CompletionGroup = {
+            name: string;
+            completions: string[];
+        };
+        type CommandCompletionResult = {
+            startIndex: number;
+            completions: CompletionGroup[];
+        };
+
+        const result = await this.rpc.invoke<CommandCompletionResult>(
+            dispatcherChannel,
+            "getCommandCompletion",
+            prefix,
+            "forward", // direction parameter
+        );
+
+        // Flatten all completion groups into a single array of strings
+        const allCompletions: string[] = [];
+        if (result.completions) {
+            for (const group of result.completions) {
+                if (group.completions) {
+                    // Prepend the prefix up to startIndex with each completion
+                    const prefixPart = prefix.slice(0, result.startIndex);
+                    for (const completion of group.completions) {
+                        allCompletions.push(prefixPart + completion);
+                    }
+                }
+            }
+        }
+        return allCompletions;
+    }
+
     get conversationId(): string | null {
         return this.currentConversationId;
     }

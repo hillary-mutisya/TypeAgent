@@ -556,8 +556,7 @@ async function initializeDispatcher(
 
             const [
                 {
-                    getDefaultAppAgentSource,
-                    getMcpAppAgentSource,
+                    getDefaultAppAgentSources,
                     getDefaultAppAgentProviders,
                     getDefaultConstructionProvider,
                     getIndexingServiceRegistry,
@@ -624,10 +623,9 @@ async function initializeDispatcher(
                         browser: browserControl.control,
                     },
                     portRegistrar,
-                    appAgentSources: [
-                        getDefaultAppAgentSource(instanceDir, { configName }),
-                        getMcpAppAgentSource(instanceDir),
-                    ],
+                    appAgentSources: getDefaultAppAgentSources(instanceDir, {
+                        configName,
+                    }),
                     persistSession: true,
                     storageProvider: getFsStorageProvider(),
                     metrics: true,
